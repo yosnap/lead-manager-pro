@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snap Lead Manager</title>
+  <link rel="stylesheet" href="css/sidebar.css">
+  <link rel="stylesheet" href="css/progress.css">
+</head>
+<body>
+  <div class="sidebar-container">
+    <header>
+      <h1>Snap Lead Manager</h1>
+      <div class="version">v1.0.0</div>
+    </header>
+    
+    <main>
+      <section class="search-section">
+        <h2>Búsqueda en Facebook</h2>
+        <div class="form-group">
+          <label for="search-term">Término de búsqueda</label>
+          <input type="text" id="search-term" placeholder="Nombre, profesión, etc.">
+        </div>
+        <div class="form-group">
+          <label for="search-city">Ciudad (opcional)</label>
+          <input type="text" id="search-city" placeholder="Ej: Madrid, Barcelona">
+        </div>
+        <div class="button-group">
+          <button id="search-button" class="btn">Buscar</button>
+          <button id="apply-filters-button" class="btn btn-secondary">Aplicar Filtros</button>
+        </div>
+        
+        <!-- Contenedor para mostrar información de búsqueda actual -->
+        <div id="current-search-info" class="current-search-info" style="display: none;"></div>
+      </section>
+      
+      <section class="status-section">
+        <h2>Estado</h2>
+        <div id="status-message" class="status">Listo para comenzar</div>
+        <div class="progress-container">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+        
+        <!-- Nuevo contenedor detallado para el estado de la búsqueda -->
+        <div id="search-status-container" class="status-container" style="display: none;">
+          <div class="status-header">
+            <div class="status-title">Detalles de la búsqueda</div>
+            <div id="progress-percentage">0%</div>
+          </div>
+          <div id="detailed-status-message" class="status-message">Esperando inicio de búsqueda...</div>
+          <div class="progress-bar-container">
+            <div id="detailed-progress-bar" class="progress-bar"></div>
+          </div>
+          <div class="progress-details">
+            <span id="current-operation">Inactivo</span>
+            <span id="elapsed-time">00:00</span>
+          </div>
+          
+          <!-- Registro de scrolls y hallazgos -->
+          <div id="scroll-log-container" class="scroll-log">
+            <!-- Las entradas de log se agregarán aquí dinámicamente -->
+          </div>
+        </div>
+      </section>
+      
+      <section class="controls-section">
+        <h2>Controles</h2>
+        <div class="control-buttons">
+          <button id="start-button" class="btn">Iniciar</button>
+          <button id="pause-button" class="btn btn-secondary" disabled>Pausar</button>
+          <button id="stop-button" class="btn btn-secondary" disabled>Detener</button>
+        </div>
+      </section>
+      
+      <section class="results-section">
+        <h2>Resultados</h2>
+        <div id="results-summary" class="results-summary"></div>
+        <ul id="search-results" class="results-list"></ul>
+      </section>
+    </main>
+    
+    <footer>
+      <p>Snap Lead Manager v1.0.0</p>
+      <button id="toggle-sidebar" class="toggle-btn">Ocultar</button>
+    </footer>
+  </div>
+  
+  <script src="js/sidebar.js"></script>
+</body>
+</html>

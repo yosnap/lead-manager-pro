@@ -1,0 +1,53 @@
+/* Estilos para el overlay del sidebar */
+#snap-lead-manager-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 300px;
+  background-color: white;
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+  z-index: 9999;
+  transition: transform 0.3s ease-in-out;
+  display: flex;
+  flex-direction: column;
+}
+
+#snap-lead-manager-overlay.collapsed {
+  transform: translateX(290px);
+}
+
+/* Manija para mostrar/ocultar cuando está colapsado */
+#snap-lead-manager-handle {
+  position: absolute;
+  left: -30px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 60px;
+  background-color: black;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 5px 0 0 5px;
+  font-size: 12px;
+  user-select: none;
+}
+
+#snap-lead-manager-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* Ajuste al cuerpo principal para hacer espacio para el sidebar */
+body.snap-lead-manager-active {
+  margin-right: 300px !important;
+  transition: margin 0.3s ease-in-out;
+}
+
+body.snap-lead-manager-collapsed {
+  margin-right: 0 !important;
+}

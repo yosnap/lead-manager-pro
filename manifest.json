@@ -22,12 +22,20 @@
     }
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "js/background.js"
   },
   "content_scripts": [
     {
-      "matches": ["https://*.facebook.com/*"],
-      "js": ["content.js"]
+      "matches": ["*://*.facebook.com/*"],
+      "js": ["js/content.js", "debug/debug.js"],
+      "css": ["css/content.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["sidebar.html", "css/*", "js/*", "images/*"],
+      "matches": ["*://*.facebook.com/*"]
     }
   ],
   "icons": {

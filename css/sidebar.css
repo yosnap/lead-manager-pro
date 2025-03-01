@@ -1,0 +1,298 @@
+/**
+ * Estilos para el sidebar de Snap Lead Manager
+ */
+
+:root {
+  --primary-color: #000000;
+  --secondary-color: #333333;
+  --light-color: #ffffff;
+  --border-color: #dddddd;
+  --accent-color: #0066cc;
+  --error-color: #ff3333;
+  --success-color: #33cc66;
+  --warning-color: #ffcc00;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  font-size: 14px;
+  color: var(--primary-color);
+  background-color: var(--light-color);
+  padding: 0;
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Encabezado */
+header {
+  background-color: var(--primary-color);
+  color: var(--light-color);
+  padding: 12px;
+  text-align: center;
+  position: relative;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+header h1 {
+  font-size: 16px;
+  font-weight: bold;
+  margin: 0;
+}
+
+header .version {
+  font-size: 10px;
+  opacity: 0.7;
+  position: absolute;
+  right: 8px;
+  bottom: 5px;
+}
+
+/* Contenido principal */
+main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* Secciones */
+section {
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+h2 {
+  font-size: 14px;
+  margin-bottom: 10px;
+  color: var(--secondary-color);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: bold;
+}
+
+/* Formularios */
+.form-group {
+  margin-bottom: 10px;
+}
+
+label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+input[type="text"], 
+input[type="number"],
+select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 3px rgba(0, 102, 204, 0.3);
+}
+
+/* Botones */
+.btn {
+  display: inline-block;
+  background-color: var(--primary-color);
+  color: var(--light-color);
+  border: none;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: bold;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn:hover {
+  background-color: var(--secondary-color);
+}
+
+.btn:disabled {
+  background-color: #999;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.btn-secondary {
+  background-color: #444444;
+  color: white;
+  border: 1px solid #222222;
+}
+
+.btn-secondary:hover {
+  background-color: #555555;
+}
+
+/* Grupo de botones */
+.button-group {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.button-group .btn {
+  flex: 1;
+}
+
+/* Información de estado */
+.status {
+  background-color: #f9f9f9;
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 10px;
+  margin-bottom: 5px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.status.error {
+  background-color: rgba(255, 51, 51, 0.1);
+  color: var(--error-color);
+}
+
+.status.success {
+  background-color: rgba(51, 204, 102, 0.1);
+  color: var(--success-color);
+}
+
+.status.warning {
+  background-color: rgba(255, 204, 0, 0.1);
+  color: var(--warning-color);
+}
+
+/* Progreso */
+.progress-container {
+  height: 6px;
+  background-color: #eaeaea;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.progress-bar {
+  height: 100%;
+  background-color: var(--primary-color);
+  width: 0%;
+  transition: width 0.3s;
+}
+
+/* Listas y resultados */
+.results-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.results-item {
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  background-color: var(--light-color);
+  font-size: 12px;
+  line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.results-item .name {
+  font-weight: bold;
+}
+
+.results-item .url {
+  color: var(--accent-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.results-item .info {
+  font-size: 11px;
+  color: var(--secondary-color);
+}
+
+/* Footer */
+footer {
+  padding: 12px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--secondary-color);
+  border-top: 1px solid var(--border-color);
+}
+
+/* Estado del proceso */
+.current-search-info {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.current-search-info p {
+  margin-bottom: 5px;
+}
+
+.current-search-info strong {
+  font-weight: bold;
+}
+
+/* Botones de control */
+.control-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.control-buttons button {
+  flex: 1;
+}
+
+/* Responsive - ajustes para pantallas pequeñas */
+@media screen and (max-width: 300px) {
+  main {
+    padding: 8px;
+  }
+  
+  .btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
+  input[type="text"], 
+  input[type="number"],
+  select {
+    padding: 6px 8px;
+  }
+}

@@ -23,11 +23,66 @@
 - Comunicación entre los diferentes componentes de la extensión
 - Opción para mantener el popup abierto como una ventana independiente durante las operaciones
 
+## Notas de Implementación
+
+### Problemas resueltos
+
+#### 1. Selector de filtro de ciudad
+Se solucionó un problema con el selector de ciudad en los filtros de búsqueda. El error DOMException se producía cuando:
+- Facebook cambiaba la estructura del DOM para los filtros
+- Se intentaba hacer clic en elementos que aún no estaban completamente cargados
+
+La solución implementada:
+- Uso de selectores más robustos que se adaptan a diferentes variaciones del DOM
+- Detección y manejo de errores para reintentar o proveer alternativas
+- Mejor manejo de los tiempos de espera entre acciones para asegurar que los elementos estén cargados
+
+#### 2. Persistencia del sidebar
+Se implementó una funcionalidad para que el sidebar permanezca visible incluso después de recargar la página.
+Esta función permite al usuario:
+- Mantener el contexto de su búsqueda actual aunque la página se recargue
+- Seguir monitoreando resultados y estados sin perder información
+- Continuar trabajo donde lo dejó incluso si hay navegación entre páginas
+
+La implementación involucró:
+- Almacenamiento del estado del sidebar en el Background Script
+- Sistema de restauración al cargar nuevas páginas
+- Sincronización del estado entre el Content Script y Background Script
+- Restauración de la información de búsqueda y resultados
+
+## Actualizaciones recientes
+
+### Mejoras en la interfaz del sidebar
+- Se ha implementado un sidebar visible en el lado derecho de Facebook
+- Se han mejorado los estilos para garantizar buena visualización y contraste
+- Se ha agregado un botón para colapsar/expandir el sidebar
+- Se ha añadido un campo para filtrar por ciudad
+
+### Mejoras en la funcionalidad de búsqueda
+- Se ha implementado la persistencia de términos de búsqueda tras recargar la página
+- La búsqueda ahora funciona correctamente al presionar Enter en los campos
+- Se ha añadido soporte para scroll infinito para cargar más resultados
+- Se ha aumentado el timeout de búsqueda de 30 a 60 segundos
+- Se implementó un sistema para mostrar la búsqueda actual en la interfaz
+
+### Mejoras en la detección de perfiles
+- Se ha mejorado la detección de perfiles en la página de resultados
+- Ahora se extraen más datos de cada perfil, incluyendo información adicional
+- Se almacenan los perfiles en localStorage para conservarlos después de recargas
+- Se revisa automáticamente si ya existen resultados al abrir Facebook
+
+### Problemas resueltos
+- Se ha corregido el problema de visibilidad del sidebar
+- Se ha corregido el problema de pérdida de términos de búsqueda al recargar
+- Se ha implementado el soporte para scroll infinito de Facebook
+- Se ha corregido el problema con la tecla Enter que no iniciaba la búsqueda
+- Se ha corregido el problema de timeout en búsquedas extensas
+
 ### Próximos pasos
-- Implementar la funcionalidad de búsqueda en Facebook
-- Desarrollar algoritmos para identificar y seleccionar perfiles
-- Implementar análisis de perfiles y extracción de datos
-- Desarrollar integración con N8N
+- Implementar el análisis detallado de perfiles
+- Desarrollar la extracción de datos adicionales
+- Implementar la integración con N8N
+- Añadir más opciones de filtrado en la búsqueda
 
 ## Instalación y pruebas
 
@@ -49,21 +104,11 @@ Antes de cargar la extensión, necesitas generar los iconos:
 ### Uso de la ventana independiente
 1. Al hacer clic en el icono de la extensión, se abrirá el popup tradicional
 2. En la parte inferior del popup, encontrarás un botón "Abrir en ventana"
-3. Al hacer clic en este botón, se abrirá la interfaz en una ventana independiente que permanecerá abierta durante todas las operaciones
-4. Esta ventana se mantendrá abierta incluso cuando se realicen búsquedas o se interactúe con Facebook
+3. Al hacer clic en este botón, se abrirá una ventana independiente que permanecerá abierta mientras navegas
 
-### Recargar la extensión después de cambios
-1. Después de realizar cambios en el código, regresa a `chrome://extensions/`
-2. Haz clic en el icono de recarga (↻) en la tarjeta de la extensión "Snap Lead Manager"
-3. Los cambios deberían aplicarse inmediatamente
-
-### Depuración
-1. Haz clic en "Detalles" en la tarjeta de la extensión
-2. Desplázate hacia abajo y haz clic en "Página en segundo plano" para inspeccionar el background script
-3. Para depurar el popup, haz clic derecho en el icono de la extensión y selecciona "Inspeccionar"
-4. Para depurar los content scripts, abre las herramientas de desarrollador en una página de Facebook donde se esté ejecutando la extensión
-
-### Notas importantes
-- Asegúrate de que los iconos estén presentes en la carpeta `/icons` antes de cargar la extensión
-- Si realizas cambios en el `manifest.json`, deberás recargar la extensión manualmente
-- Para probar la extensión en Facebook, deberás iniciar sesión en tu cuenta de Facebook
+### Uso del sidebar en Facebook
+1. Navega a Facebook.com
+2. Una vez cargada la página, verás un botón en el lado derecho para mostrar el sidebar
+3. Introduce el término de búsqueda (y opcionalmente la ciudad) y haz clic en "Buscar" o presiona Enter
+4. Los resultados se procesarán y se mostrarán en el sidebar
+5. La información de búsqueda se mantendrá incluso si recargas la página
