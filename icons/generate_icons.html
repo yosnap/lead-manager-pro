@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generador de Iconos - Snap Lead Manager</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .icon-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin: 20px 0;
+    }
+    .icon-item {
+      text-align: center;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      margin-bottom: 10px;
+    }
+    button {
+      padding: 8px 16px;
+      background-color: #000;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      margin-top: 5px;
+    }
+    h1, h2 {
+      border-bottom: 2px solid #000;
+      padding-bottom: 10px;
+    }
+    .instructions {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-left: 4px solid #000;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Generador de Iconos - Snap Lead Manager</h1>
+  
+  <div class="instructions">
+    <h3>Instrucciones:</h3>
+    <p>1. Haz clic en "Generar Iconos" para crear los iconos en diferentes tamaños.</p>
+    <p>2. Para cada tamaño, haz clic en "Descargar" para guardar el archivo PNG.</p>
+    <p>3. Guarda cada archivo con el nombre correspondiente (icon16.png, icon48.png, icon128.png) en la carpeta "icons".</p>
+  </div>
+  
+  <button id="generate-btn">Generar Iconos</button>
+  
+  <div class="icon-container" id="icons">
+    <!-- Los iconos se generarán aquí -->
+  </div>
+  
+  <script>
+    // SVG del icono (círculos concéntricos en blanco y negro)
+    const svgTemplate = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="SIZE" height="SIZE" viewBox="0 0 128 128">
+        <rect width="128" height="128" fill="white"/>
+        <path d="M64 16C37.49 16 16 37.49 16 64C16 90.51 37.49 112 64 112C90.51 112 112 90.51 112 64C112 37.49 90.51 16 64 16ZM64 24C86.09 24 104 41.91 104 64C104 86.09 86.09 104 64 104C41.91 104 24 86.09 24 64C24 41.91 41.91 24 64 24ZM64 32C46.33 32 32 46.33 32 64C32 81.67 46.33 96 64 96C81.67 96 96 81.67 96 64C96 46.33 81.67 32 64 32ZM64 40C77.25 40 88 50.75 88 64C88 77.25 77.25 88 64 88C50.75 88 40 77.25 40 64C40 50.75 50.75 40 64 40ZM64 48C55.16 48 48 55.16 48 64C48 72.84 55.16 80 64 80C72.84 80 80 72.84 80 64C80 55.16 72.84 48 64 48ZM64 56C68.42 56 72 59.58 72 64C72 68.42 68.42 72 64 72C59.58 72 56 68.42 56 64C56 59.58 59.58 56 64 56Z" fill="black"/>
+      </svg>
+    `;
+    
+    // Tamaños de iconos
+    const sizes = [16, 48, 128];
+    
+    // Función para generar los iconos
+    function generateIcons() {
+      const iconsContainer = document.getElementById('icons');
+      iconsContainer.innerHTML = '';
+      
+      sizes.forEach(size => {
+        // Crear contenedor para este icono
+        const iconItem = document.createElement('div');
+        iconItem.className = 'icon-item';
+        
+        // Crear título
+        const title = document.createElement('h3');
+        title.textContent = `Icono ${size}x${size}`;
+        iconItem.appendChild(title);
+        
+        // Crear canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        canvas.id = `canvas-${size}`;
+        iconItem.appendChild(canvas);
+        
+        // Crear botón de descarga
+        const downloadBtn = document.createElement('button');
+        downloadBtn.textContent = 'Descargar';
+        downloadBtn.onclick = () => downloadIcon(size);
+        iconItem.appendChild(downloadBtn);
+        
+        // Añadir a la página
+        iconsContainer.appendChild(iconItem);
+        
+        // Dibujar el icono
+        drawIcon(size);
+      });
+    }
+    
+    // Función para dibujar un icono en el canvas
+    function drawIcon(size) {
+      const canvas = document.getElementById(`canvas-${size}`);
+      const ctx = canvas.getContext('2d');
+      
+      // Crear una imagen a partir del SVG
+      const img = new Image();
+      const svg = svgTemplate.replace(/SIZE/g, size);
+      const blob = new Blob([svg], {type: 'image/svg+xml'});
+      const url = URL.createObjectURL(blob);
+      
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, size, size);
+        URL.revokeObjectURL(url);
+      };
+      
+      img.src = url;
+    }
+    
+    // Función para descargar un icono
+    function downloadIcon(size) {
+      const canvas = document.getElementById(`canvas-${size}`);
+      const link = document.createElement('a');
+      link.download = `icon${size}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+    
+    // Inicializar
+    document.getElementById('generate-btn').addEventListener('click', generateIcons);
+  </script>
+</body>
+</html>
