@@ -277,30 +277,42 @@ async function performSearch(searchTerm, searchData) {
     clearOperationTimeout('search');
     return { success: true, message: 'Navegando a la página de búsqueda...' };
   } catch (error) {
-    return handleError(error, 'search');
+    clearOperationTimeout('search');
+    console.error('Error en performSearch:', error);
+    return { success: false, error: error.message };
   }
 }
 
 // Función para aplicar filtros después de cargar la página de resultados
 async function applySearchFilters() {
+  console.log('Aplicando filtros de búsqueda...');
+  updateStatus('Aplicando filtros de búsqueda...', 20);
+  
+  // Comprobar si ya hemos aplicado los filtros
+  if (localStorage.getItem('snap_lead_manager_city_filter_applied') === 'true') {
+    console.log('Los filtros ya están aplicados, omitiendo');
+    return { success: true, message: 'Filtros ya aplicados' };
+  }
+  
   try {
-    const searchData = localStorage.getItem('snap_lead_manager_search_data');
-    if (!searchData) {
-      console.log('No hay datos de búsqueda en localStorage');
-      return;
+    // Obtener datos de búsqueda del localStorage
+    const searchDataStr = localStorage.getItem('snap_lead_manager_search_data');
+    if (!searchDataStr) {
+      console.log('No hay datos de búsqueda, omitiendo filtros');
+      return { success: true, message: 'No hay datos de filtro para aplicar' };
     }
     
-    const parsedData = JSON.parse(searchData);
-    if (!parsedData.city || parsedData.city.trim() === '') {
+    const searchData = JSON.parse(searchDataStr);
+    if (!searchData.city || searchData.city.trim() === '') {
       console.log('No hay ciudad especificada en los datos de búsqueda');
-      return;
+      return { success: true, message: 'No hay ciudad para filtrar' };
     }
     
     // Marcar que estamos aplicando el filtro
     localStorage.setItem('snap_lead_manager_city_filter_applied', 'false');
     
     updateStatus('Aplicando filtro de ciudad...', 20);
-    console.log('Comenzando a aplicar filtro de ciudad:', parsedData.city);
+    console.log('Comenzando a aplicar filtro de ciudad:', searchData.city);
     
     // Esperar a que se cargue completamente la página de resultados
     await sleep(3000);
@@ -348,8 +360,8 @@ async function applySearchFilters() {
     await sleep(500);
     
     // 3. Escribir la ciudad deseada
-    console.log('Escribiendo la ciudad:', parsedData.city);
-    await simulateTyping(cityInput, parsedData.city);
+    console.log('Escribiendo la ciudad:', searchData.city);
+    await simulateTyping(cityInput, searchData.city);
     
     // 4. Esperar a que aparezcan las sugerencias
     await sleep(2000);
@@ -462,7 +474,7 @@ async function applySearchFilters() {
             if (clickable.element) {
               await clickElementWithMultipleStrategies(clickable.element, clickable.description);
               // Verificar si se aplicó el filtro después de cada intento
-              if (document.querySelector('input[aria-label="Ciudad"]')?.value.includes(parsedData.city)) {
+              if (document.querySelector('input[aria-label="Ciudad"]')?.value.includes(searchData.city)) {
                 console.log('Filtro aplicado con éxito usando:', clickable.description);
                 break;
               }
@@ -506,7 +518,7 @@ async function applySearchFilters() {
     
     // Si todos los métodos anteriores fallan, buscar cualquier elemento que contenga el texto
     console.log('Intentando método de respaldo final...');
-    const cityLower = parsedData.city.toLowerCase().trim();
+    const cityLower = searchData.city.toLowerCase().trim();
     const textMatchingElements = Array.from(document.querySelectorAll('div, span, li'))
       .filter(el => {
         // Solo elementos visibles y que contengan el texto de la ciudad
@@ -534,6 +546,21 @@ async function applySearchFilters() {
   } catch (error) {
     console.error('Error al aplicar filtro de ciudad:', error);
     updateStatus('Error al aplicar filtro de ciudad: ' + error.message, 30, true);
+  }
+  
+  // Esperar a que los resultados se carguen después de aplicar el filtro
+  console.log('Esperando a que se carguen los resultados con el filtro aplicado...');
+  updateStatus('Esperando a que se carguen los resultados con filtro de ciudad...', 45);
+  await sleep(5000);
+  
+  // Iniciar la búsqueda de perfiles para continuar con el proceso
+  console.log('Iniciando búsqueda de perfiles después de aplicar filtro de ciudad...');
+  try {
+    await findProfiles();
+    console.log('Búsqueda de perfiles completada con éxito después de aplicar filtro de ciudad');
+  } catch (error) {
+    console.error('Error al buscar perfiles después de aplicar filtro de ciudad:', error);
+    updateStatus('Error en la búsqueda después de aplicar filtro: ' + error.message, 30, true);
   }
 }
 
@@ -631,85 +658,106 @@ if (chrome.runtime && chrome.runtime.onMessage) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('Content script recibió mensaje:', message);
     
-    try {
-      if (message.action === 'search') {
-        if (!isProcessing) {
-          console.log('Iniciando búsqueda con término:', message.searchTerm);
-          
-          // Marcar como procesando
-          isProcessing = true;
-          
-          // Realizar la búsqueda
-          performSearch(message.searchTerm, message.searchData)
-            .then(result => {
-              console.log('Búsqueda iniciada con éxito:', result);
-              isProcessing = false; // Restablecer el flag cuando la búsqueda termina
-              sendResponse({ success: true, result });
-            })
-            .catch(error => {
-              console.error('Error al iniciar búsqueda:', error);
-              isProcessing = false; // Restablecer el flag en caso de error
-              sendResponse({ success: false, error: error.message });
-            });
-          
-          // Esto es crucial para indicar que la respuesta se enviará asincrónicamente
-          return true;
-        } else {
-          console.warn('Ya hay una búsqueda en proceso');
-          sendResponse({ success: false, error: 'Ya hay una búsqueda en proceso' });
-        }
-      } else if (message.action === 'restore_sidebar') {
-        // Restaurar el sidebar
-        injectSidebar();
+    if (message.action === 'search') {
+      if (!isProcessing) {
+        console.log('Iniciando búsqueda con término:', message.searchTerm);
         
-        // Si hay datos de búsqueda, guardarlos en localStorage
-        if (message.searchTerm) {
-          currentSearchTerm = message.searchTerm;
+        // Marcar como procesando
+        isProcessing = true;
+        
+        // Usar promesa para manejar la búsqueda de forma asíncrona
+        performSearch(message.searchTerm, message.searchData)
+          .then(result => {
+            console.log('Búsqueda iniciada con éxito:', result);
+            isProcessing = false; // Restablecer el flag cuando la búsqueda termina
+            sendResponse({ success: true, result });
+          })
+          .catch(error => {
+            console.error('Error al iniciar búsqueda:', error);
+            isProcessing = false; // Restablecer el flag en caso de error
+            sendResponse({ success: false, error: error.message });
+          });
+        
+        // Indicar que la respuesta se enviará asincrónicamente
+        return true;
+      } else {
+        console.warn('Ya hay una búsqueda en proceso');
+        sendResponse({ success: false, error: 'Ya hay una búsqueda en proceso' });
+        return false; // No es necesario mantener la conexión abierta
+      }
+    } else if (message.action === 'restore_sidebar') {
+      // Restaurar el sidebar
+      injectSidebar();
+      
+      // Si hay datos de búsqueda, guardarlos en localStorage
+      if (message.searchTerm) {
+        currentSearchTerm = message.searchTerm;
+        
+        if (message.searchData) {
+          console.log('Restaurando datos de búsqueda:', message.searchData);
+          localStorage.setItem('snap_lead_manager_search_data', JSON.stringify(message.searchData));
           
-          if (message.searchData) {
-            console.log('Restaurando datos de búsqueda:', message.searchData);
-            localStorage.setItem('snap_lead_manager_search_data', JSON.stringify(message.searchData));
+          // Resetear el indicador de filtro de ciudad aplicado
+          localStorage.setItem('snap_lead_manager_city_filter_applied', 'false');
+        }
+      }
+      
+      sendResponse({ success: true, message: 'Sidebar restaurado' });
+    } else if (message.action === 'apply_filters') {
+      // Aplicar filtros de búsqueda (principalmente ciudad)
+      console.log('Solicitando aplicar filtros de búsqueda');
+      
+      // Verificar si ya tenemos filtros aplicados
+      const cityFilterApplied = localStorage.getItem('snap_lead_manager_city_filter_applied') === 'true';
+      
+      if (cityFilterApplied) {
+        console.log('Los filtros ya están aplicados, iniciando búsqueda de perfiles...');
+        // Aunque los filtros estén aplicados, iniciamos la búsqueda para asegurar que se realice el proceso completo
+        findProfiles()
+          .then(() => {
+            sendResponse({ success: true, message: 'Filtros ya aplicados, búsqueda de perfiles completada' });
+          })
+          .catch(error => {
+            console.error('Error al buscar perfiles con filtros ya aplicados:', error);
+            sendResponse({ success: false, error: error.message });
+          });
+      } else {
+        // Aplicar filtros de búsqueda
+        console.log('Aplicando filtros y luego buscando perfiles...');
+        applySearchFilters()
+          .then(result => {
+            console.log('Resultado de aplicar filtros:', result);
             
-            // Resetear el indicador de filtro de ciudad aplicado
-            localStorage.setItem('snap_lead_manager_city_filter_applied', 'false');
-          }
-        }
-        
-        sendResponse({ success: true, message: 'Sidebar restaurado' });
-      } else if (message.action === 'apply_filters') {
-        // Aplicar filtros de búsqueda (principalmente ciudad)
-        console.log('Solicitando aplicar filtros de búsqueda');
-        
-        // Verificar si ya tenemos filtros aplicados
-        const cityFilterApplied = localStorage.getItem('snap_lead_manager_city_filter_applied') === 'true';
-        
-        if (cityFilterApplied) {
-          console.log('Los filtros ya están aplicados, omitiendo');
-          sendResponse({ success: true, message: 'Filtros ya aplicados' });
-        } else {
-          // Aplicar filtros de búsqueda
-          applySearchFilters().then(() => {
-            sendResponse({ success: true, message: 'Filtros aplicados correctamente' });
-          }).catch(error => {
+            if (result && result.success) {
+              return findProfiles()
+                .then(() => {
+                  sendResponse({ success: true, message: 'Filtros aplicados y búsqueda de perfiles completada' });
+                })
+                .catch(error => {
+                  console.error('Error al buscar perfiles después de aplicar filtros:', error);
+                  sendResponse({ success: false, error: error.message });
+                });
+            } else {
+              sendResponse({ success: false, error: result?.error || 'Error al aplicar filtros' });
+            }
+          })
+          .catch(error => {
             console.error('Error al aplicar filtros:', error);
             sendResponse({ success: false, error: error.message });
           });
-        }
-        
-        return true; // Mantener el canal abierto para respuesta asíncrona
-      } else if (message.action === 'status_update') {
-        // Actualizar estado en la página
-        updateStatus(message.message || 'Estado actualizado', message.progress || 0, message.error);
-        sendResponse({ success: true });
       }
       
-      // Respuesta por defecto
+      return true; // Mantener el canal abierto para respuesta asíncrona
+    } else if (message.action === 'status_update') {
+      // Actualizar estado en la página
+      updateStatus(message.message || 'Estado actualizado', message.progress || 0, message.error);
       sendResponse({ success: true });
-      return true;
-    } catch (error) {
-      console.error('Error al procesar mensaje:', error);
-      sendResponse({ success: false, error: error.message });
-      return true;
+      return false; // No necesitamos mantener el canal abierto
+    } else {
+      // Respuesta por defecto para acciones desconocidas
+      console.log('Acción no reconocida:', message.action);
+      sendResponse({ success: false, error: 'Acción no reconocida' });
+      return false; // No necesitamos mantener el canal abierto
     }
   });
 } else {
@@ -742,7 +790,33 @@ async function findProfiles() {
     console.log('Esperando que se cargue el contenedor de perfiles...');
     updateStatus('Esperando que se cargue el contenedor de perfiles...', 35);
     
-    const feedContainer = await waitForElement(SELECTORS.PROFILE_CONTAINER, 20000);
+    // Intentar varios selectores para mayor robustez
+    let feedContainer = null;
+    const possibleSelectors = [
+      SELECTORS.PROFILE_CONTAINER,
+      'div[role="feed"]',
+      'div.x1hc1fzr',
+      'div[data-pagelet="MainFeed"]',
+      'div.x9f619.x1n2onr6.x1ja2u2z' // Selector alternativo que podría funcionar en diferentes versiones de Facebook
+    ];
+    
+    for (const selector of possibleSelectors) {
+      try {
+        const container = await waitForElement(selector, 5000);
+        if (container) {
+          feedContainer = container;
+          console.log(`Contenedor de perfiles encontrado con selector: ${selector}`);
+          break;
+        }
+      } catch (e) {
+        console.log(`No se encontró contenedor con selector: ${selector}`);
+      }
+    }
+    
+    if (!feedContainer) {
+      throw new Error('No se pudo encontrar el contenedor de perfiles después de intentar varios selectores');
+    }
+    
     console.log('Contenedor de perfiles encontrado:', feedContainer);
     updateStatus('Contenedor de perfiles encontrado', 40);
     
@@ -752,7 +826,7 @@ async function findProfiles() {
     await sleep(3000);
     
     // Función para hacer scroll para cargar más resultados
-    const scrollForMoreResults = async (maxScrolls = 5) => {
+    const scrollForMoreResults = async (maxScrolls = 50) => {
       let prevHeight = 0;
       let scrollCount = 0;
       let noChangeCount = 0;
@@ -760,13 +834,33 @@ async function findProfiles() {
       console.log(`Comenzando scroll para cargar más resultados (máximo ${maxScrolls} scrolls)...`);
       updateStatus(`Comenzando scroll para cargar más resultados (máximo ${maxScrolls} scrolls)...`, 50);
       
+      // Verificar si hay un botón de "Ver más resultados" o similar y hacer clic si existe
+      try {
+        const moreResultsButtons = Array.from(document.querySelectorAll('div[role="button"]')).filter(
+          button => button.textContent.includes('Ver más') || 
+                   button.textContent.includes('Mostrar más') || 
+                   button.textContent.includes('Cargar más')
+        );
+        
+        if (moreResultsButtons.length > 0) {
+          console.log('Se encontró botón de "Ver más resultados", haciendo clic...');
+          moreResultsButtons[0].click();
+          await sleep(3000); // Esperar a que carguen más resultados
+        }
+      } catch (e) {
+        console.log('No se encontró botón de "Ver más resultados" o hubo un error:', e);
+      }
+      
       while (scrollCount < maxScrolls) {
         // Obtener altura actual del contenedor
         const currentHeight = feedContainer.scrollHeight;
+        const documentHeight = document.documentElement.scrollHeight;
         
         // Si la altura no ha cambiado después de varios intentos, asumimos que no hay más resultados
         if (currentHeight === prevHeight) {
           noChangeCount++;
+          console.log(`Altura sin cambios: ${noChangeCount}/3. Actual: ${currentHeight}px`);
+          
           if (noChangeCount >= 3) {
             console.log('No hay más resultados para cargar (altura estable).');
             updateStatus('No hay más resultados para cargar (altura estable)', 60);
@@ -774,13 +868,28 @@ async function findProfiles() {
           }
         } else {
           noChangeCount = 0;
+          console.log(`Altura cambió de ${prevHeight}px a ${currentHeight}px`);
         }
         
-        // Hacer scroll hasta el final del contenedor
-        window.scrollTo(0, document.body.scrollHeight);
+        // Verificar si hemos llegado al final de la página
+        const scrollY = window.scrollY;
+        const visibleHeight = window.innerHeight;
+        const totalHeight = documentHeight;
         
-        // Esperar a que se carguen nuevos resultados
-        await sleep(1500);
+        console.log(`Scroll actual: ${scrollY}px, Altura visible: ${visibleHeight}px, Altura total: ${totalHeight}px`);
+        
+        // Si estamos cerca del final de la página y no hay cambios, podríamos haber llegado al final
+        if (scrollY + visibleHeight >= totalHeight - 200 && noChangeCount >= 2) {
+          console.log('Llegamos al final de la página.');
+          updateStatus('Llegamos al final de la página', 60);
+          break;
+        }
+        
+        // Hacer scroll hasta el final del contenedor y un poco más allá para forzar la carga
+        window.scrollTo(0, document.body.scrollHeight + 1000);
+        
+        // Esperar a que se carguen nuevos resultados (aumentamos el tiempo de espera)
+        await sleep(2000);
         
         prevHeight = currentHeight;
         scrollCount++;

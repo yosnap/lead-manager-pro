@@ -266,11 +266,27 @@ function performSearch() {
     // Enviar mensaje al script de fondo para iniciar la búsqueda
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
       try {
+        console.log('Enviando solicitud de búsqueda al background...', {
+          searchTerm,
+          searchData
+        });
+        
         chrome.runtime.sendMessage({
           action: 'search',
           searchTerm: searchTerm,
           searchData: searchData
         }, function(response) {
+          // Verifica si hay un error de runtime
+          if (chrome.runtime.lastError) {
+            const errorMsg = chrome.runtime.lastError.message;
+            console.error('Error de runtime al enviar mensaje:', errorMsg);
+            addLogEntry(`Error de comunicación: ${errorMsg}`, true);
+            showError(`Error de comunicación: ${errorMsg}`);
+            return;
+          }
+          
+          console.log('Respuesta recibida:', response);
+          
           if (response && response.success) {
             console.log('Búsqueda iniciada con éxito');
             addLogEntry('Búsqueda iniciada con éxito, navegando a Facebook...');
@@ -280,7 +296,7 @@ function performSearch() {
               addLogEntry(`Utilizando filtro de ciudad: "${searchCity}"`);
             }
           } else {
-            const errorMsg = response?.message || 'Error al iniciar la búsqueda';
+            const errorMsg = response?.error || 'Acción no reconocida';
             console.error('Error al iniciar búsqueda:', errorMsg);
             addLogEntry(`Error al iniciar búsqueda: ${errorMsg}`, true);
             showError(`Error: ${errorMsg}`);

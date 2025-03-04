@@ -48,14 +48,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (tabs.length > 0) {
         console.log('Enviando solicitud de búsqueda a la pestaña activa:', tabs[0].id);
         
-        chrome.tabs.sendMessage(tabs[0].id, {
-          action: 'search',
-          searchTerm: message.searchTerm,
-          searchData: message.searchData
-        }, function(response) {
-          console.log('Respuesta recibida de la pestaña:', response);
-          sendResponse(response || { success: false, error: 'No se recibió respuesta de la pestaña' });
-        });
+        try {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'search',
+            searchTerm: message.searchTerm,
+            searchData: message.searchData
+          }, function(response) {
+            console.log('Respuesta recibida de la pestaña:', response);
+            
+            // Comprobar si hay un error de runtime (puede ocurrir si la pestaña se cerró o se desconectó)
+            if (chrome.runtime.lastError) {
+              console.error('Error al enviar mensaje a la pestaña:', chrome.runtime.lastError);
+              sendResponse({ 
+                success: false, 
+                error: 'Error de comunicación: ' + chrome.runtime.lastError.message 
+              });
+              return;
+            }
+            
+            // Enviar la respuesta recibida o un error si no hay respuesta
+            if (response) {
+              sendResponse(response);
+            } else {
+              sendResponse({ success: false, error: 'No se recibió respuesta de la pestaña' });
+            }
+          });
+        } catch (error) {
+          console.error('Error al enviar mensaje a la pestaña:', error);
+          sendResponse({ success: false, error: 'Error al enviar mensaje: ' + error.message });
+        }
       } else {
         console.error('No hay pestañas activas');
         sendResponse({ success: false, error: 'No hay pestañas activas' });
