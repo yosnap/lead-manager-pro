@@ -553,6 +553,11 @@ async function applySearchFilters() {
   updateStatus('Esperando a que se carguen los resultados con filtro de ciudad...', 45);
   await sleep(5000);
   
+  // Espera adicional después de aplicar el filtro de ciudad
+  console.log('Filtro de ciudad aplicado. Esperando 2 segundos adicionales antes de continuar...');
+  updateStatus('Filtro de ciudad aplicado. Preparando escaneo...', 48);
+  await sleep(2000);
+  
   // Iniciar la búsqueda de perfiles para continuar con el proceso
   console.log('Iniciando búsqueda de perfiles después de aplicar filtro de ciudad...');
   try {
