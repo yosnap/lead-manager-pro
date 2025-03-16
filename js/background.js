@@ -512,8 +512,8 @@ chrome.action.onClicked.addListener((tab) => {
 });
 
 // Función para manejar la búsqueda
-async function handleSearch(searchTerm, searchData, tabId, sendResponse) {
-  if (!searchTerm) {
+async function handleSearch(currentSearchTerm, searchData, tabId, sendResponse) {
+  if (!currentSearchTerm) {
     sendResponse({ success: false, message: 'Término de búsqueda vacío' });
     return;
   }

@@ -212,7 +212,10 @@ function toggleSidebar() {
 // Función principal de búsqueda
 async function performSearch(searchTerm, searchData) {
   console.log('Realizando búsqueda:', searchTerm, 'Datos adicionales:', searchData);
-  currentSearchTerm = searchTerm; // Guardar el término de búsqueda
+  currentSearchTerm = searchTerm; // Guardar el término de búsqueda en la variable global
+  
+  // Guardar tiempo de inicio
+  localStorage.setItem('snap_lead_manager_search_start_time', Date.now().toString());
   
   try {
     const timeoutPromise = setupOperationTimeout('search', 120000); // Aumentar a 2 minutos
@@ -864,6 +867,13 @@ try {
 // Función para encontrar perfiles en la página de resultados de búsqueda
 async function findProfiles() {
   try {
+    // Añadir al inicio de la función
+    console.log('Iniciando búsqueda de perfiles para término:', currentSearchTerm);
+    
+    // Obtener searchData del localStorage
+    const searchData = JSON.parse(localStorage.getItem('snap_lead_manager_search_data') || '{}');
+    console.log('Datos de búsqueda recuperados:', searchData);
+    
     console.log('Iniciando búsqueda de perfiles...');
     updateStatus('Iniciando búsqueda de perfiles...', 30);
     
@@ -1058,7 +1068,7 @@ async function findProfiles() {
     
     // Mostrar resumen completo de la búsqueda
     const searchSummary = {
-      searchTerm: searchTerm,
+      searchTerm: currentSearchTerm,
       searchLocation: searchData.location || 'No especificada',
       totalScrolls: scrollInfo,
       maxScrolls: 50, // El máximo configurado
@@ -1211,6 +1221,7 @@ async function findProfiles() {
       perfilesEncontrados: profiles.length,
       scrollsRealizados: scrollInfo,
       tiempoTotal: `${minutes}m ${seconds}s`,
+      searchTerm: currentSearchTerm,
       timestamp: new Date().toLocaleTimeString()
     };
 
@@ -2128,6 +2139,10 @@ async function applyCityFilter() {
       setTimeout(() => {
         isProcessing = true; // Asegurarse de que isProcessing sea true
         console.log('Iniciando búsqueda de perfiles después de aplicar filtro...');
+        
+        // Guardar el tiempo de inicio antes de realizar la búsqueda
+        localStorage.setItem('snap_lead_manager_search_start_time', Date.now().toString());
+        
         findProfiles()
           .then(profiles => {
             if (profiles && profiles.length > 0) {
@@ -2357,3 +2372,56 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 });
+
+// Añadir esta función justo antes o después de findProfiles()
+
+// Función para extraer información de un perfil
+async function extractProfileInfo(resultElement) {
+  try {
+    // Buscar el enlace al perfil
+    const profileLink = resultElement.querySelector(SELECTORS.PROFILE_LINK);
+    if (!profileLink) {
+      console.log('No se encontró enlace de perfil en el resultado');
+      return null;
+    }
+    
+    // Extraer URL y limpiarla
+    let profileUrl = profileLink.href || '';
+    // Normalizar URL (eliminar parámetros innecesarios)
+    if (profileUrl.includes('?')) {
+      profileUrl = profileUrl.split('?')[0];
+    }
+    
+    if (!profileUrl || !profileUrl.includes('facebook.com')) {
+      console.log('URL de perfil no válida:', profileUrl);
+      return null;
+    }
+    
+    // Extraer nombre del perfil
+    const name = profileLink.textContent || 'Nombre no disponible';
+    
+    // Buscar otra información relevante
+    const secondaryInfo = resultElement.querySelector('span:not(:first-child)');
+    const description = secondaryInfo ? secondaryInfo.textContent.trim() : '';
+    
+    // Buscar botón de "Añadir amigo"
+    const addFriendButton = resultElement.querySelector(SELECTORS.ADD_FRIEND_BUTTON);
+    const canAddFriend = !!addFriendButton;
+    
+    // Crear objeto de perfil
+    const profileInfo = {
+      name: name,
+      url: profileUrl,
+      description: description,
+      canAddFriend: canAddFriend,
+      processed: false,
+      timestamp: Date.now()
+    };
+    
+    console.log('Perfil extraído:', profileInfo);
+    return profileInfo;
+  } catch (error) {
+    console.error('Error al extraer información del perfil:', error);
+    return null; // Devolver null en caso de error para continuar con el siguiente perfil
+  }
+}
