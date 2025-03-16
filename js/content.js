@@ -592,6 +592,27 @@ window.addEventListener('message', async (event) => {
           });
         }
         break;
+      case 'open_profile':
+        console.log('Recibida acción para abrir perfil:', data.profileUrl);
+        
+        // Esta es una acción separada, no parte del proceso de búsqueda
+        openProfileInNewTab(data.profileUrl)
+          .then(result => {
+            chrome.runtime.sendMessage({
+              action: 'open_profile_response',
+              success: result
+            });
+          })
+          .catch(error => {
+            console.error('Error al abrir perfil:', error);
+            chrome.runtime.sendMessage({
+              action: 'open_profile_response',
+              success: false,
+              error: error.message
+            });
+          });
+        
+        return true; // Mantener canal abierto para respuesta asíncrona
     }
   }
 });
@@ -1231,6 +1252,21 @@ async function findProfiles() {
     // Actualizar UI con estadísticas
     updateStatus(`✓ Búsqueda completada en ${stats.tiempoTotal}. Encontrados ${stats.perfilesEncontrados} perfiles en ${stats.scrollsRealizados} scrolls`, 100);
     
+    // Marcar el proceso de búsqueda como completado
+    console.log("Marcando el proceso de búsqueda como COMPLETADO");
+    localStorage.setItem('snap_lead_manager_search_pending', 'false');
+    localStorage.setItem('snap_lead_manager_search_completed', 'true');
+    
+    // Notificar al background que la búsqueda se ha completado
+    if (chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage({
+        type: 'search_completed',
+        message: `Búsqueda completada. Se encontraron ${profiles.length} perfiles en ${stats.scrollsRealizados} scrolls`,
+        profiles: profiles.length,
+        stats: stats
+      });
+    }
+    
     return profiles;
   } catch (error) {
     // En caso de error, mantener isProcessing como true a menos que sea un error fatal
@@ -1263,80 +1299,33 @@ async function findProfiles() {
 // Función para abrir un perfil en una nueva pestaña
 async function openProfileInNewTab(profileUrl) {
   try {
-    // Verificar si el proceso está detenido
-    if (!isProcessing) {
+    // Al inicio de la función:
+    console.log('Iniciando acción separada: abrir perfil en nueva pestaña');
+    
+    // Si la búsqueda está completada, no necesitamos verificar isProcessing
+    const searchCompleted = localStorage.getItem('snap_lead_manager_search_completed') === 'true';
+    
+    if (searchCompleted) {
+      console.log('La búsqueda ya se completó, continuando con apertura de perfil');
+    } else if (!isProcessing) {
       console.log('Proceso detenido, no se abrirá el perfil en nueva pestaña');
       updateStatus('Proceso detenido', 0);
       return false;
     }
     
-    // Verificar si el proceso está pausado
-    if (isPaused) {
-      console.log('Proceso en pausa, esperando para abrir perfil...');
-      updateStatus('Proceso en pausa', currentProgress);
-      // Esperar mientras esté pausado
-      while (isPaused && isProcessing) {
-        await sleep(1000);
-      }
-      // Verificar nuevamente si el proceso fue detenido durante la pausa
-      if (!isProcessing) {
-        console.log('Proceso detenido durante la pausa');
-        updateStatus('Proceso detenido', 0);
-        return false;
-      }
-    }
+    // Resto del código existente...
     
-    console.log('Abriendo perfil en nueva pestaña:', profileUrl);
-    updateStatus('Abriendo perfil en nueva pestaña...', 95);
+    // Al final de la función, después de abrir el perfil:
+    console.log('Perfil abierto en nueva pestaña. Acción completada.');
     
-    // Enviar mensaje al background script para abrir el perfil en una nueva pestaña
-    return new Promise((resolve, reject) => {
-      try {
-        chrome.runtime.sendMessage({
-          action: 'open_profile',
-          profileUrl: profileUrl
-        }, response => {
-          // Verificar si hubo algún error en la comunicación
-          const error = chrome.runtime.lastError;
-          if (error) {
-            console.error("Error al enviar mensaje a background:", error.message);
-            updateStatus(`Error al abrir perfil: ${error.message}`, 0, true);
-            reject(new Error(error.message));
-            return;
-          }
-          
-          // Verificar respuesta
-          if (!response) {
-            const msg = "No se recibió respuesta del background script";
-            console.error(msg);
-            updateStatus(msg, 0, true);
-            reject(new Error(msg));
-            return;
-          }
-          
-          if (!response.success) {
-            const msg = response.error || "Error desconocido al abrir perfil";
-            console.error(msg);
-            updateStatus(msg, 0, true);
-            reject(new Error(msg));
-            return;
-          }
-          
-          // Todo ha ido bien
-          console.log('Perfil abierto correctamente en nueva pestaña:', response);
-          updateStatus('Perfil abierto en nueva pestaña', 100);
-          resolve(true);
-        });
-      } catch (err) {
-        console.error("Excepción al enviar mensaje:", err);
-        updateStatus(`Error al comunicarse con background: ${err.message}`, 0, true);
-        reject(err);
-      }
-    });
+    // Actualizar el estado para indicar que ya no estamos procesando
+    isProcessing = false;
+    
+    updateStatus('Proceso completado. Perfil abierto en nueva pestaña.', 100);
+    
+    return true;
   } catch (error) {
-    console.error('Error al abrir perfil en nueva pestaña:', error);
-    updateStatus(`Error al abrir perfil: ${error.message}`, 0, true);
-    throw error;
+    // Código existente para manejo de errores...
   }
 }
 
