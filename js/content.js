@@ -613,6 +613,19 @@ window.addEventListener('message', async (event) => {
           });
         
         return true; // Mantener canal abierto para respuesta asíncrona
+      case 'search_completed':
+        // Notificar al sidebar que puede mostrar los resultados
+        const searchResults = event.data.profiles || [];
+        
+        // Enviar resultados al sidebar
+        const iframe = document.getElementById('snap-lead-manager-iframe');
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({
+            action: 'display_profile_links',
+            profiles: searchResults
+          }, '*');
+        }
+        break;
     }
   }
 });
@@ -2364,53 +2377,59 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Añadir esta función justo antes o después de findProfiles()
 
-// Función para extraer información de un perfil
+// Función para extraer información de un perfil (actualizada)
 async function extractProfileInfo(resultElement) {
   try {
-    // Buscar el enlace al perfil
-    const profileLink = resultElement.querySelector(SELECTORS.PROFILE_LINK);
+    // Selector específico para los enlaces que contienen nombres de perfiles en Facebook
+    // Este selector busca enlaces con los atributos específicos que has mostrado
+    const profileLink = resultElement.querySelector('a[aria-hidden="true"][role="presentation"][tabindex="-1"]');
+    
     if (!profileLink) {
-      console.log('No se encontró enlace de perfil en el resultado');
-      return null;
+      console.log('No se encontró enlace de perfil con el selector específico');
+      
+      // Selector alternativo más genérico como respaldo
+      const alternativeProfileLink = resultElement.querySelector('a[href*="facebook.com/"]:not([href*="search"])');
+      if (!alternativeProfileLink) {
+        console.log('No se encontró enlace de perfil con selector alternativo');
+        return null;
+      }
+      
+      return processProfileLink(alternativeProfileLink);
     }
     
-    // Extraer URL y limpiarla
-    let profileUrl = profileLink.href || '';
-    // Normalizar URL (eliminar parámetros innecesarios)
-    if (profileUrl.includes('?')) {
-      profileUrl = profileUrl.split('?')[0];
-    }
-    
-    if (!profileUrl || !profileUrl.includes('facebook.com')) {
-      console.log('URL de perfil no válida:', profileUrl);
-      return null;
-    }
-    
-    // Extraer nombre del perfil
-    const name = profileLink.textContent || 'Nombre no disponible';
-    
-    // Buscar otra información relevante
-    const secondaryInfo = resultElement.querySelector('span:not(:first-child)');
-    const description = secondaryInfo ? secondaryInfo.textContent.trim() : '';
-    
-    // Buscar botón de "Añadir amigo"
-    const addFriendButton = resultElement.querySelector(SELECTORS.ADD_FRIEND_BUTTON);
-    const canAddFriend = !!addFriendButton;
-    
-    // Crear objeto de perfil
-    const profileInfo = {
-      name: name,
-      url: profileUrl,
-      description: description,
-      canAddFriend: canAddFriend,
-      processed: false,
-      timestamp: Date.now()
-    };
-    
-    console.log('Perfil extraído:', profileInfo);
-    return profileInfo;
+    return processProfileLink(profileLink);
   } catch (error) {
     console.error('Error al extraer información del perfil:', error);
-    return null; // Devolver null en caso de error para continuar con el siguiente perfil
+    return null;
   }
+}
+
+// Función auxiliar para procesar el enlace del perfil
+function processProfileLink(profileLink) {
+  // Extraer URL y limpiarla
+  let profileUrl = profileLink.href || '';
+  if (profileUrl.includes('?')) {
+    profileUrl = profileUrl.split('?')[0];
+  }
+  
+  if (!profileUrl || !profileUrl.includes('facebook.com')) {
+    console.log('URL de perfil no válida:', profileUrl);
+    return null;
+  }
+  
+  // Extraer nombre directamente del texto del enlace
+  // Este es el cambio principal - obtenemos el texto directamente del enlace
+  const name = profileLink.textContent.trim();
+  console.log('Nombre extraído correctamente:', name);
+  
+  // Crear objeto de perfil
+  const profileInfo = {
+    name: name,
+    url: profileUrl,
+    processed: false,
+    timestamp: Date.now()
+  };
+  
+  console.log('Perfil extraído completo:', profileInfo);
+  return profileInfo;
 }
