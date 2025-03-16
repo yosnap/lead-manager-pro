@@ -6,7 +6,8 @@ const SELECTORS = {
   ADD_FRIEND_BUTTON: 'div[aria-label="Añadir a amigos"], div[aria-label="Agregar a amigos"], div[aria-label="Add Friend"]',
   SEARCH_INPUT: 'input[type="search"]',
   MESSAGE_BUTTON: 'div[aria-label="Enviar mensaje"], div[aria-label="Message"]',
-  MESSAGE_INPUT: 'div[role="textbox"][contenteditable="true"]'
+  MESSAGE_INPUT: 'div[role="textbox"][contenteditable="true"]',
+  SEND_BUTTON: 'button[type="submit"]' // Agregar selector para el botón de envío
 };
 
 // Estado local
@@ -23,6 +24,12 @@ let state = {
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
 const OPERATION_TIMEOUT = 30000;
+
+// Variables globales para sincronización con background.js
+// ELIMINAR esta línea que causa el error de duplicación
+// let isProcessing = true; 
+let isPaused = false;
+let currentProgress = 0;
 
 // Función para manejar errores
 function handleError(error, operation) {
@@ -92,6 +99,11 @@ function setupOperationTimeout(operation, timeout = OPERATION_TIMEOUT) {
     clearTimeout(state.timeouts[operation]);
   }
   
+  // Aumentar el timeout para la operación de búsqueda
+  if (operation === 'search') {
+    timeout = 120000; // 2 minutos para búsqueda
+  }
+  
   return new Promise((resolve, reject) => {
     state.timeouts[operation] = setTimeout(() => {
       const error = new Error(`Operación ${operation} excedió el tiempo límite de ${timeout/1000} segundos`);
@@ -117,60 +129,54 @@ let retryCount = 0;
 function injectSidebar(options = {}) {
   // Verificar si el sidebar ya existe
   if (document.getElementById('snap-lead-manager-overlay')) {
+    console.log('Sidebar ya inyectado, no se necesita volver a crear');
     return;
   }
-
-  // Crear el contenedor del sidebar
+  
+  console.log('Inyectando sidebar...');
+  
+  // Crear el overlay que contendrá el sidebar
   const overlay = document.createElement('div');
   overlay.id = 'snap-lead-manager-overlay';
+  overlay.className = 'snap-lead-manager-overlay';
   
-  // Crear la manija para mostrar/ocultar
+  // Crear el handle para colapsar/expandir el sidebar
   const handle = document.createElement('div');
   handle.id = 'snap-lead-manager-handle';
+  handle.className = 'snap-lead-manager-handle';
   handle.innerHTML = '⟪';
-  handle.title = 'Mostrar/Ocultar Snap Lead Manager';
+  handle.title = 'Colapsar/Expandir Snap Lead Manager';
   
-  // Crear el iframe para el contenido del sidebar
+  // Agregar evento de clic al handle
+  handle.addEventListener('click', toggleSidebar);
+  
+  // Crear el iframe para el sidebar
   const iframe = document.createElement('iframe');
   iframe.id = 'snap-lead-manager-iframe';
   iframe.src = chrome.runtime.getURL('sidebar.html');
+  iframe.className = 'snap-lead-manager-iframe';
   
-  // Ensamblar el sidebar
+  // Agregar elementos al DOM
   overlay.appendChild(handle);
   overlay.appendChild(iframe);
   document.body.appendChild(overlay);
   
-  // Añadir clase al body para el margen
-  document.body.classList.add('snap-lead-manager-active');
-  
-  // Manejar eventos de la manija
-  handle.addEventListener('click', toggleSidebar);
-  
-  // Aplicar estado inicial del sidebar (expandido o colapsado)
-  let initialStateCollapsed = false;
-  
-  // Si hay opciones específicas, usarlas primero
-  if (options.collapsed !== undefined) {
-    initialStateCollapsed = options.collapsed;
-  } 
-  // Si no hay opciones específicas, usar el estado almacenado en localStorage
-  else {
-    const sidebarState = localStorage.getItem('snap-lead-manager-state');
-    if (sidebarState === 'collapsed') {
-      initialStateCollapsed = true;
-    }
-  }
-  
-  // Si debe estar colapsado inicialmente, aplicar ese estado
-  if (initialStateCollapsed) {
+  // Verificar si hay un estado guardado
+  const savedState = localStorage.getItem('snap-lead-manager-state');
+  if (savedState === 'collapsed') {
+    // Si estaba colapsado, colapsar ahora
     toggleSidebar();
   }
   
-  // Notificar al background script sobre el estado del sidebar
+  // Agregar clase al body para ajustar el contenido
+  document.body.classList.add('snap-lead-manager-active');
+  
+  console.log('Sidebar inyectado correctamente');
+  
+  // Notificar al background script que el sidebar se ha inyectado
   if (chrome.runtime && chrome.runtime.sendMessage) {
     chrome.runtime.sendMessage({
-      action: 'sidebar_state_changed',
-      isOpen: state.sidebarVisible
+      action: 'sidebar_injected'
     });
   }
 }
@@ -209,7 +215,7 @@ async function performSearch(searchTerm, searchData) {
   currentSearchTerm = searchTerm; // Guardar el término de búsqueda
   
   try {
-    const timeoutPromise = setupOperationTimeout('search', 60000); // Aumentar el timeout a 60 segundos
+    const timeoutPromise = setupOperationTimeout('search', 120000); // Aumentar a 2 minutos
     
     // Verificar si chrome.runtime está disponible antes de enviar mensaje
     if (chrome.runtime && chrome.runtime.sendMessage) {
@@ -257,29 +263,52 @@ async function performSearch(searchTerm, searchData) {
       if (chrome.runtime && chrome.runtime.sendMessage) {
         chrome.runtime.sendMessage({
           type: 'status_update',
-          message: 'Navegando a la página de búsqueda...',
+          message: 'Redirigiendo a la página de búsqueda...',
           progress: 15
         });
-        console.log("Mensaje enviado: Navegando a la página de búsqueda");
       }
     } catch (e) {
-      console.error("Error al enviar mensaje antes de navegar:", e);
+      console.error('Error al enviar mensaje de estado antes de redirección:', e);
     }
     
-    // Navegar a la página de búsqueda
-    console.log('Navegando a la página de búsqueda...');
+    // Redirigir a la URL de búsqueda
+    console.log('Redirigiendo a:', baseSearchUrl);
+    updateStatus('Redirigiendo a la página de búsqueda...', 15);
     
-    // Usar timeout para asegurarnos de que la respuesta al mensaje original se envía primero
-    setTimeout(() => {
+    // Verificar si ya estamos en la página de búsqueda
+    const currentUrl = window.location.href;
+    const isSearchPage = currentUrl.includes('/search/people');
+    
+    if (isSearchPage) {
+      console.log('Ya estamos en una página de búsqueda, aplicando filtros directamente...');
+      
+      // Si ya estamos en una página de búsqueda, aplicar los filtros directamente
+      await applySearchFilters();
+    } else {
+      // Si no estamos en una página de búsqueda, redirigir
       window.location.href = baseSearchUrl;
-    }, 100);
+    }
     
+    // Limpiar el timeout al finalizar con éxito
     clearOperationTimeout('search');
-    return { success: true, message: 'Navegando a la página de búsqueda...' };
+    
+    return { success: true, message: 'Búsqueda iniciada' };
   } catch (error) {
+    // Limpiar el timeout en caso de error
     clearOperationTimeout('search');
-    console.error('Error en performSearch:', error);
-    return { success: false, error: error.message };
+    console.error('Error al realizar búsqueda:', error);
+    
+    // Notificar al background script sobre el error
+    if (chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage({
+        type: 'status_update',
+        message: 'Error al realizar búsqueda: ' + error.message,
+        error: true,
+        progress: 0
+      });
+    }
+    
+    throw error;
   }
 }
 
@@ -288,284 +317,180 @@ async function applySearchFilters() {
   console.log('Aplicando filtros de búsqueda...');
   updateStatus('Aplicando filtros de búsqueda...', 20);
   
-  // Comprobar si ya hemos aplicado los filtros
-  if (localStorage.getItem('snap_lead_manager_city_filter_applied') === 'true') {
-    console.log('Los filtros ya están aplicados, omitiendo');
-    return { success: true, message: 'Filtros ya aplicados' };
-  }
-  
   try {
     // Obtener datos de búsqueda del localStorage
     const searchDataStr = localStorage.getItem('snap_lead_manager_search_data');
     if (!searchDataStr) {
       console.log('No hay datos de búsqueda, omitiendo filtros');
+      // Marcar como aplicado para continuar con el proceso
+      localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+      
+      // Iniciar la búsqueda de perfiles directamente
+      console.log('Iniciando búsqueda de perfiles sin filtros...');
+      
+      // Notificar al background script sobre el progreso
+      if (chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'status_update',
+          message: 'Iniciando búsqueda sin filtros...',
+          progress: 30
+        });
+      }
+      
+      // Iniciar findProfiles con un pequeño retraso para asegurar que la página esté lista
+      setTimeout(() => {
+        findProfiles().catch(error => {
+          console.error('Error al buscar perfiles sin filtros:', error);
+        });
+      }, 1000);
+      
       return { success: true, message: 'No hay datos de filtro para aplicar' };
     }
     
     const searchData = JSON.parse(searchDataStr);
-    if (!searchData.city || searchData.city.trim() === '') {
-      console.log('No hay ciudad especificada en los datos de búsqueda');
-      return { success: true, message: 'No hay ciudad para filtrar' };
-    }
     
-    // Marcar que estamos aplicando el filtro
-    localStorage.setItem('snap_lead_manager_city_filter_applied', 'false');
-    
-    updateStatus('Aplicando filtro de ciudad...', 20);
-    console.log('Comenzando a aplicar filtro de ciudad:', searchData.city);
-    
-    // Esperar a que se cargue completamente la página de resultados
-    await sleep(3000);
-    
-    // ENFOQUE MEJORADO PARA SELECCIONAR ESPECÍFICAMENTE EL PRIMER ELEMENTO DEL LISTBOX
-    console.log('Aplicando filtro de ciudad con enfoque mejorado...');
-
-    // 1. Buscar el input de ciudad específicamente con los selectores proporcionados
-    console.log('Buscando input de ciudad...');
-    let cityInput = document.querySelector('input[aria-label="Ciudad"][role="combobox"][placeholder="Ciudad"]');
-    
-    if (!cityInput) {
-      console.log('No se encontró el input de ciudad con el selector exacto, intentando alternativas...');
+    // Aplicar filtro de ciudad si está especificado
+    if (searchData && searchData.city && searchData.city.trim() !== '') {
+      console.log('Aplicando filtro de ciudad:', searchData.city);
       
-      // Probar con múltiples selectores alternativos basados en el HTML proporcionado
-      const alternativeSelectors = [
-        'input[placeholder="Ciudad"]',
-        'input[aria-label="Ciudad"]',
-        'input.x1i10hfl[role="combobox"]',
-        'div.x1n2onr6 > input',
-        'input[role="combobox"][type="search"]'
-      ];
-      
-      for (const selector of alternativeSelectors) {
-        const input = document.querySelector(selector);
-        if (input) {
-          console.log(`Input de ciudad encontrado con selector alternativo: ${selector}`);
-          cityInput = input;
-          break;
-        }
-      }
-      
-      if (!cityInput) {
-        console.error('No se pudo encontrar el input de ciudad con ningún selector');
-        return;
-      }
-    }
-    
-    console.log('Campo de entrada para ciudad encontrado:', cityInput);
-    
-    // 2. Focus y borrar el campo
-    cityInput.focus();
-    cityInput.value = '';
-    cityInput.dispatchEvent(new Event('input', { bubbles: true }));
-    await sleep(500);
-    
-    // 3. Escribir la ciudad deseada
-    console.log('Escribiendo la ciudad:', searchData.city);
-    await simulateTyping(cityInput, searchData.city);
-    
-    // 4. Esperar a que aparezcan las sugerencias
-    await sleep(2000);
-    
-    // 5. MÉTODO ESPECÍFICO para el HTML proporcionado
-    console.log('Intentando seleccionar el primer elemento del listbox de sugerencias...');
-    
-    // Buscar el listbox usando la estructura exacta proporcionada
-    // Primero buscamos el contenedor principal
-    const listboxContainer = document.querySelector('div.x1y1aw1k.x1sxyh0.xwib8y2.xurb0ha');
-    
-    if (listboxContainer) {
-      console.log('Contenedor del listbox encontrado');
-      
-      // Ahora buscamos el ul con role="listbox"
-      const listbox = listboxContainer.querySelector('ul[role="listbox"]');
-      
-      if (listbox) {
-        console.log('Listbox encontrado:', listbox);
-        console.log('ID del listbox:', listbox.id);
-        console.log('Número de opciones según aria-label:', listbox.getAttribute('aria-label'));
+      // Comprobar si ya hemos aplicado los filtros
+      if (localStorage.getItem('snap_lead_manager_city_filter_applied') === 'true') {
+        console.log('Los filtros ya están aplicados, iniciando búsqueda de perfiles...');
         
-        // Obtener todos los elementos li con role="option"
-        const options = listbox.querySelectorAll('li[role="option"]');
-        console.log(`Encontradas ${options.length} opciones en el listbox`);
-        
-        if (options.length > 0) {
-          // Obtener el primer elemento li
-          const firstOption = options[0];
-          console.log('Primer option ID:', firstOption.id);
-          console.log('Primer option text:', firstOption.textContent.trim());
-          
-          // ESTRATEGIA 1: Hacer clic en el div interno con role="presentation" dentro del li
-          const presentationDiv = firstOption.querySelector('div[role="presentation"]');
-          if (presentationDiv) {
-            console.log('Encontrado div[role="presentation"] dentro del primer li, haciendo clic...');
-            presentationDiv.click();
-            await sleep(1500);
-          } 
-          // ESTRATEGIA 2: Si no hay div interno o el clic no funciona, hacer clic directamente en el li
-          else {
-            console.log('No se encontró div[role="presentation"], haciendo clic directamente en el li...');
-            firstOption.click();
-            await sleep(1500);
-          }
-          
-          // ESTRATEGIA 3: Si las anteriores no funcionan, intentar con dispatch de eventos
-          const clickElementWithMultipleStrategies = async (element, description) => {
-            console.log(`Intentando múltiples estrategias de clic en ${description}...`);
-            
-            // 1. Click normal
-            element.click();
-            await sleep(500);
-            
-            // 2. Forzar focus y simular Enter
-            element.focus();
-            await sleep(300);
-            element.dispatchEvent(new KeyboardEvent('keydown', {
-              key: 'Enter',
-              code: 'Enter',
-              keyCode: 13,
-              which: 13,
-              bubbles: true
-            }));
-            await sleep(500);
-            
-            // 3. Usar MouseEvent
-            const mouseEvent = new MouseEvent('mousedown', {
-              bubbles: true,
-              cancelable: true,
-              view: window
-            });
-            element.dispatchEvent(mouseEvent);
-            await sleep(300);
-            
-            const mouseUpEvent = new MouseEvent('mouseup', {
-              bubbles: true,
-              cancelable: true,
-              view: window
-            });
-            element.dispatchEvent(mouseUpEvent);
-            await sleep(300);
-            
-            // 4. Usar evento táctil para dispositivos móviles
-            const touchStartEvent = new TouchEvent('touchstart', {
-              bubbles: true,
-              cancelable: true,
-              view: window
-            });
-            element.dispatchEvent(touchStartEvent);
-            await sleep(300);
-            
-            const touchEndEvent = new TouchEvent('touchend', {
-              bubbles: true,
-              cancelable: true,
-              view: window
-            });
-            element.dispatchEvent(touchEndEvent);
-            await sleep(500);
-          };
-          
-          // Intentar con múltiples estrategias en elementos específicos
-          const clickables = [
-            { element: firstOption, description: 'first li option' },
-            { element: presentationDiv || firstOption.querySelector('div.x1i10hfl'), description: 'presentation div' },
-            { element: firstOption.querySelector('span.x1lliihq'), description: 'text span' }
-          ];
-          
-          for (const clickable of clickables) {
-            if (clickable.element) {
-              await clickElementWithMultipleStrategies(clickable.element, clickable.description);
-              // Verificar si se aplicó el filtro después de cada intento
-              if (document.querySelector('input[aria-label="Ciudad"]')?.value.includes(searchData.city)) {
-                console.log('Filtro aplicado con éxito usando:', clickable.description);
-                break;
-              }
-            }
-          }
-          
-          // Si llegamos hasta aquí, marcar como aplicado
-          localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
-          console.log('Filtro de ciudad aplicado con éxito');
-          updateStatus('Filtro de ciudad aplicado, cargando resultados...', 40);
-          return;
-        } else {
-          console.log('No se encontraron elementos li[role="option"] dentro del listbox');
+        // Notificar al background script sobre el progreso
+        if (chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({
+            type: 'status_update',
+            message: 'Filtros ya aplicados, iniciando búsqueda...',
+            progress: 35
+          });
         }
+        
+        // Iniciar findProfiles con un pequeño retraso para asegurar que la página esté lista
+        setTimeout(() => {
+          findProfiles().catch(error => {
+            console.error('Error al buscar perfiles después de aplicar filtros:', error);
+          });
+        }, 1000);
       } else {
-        console.log('No se encontró el ul[role="listbox"] dentro del contenedor');
+        // Aplicar filtros de búsqueda
+        console.log('Aplicando filtros y luego buscando perfiles...');
+        
+        // Notificar al background script sobre el progreso
+        if (chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({
+            type: 'status_update',
+            message: 'Aplicando filtro de ciudad...',
+            progress: 25
+          });
+        }
+        
+        applyCityFilter()
+          .then(result => {
+            console.log('Resultado de aplicar filtros:', result);
+            
+            if (result && result.success) {
+              // La función applyCityFilter ya inicia findProfiles() automáticamente
+              console.log('Filtro aplicado con éxito, findProfiles() ya iniciado');
+              
+              // Notificar al background script sobre el progreso
+              if (chrome.runtime && chrome.runtime.sendMessage) {
+                chrome.runtime.sendMessage({
+                  type: 'status_update',
+                  message: 'Filtro aplicado con éxito, iniciando búsqueda...',
+                  progress: 35
+                });
+              }
+            } else {
+              console.error('Error al aplicar filtros:', result?.error || 'Error desconocido');
+              
+              // Notificar al background script sobre el error
+              if (chrome.runtime && chrome.runtime.sendMessage) {
+                chrome.runtime.sendMessage({
+                  type: 'status_update',
+                  message: 'Error al aplicar filtros, intentando continuar...',
+                  progress: 30
+                });
+              }
+              
+              // Intentar continuar de todos modos
+              setTimeout(() => {
+                findProfiles().catch(error => {
+                  console.error('Error al buscar perfiles después de fallo en filtros:', error);
+                });
+              }, 1000);
+            }
+          })
+          .catch(error => {
+            console.error('Error al aplicar filtros:', error);
+            
+            // Notificar al background script sobre el error
+            if (chrome.runtime && chrome.runtime.sendMessage) {
+              chrome.runtime.sendMessage({
+                type: 'status_update',
+                message: 'Error al aplicar filtros: ' + error.message,
+                progress: 30
+              });
+            }
+            
+            // Intentar continuar de todos modos
+            setTimeout(() => {
+              findProfiles().catch(innerError => {
+                console.error('Error al buscar perfiles después de excepción en filtros:', innerError);
+              });
+            }, 1000);
+          });
       }
+      
+      updateStatus('Continuando con la búsqueda después de filtro de ciudad', 40);
     } else {
-      console.log('No se encontró el contenedor del listbox con la clase exacta');
-    }
-    
-    // MÉTODO ALTERNATIVO: Buscar directamente el li[role="option"]
-    console.log('Intentando encontrar directamente cualquier elemento li[role="option"]');
-    const allOptions = document.querySelectorAll('li[role="option"]');
-    
-    if (allOptions.length > 0) {
-      console.log(`Encontrados ${allOptions.length} elementos li[role="option"] en la página`);
-      // Seleccionar el primer elemento
-      const firstOption = allOptions[0];
-      console.log('Seleccionando primer li[role="option"]:', firstOption.textContent.trim());
-      
-      // Intentar clic directo
-      firstOption.click();
-      await sleep(1500);
-      
+      console.log('No hay ciudad especificada en los datos de búsqueda');
+      // Marcar como aplicado para continuar con el proceso
       localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
-      console.log('Filtro de ciudad aplicado con método alternativo');
-      updateStatus('Filtro de ciudad aplicado, cargando resultados...', 40);
-      return;
+      
+      // Notificar al background script sobre el progreso
+      if (chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'status_update',
+          message: 'Iniciando búsqueda sin filtro de ciudad...',
+          progress: 30
+        });
+      }
+      
+      // Iniciar la búsqueda de perfiles directamente
+      console.log('Iniciando búsqueda de perfiles sin filtro de ciudad...');
+      setTimeout(() => {
+        findProfiles().catch(error => {
+          console.error('Error al buscar perfiles sin filtro de ciudad:', error);
+        });
+      }, 1000);
     }
     
-    // Si todos los métodos anteriores fallan, buscar cualquier elemento que contenga el texto
-    console.log('Intentando método de respaldo final...');
-    const cityLower = searchData.city.toLowerCase().trim();
-    const textMatchingElements = Array.from(document.querySelectorAll('div, span, li'))
-      .filter(el => {
-        // Solo elementos visibles y que contengan el texto de la ciudad
-        const isVisible = el.offsetParent !== null;
-        const text = el.textContent.toLowerCase().trim();
-        return isVisible && text.includes(cityLower) && text.length < 100;
+    return { success: true, message: 'Proceso de filtrado completado' };
+  } catch (error) {
+    console.error('Error al aplicar filtros:', error);
+    // Marcar como aplicado para evitar bloqueos
+    localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+    updateStatus('Error al aplicar filtros, continuando con la búsqueda', 30);
+    
+    // Notificar al background script sobre el error
+    if (chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage({
+        type: 'status_update',
+        message: 'Error al aplicar filtros: ' + error.message,
+        progress: 30
       });
-    
-    if (textMatchingElements.length > 0) {
-      console.log(`Encontrados ${textMatchingElements.length} elementos con texto coincidente`);
-      // Intentar clic en el primer elemento que coincida
-      const bestMatch = textMatchingElements[0];
-      console.log('Intentando clic en:', bestMatch.textContent.trim());
-      
-      bestMatch.click();
-      await sleep(1500);
-      
-      localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
-      console.log('Filtro de ciudad aplicado con método de respaldo');
-      updateStatus('Filtro de ciudad aplicado, cargando resultados...', 40);
-    } else {
-      console.log('No se encontraron elementos coincidentes para la ciudad');
-      updateStatus('No se pudieron encontrar opciones para la ciudad', 30, true);
     }
-  } catch (error) {
-    console.error('Error al aplicar filtro de ciudad:', error);
-    updateStatus('Error al aplicar filtro de ciudad: ' + error.message, 30, true);
-  }
-  
-  // Esperar a que los resultados se carguen después de aplicar el filtro
-  console.log('Esperando a que se carguen los resultados con el filtro aplicado...');
-  updateStatus('Esperando a que se carguen los resultados con filtro de ciudad...', 45);
-  await sleep(5000);
-  
-  // Espera adicional después de aplicar el filtro de ciudad
-  console.log('Filtro de ciudad aplicado. Esperando 2 segundos adicionales antes de continuar...');
-  updateStatus('Filtro de ciudad aplicado. Preparando escaneo...', 48);
-  await sleep(2000);
-  
-  // Iniciar la búsqueda de perfiles para continuar con el proceso
-  console.log('Iniciando búsqueda de perfiles después de aplicar filtro de ciudad...');
-  try {
-    await findProfiles();
-    console.log('Búsqueda de perfiles completada con éxito después de aplicar filtro de ciudad');
-  } catch (error) {
-    console.error('Error al buscar perfiles después de aplicar filtro de ciudad:', error);
-    updateStatus('Error en la búsqueda después de aplicar filtro: ' + error.message, 30, true);
+    
+    // Intentar continuar de todos modos
+    console.log('Intentando buscar perfiles a pesar del error...');
+    setTimeout(() => {
+      findProfiles().catch(innerError => {
+        console.error('Error al buscar perfiles después de excepción en applySearchFilters:', innerError);
+      });
+    }, 1000);
+    
+    return { success: false, error: error.message };
   }
 }
 
@@ -587,7 +512,7 @@ function updateStatus(message, progress = 0, isError = false) {
   const iframe = document.getElementById('snap-lead-manager-iframe');
   if (iframe && iframe.contentWindow) {
     iframe.contentWindow.postMessage({
-      action: 'status_update',
+      type: 'status_update',
       message: message,
       progress: progress,
       error: isError
@@ -654,6 +579,16 @@ window.addEventListener('message', async (event) => {
           }
         }
         break;
+      case 'open_in_window':
+        // Enviar mensaje al background script para abrir el sidebar en una ventana separada
+        if (chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({
+            action: 'open_sidebar_window'
+          }, (response) => {
+            console.log('Respuesta al abrir sidebar en ventana:', response);
+          });
+        }
+        break;
     }
   }
 });
@@ -664,32 +599,112 @@ if (chrome.runtime && chrome.runtime.onMessage) {
     console.log('Content script recibió mensaje:', message);
     
     if (message.action === 'search') {
-      if (!isProcessing) {
-        console.log('Iniciando búsqueda con término:', message.searchTerm);
+      console.log('Content script recibió solicitud de búsqueda:', message);
+      
+      // Ejecutar la búsqueda en un try-catch para manejar errores
+      try {
+        // Iniciar la búsqueda y enviar respuesta inmediata
+        sendResponse({ success: true, message: 'Iniciando búsqueda' });
         
-        // Marcar como procesando
-        isProcessing = true;
-        
-        // Usar promesa para manejar la búsqueda de forma asíncrona
+        // Ejecutar la búsqueda de forma asíncrona
         performSearch(message.searchTerm, message.searchData)
           .then(result => {
-            console.log('Búsqueda iniciada con éxito:', result);
-            isProcessing = false; // Restablecer el flag cuando la búsqueda termina
-            sendResponse({ success: true, result });
+            console.log('Búsqueda completada:', result);
           })
           .catch(error => {
-            console.error('Error al iniciar búsqueda:', error);
-            isProcessing = false; // Restablecer el flag en caso de error
-            sendResponse({ success: false, error: error.message });
+            console.error('Error en búsqueda:', error);
+            
+            // Si es un error de timeout, intentar continuar con el proceso
+            if (error.message.includes('excedió el tiempo límite')) {
+              console.log('Timeout en búsqueda, intentando continuar con el proceso...');
+              
+              // Verificar si estamos en una página de resultados
+              if (window.location.href.includes('/search/')) {
+                console.log('Estamos en página de resultados, intentando aplicar filtros...');
+                
+                // Intentar aplicar filtros y continuar
+                applySearchFilters()
+                  .then(() => {
+                    console.log('Filtros aplicados después de timeout, continuando...');
+                  })
+                  .catch(filterError => {
+                    console.error('Error al aplicar filtros después de timeout:', filterError);
+                  });
+              }
+            }
+            
+            // Notificar el error
+            updateStatus(`Error en búsqueda: ${error.message}`, 0, true);
           });
         
-        // Indicar que la respuesta se enviará asincrónicamente
-        return true;
-      } else {
-        console.warn('Ya hay una búsqueda en proceso');
-        sendResponse({ success: false, error: 'Ya hay una búsqueda en proceso' });
-        return false; // No es necesario mantener la conexión abierta
+        return true; // Mantener el canal abierto
+      } catch (error) {
+        console.error('Error al iniciar búsqueda:', error);
+        sendResponse({ success: false, error: error.message });
+        return false;
       }
+    } else if (message.action === 'toggle_sidebar') {
+      console.log('Recibida solicitud para mostrar/ocultar sidebar');
+      
+      // Si el sidebar no existe, inyectarlo primero
+      if (!document.getElementById('snap-lead-manager-overlay')) {
+        injectSidebar();
+      } else {
+        // Si ya existe, alternar su visibilidad
+        toggleSidebar();
+      }
+      
+      sendResponse({ success: true });
+      return true;
+    } else if (message.action === 'start') {
+      console.log('Content script recibió comando de inicio');
+      
+      // Si hay una búsqueda guardada, reanudarla
+      const savedSearchTerm = localStorage.getItem('snap_lead_manager_search_term');
+      const savedSearchData = localStorage.getItem('snap_lead_manager_search_data');
+      
+      if (savedSearchTerm) {
+        try {
+          isProcessing = true;
+          isPaused = false;
+          
+          let searchData = {};
+          if (savedSearchData) {
+            try {
+              searchData = JSON.parse(savedSearchData);
+            } catch (e) {
+              console.error('Error al parsear datos de búsqueda guardados:', e);
+            }
+          }
+          
+          // Actualizar estado en la UI
+          updateStatus('Iniciando proceso con búsqueda guardada...', 5);
+          
+          // Iniciar búsqueda con término guardado
+          performSearch(savedSearchTerm, searchData)
+            .then(result => {
+              console.log('Búsqueda completada con éxito:', result);
+            })
+            .catch(error => {
+              console.error('Error en búsqueda:', error);
+              updateStatus('Error: ' + error.message, 0, true);
+            });
+        } catch (error) {
+          console.error('Error al iniciar proceso:', error);
+          updateStatus('Error al iniciar: ' + error.message, 0, true);
+        }
+      } else {
+        updateStatus('No hay términos de búsqueda guardados', 0, true);
+      }
+      
+      sendResponse({ success: true });
+      return false;
+    } else if (message.action === 'pause') {
+      console.log('Recibido comando de pausa');
+      isPaused = !isPaused;
+      updateStatus(isPaused ? 'Proceso pausado' : 'Proceso reanudado', currentProgress);
+      sendResponse({ success: true, isPaused: isPaused });
+      return false; // Usar return false en lugar de break
     } else if (message.action === 'restore_sidebar') {
       // Restaurar el sidebar
       injectSidebar();
@@ -708,6 +723,7 @@ if (chrome.runtime && chrome.runtime.onMessage) {
       }
       
       sendResponse({ success: true, message: 'Sidebar restaurado' });
+      return false; // Usar return false en lugar de break
     } else if (message.action === 'apply_filters') {
       // Aplicar filtros de búsqueda (principalmente ciudad)
       console.log('Solicitando aplicar filtros de búsqueda');
@@ -723,7 +739,7 @@ if (chrome.runtime && chrome.runtime.onMessage) {
             sendResponse({ success: true, message: 'Filtros ya aplicados, búsqueda de perfiles completada' });
           })
           .catch(error => {
-            console.error('Error al buscar perfiles con filtros ya aplicados:', error);
+            console.error('Error al buscar perfiles después de aplicar filtros:', error);
             sendResponse({ success: false, error: error.message });
           });
       } else {
@@ -753,11 +769,71 @@ if (chrome.runtime && chrome.runtime.onMessage) {
       }
       
       return true; // Mantener el canal abierto para respuesta asíncrona
-    } else if (message.action === 'status_update') {
+    } else if (message.type === 'status_update') {
       // Actualizar estado en la página
       updateStatus(message.message || 'Estado actualizado', message.progress || 0, message.error);
-      sendResponse({ success: true });
+      
+      // Solo responder si no viene con flag suppressResponse
+      if (!message.suppressResponse) {
+        sendResponse({ success: true });
+      }
+      
       return false; // No necesitamos mantener el canal abierto
+    } else if (message.action === 'stop') {
+      console.log('Recibido comando de detención');
+      
+      // Establecer variables de estado
+      isProcessing = false;
+      isPaused = false;
+      
+      // Notificar a la UI
+      updateStatus('Proceso detenido', 0);
+      
+      // Limpiar cualquier timeout pendiente
+      Object.keys(state.timeouts).forEach(key => {
+        clearOperationTimeout(key);
+      });
+      
+      // Guardar el estado de detención en localStorage para persistir entre recargas
+      localStorage.setItem('snap_lead_manager_process_stopped', 'true');
+      localStorage.removeItem('snap_lead_manager_search_pending');
+      
+      // Notificar al background script de forma segura
+      try {
+        chrome.runtime.sendMessage({
+          type: 'status_update',
+          message: 'Proceso detenido por usuario',
+          progress: 0,
+          stopped: true,
+          // Importante: Indicar que no hay perfiles
+          profilesCount: 0
+        }, function(response) {
+          if (chrome.runtime.lastError) {
+            console.warn('Error al notificar detención:', chrome.runtime.lastError);
+          }
+        });
+      } catch (e) {
+        console.error('Error al notificar detención al background:', e);
+      }
+      
+      // También notificar al sidebar
+      const iframe = document.getElementById('snap-lead-manager-iframe');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({
+          action: 'process_stopped',
+          message: 'Proceso detenido por usuario'
+        }, '*');
+      }
+      
+      sendResponse({ success: true, message: 'Todas las operaciones detenidas' });
+      return false;
+    } else if (message.action === 'update_state') {
+      console.log('Actualizando estado local desde background');
+      isPaused = message.isPaused;
+      state.isProcessing = message.isRunning;
+      updateStatus(isPaused ? 'Proceso pausado' : 'Proceso en ejecución', currentProgress);
+      sendResponse({ success: true });
+      return false; // Usar return false en lugar de break
     } else {
       // Respuesta por defecto para acciones desconocidas
       console.log('Acción no reconocida:', message.action);
@@ -791,33 +867,26 @@ async function findProfiles() {
     console.log('Iniciando búsqueda de perfiles...');
     updateStatus('Iniciando búsqueda de perfiles...', 30);
     
+    // Verificar si el proceso está detenido
+    if (!isProcessing) {
+      console.log('Proceso detenido, no se abrirá el perfil en nueva pestaña');
+      updateStatus('Proceso detenido', 0);
+      return false;
+    }
+    
+    // Verificar si el proceso está pausado antes de continuar
+    if (isPaused) {
+      console.log('El proceso está pausado, esperando reanudación...');
+      updateStatus('Proceso pausado. Haz clic en "Reanudar" para continuar', 30);
+      return { success: false, message: 'Proceso pausado' };
+    }
+    
     // Esperar a que los resultados se carguen
     console.log('Esperando que se cargue el contenedor de perfiles...');
     updateStatus('Esperando que se cargue el contenedor de perfiles...', 35);
     
     // Intentar varios selectores para mayor robustez
-    let feedContainer = null;
-    const possibleSelectors = [
-      SELECTORS.PROFILE_CONTAINER,
-      'div[role="feed"]',
-      'div.x1hc1fzr',
-      'div[data-pagelet="MainFeed"]',
-      'div.x9f619.x1n2onr6.x1ja2u2z' // Selector alternativo que podría funcionar en diferentes versiones de Facebook
-    ];
-    
-    for (const selector of possibleSelectors) {
-      try {
-        const container = await waitForElement(selector, 5000);
-        if (container) {
-          feedContainer = container;
-          console.log(`Contenedor de perfiles encontrado con selector: ${selector}`);
-          break;
-        }
-      } catch (e) {
-        console.log(`No se encontró contenedor con selector: ${selector}`);
-      }
-    }
-    
+    let feedContainer = document.querySelector(SELECTORS.PROFILE_CONTAINER);
     if (!feedContainer) {
       throw new Error('No se pudo encontrar el contenedor de perfiles después de intentar varios selectores');
     }
@@ -832,90 +901,119 @@ async function findProfiles() {
     
     // Función para hacer scroll para cargar más resultados
     const scrollForMoreResults = async (maxScrolls = 50) => {
-      let prevHeight = 0;
-      let scrollCount = 0;
-      let noChangeCount = 0;
-      
       console.log(`Comenzando scroll para cargar más resultados (máximo ${maxScrolls} scrolls)...`);
       updateStatus(`Comenzando scroll para cargar más resultados (máximo ${maxScrolls} scrolls)...`, 50);
       
-      // Verificar si hay un botón de "Ver más resultados" o similar y hacer clic si existe
+      let scrollCount = 0;
+      let lastHeight = document.body.scrollHeight;
+      let noChangeCount = 0;
+      
       try {
-        const moreResultsButtons = Array.from(document.querySelectorAll('div[role="button"]')).filter(
-          button => button.textContent.includes('Ver más') || 
-                   button.textContent.includes('Mostrar más') || 
-                   button.textContent.includes('Cargar más')
-        );
-        
-        if (moreResultsButtons.length > 0) {
-          console.log('Se encontró botón de "Ver más resultados", haciendo clic...');
-          moreResultsButtons[0].click();
-          await sleep(3000); // Esperar a que carguen más resultados
-        }
-      } catch (e) {
-        console.log('No se encontró botón de "Ver más resultados" o hubo un error:', e);
-      }
-      
-      while (scrollCount < maxScrolls) {
-        // Obtener altura actual del contenedor
-        const currentHeight = feedContainer.scrollHeight;
-        const documentHeight = document.documentElement.scrollHeight;
-        
-        // Si la altura no ha cambiado después de varios intentos, asumimos que no hay más resultados
-        if (currentHeight === prevHeight) {
-          noChangeCount++;
-          console.log(`Altura sin cambios: ${noChangeCount}/3. Actual: ${currentHeight}px`);
-          
-          if (noChangeCount >= 3) {
-            console.log('No hay más resultados para cargar (altura estable).');
-            updateStatus('No hay más resultados para cargar (altura estable)', 60);
-            break;
+        while (scrollCount < maxScrolls) {
+          // Verificar si el proceso está pausado
+          if (isPaused) {
+            console.log('Scroll pausado, esperando reanudación...');
+            updateStatus('Scroll pausado. Haz clic en "Reanudar" para continuar', 50 + (scrollCount / maxScrolls) * 30);
+            await sleep(1000); // Esperar y verificar nuevamente
+            continue; // Continuar el bucle sin incrementar el contador
           }
-        } else {
-          noChangeCount = 0;
-          console.log(`Altura cambió de ${prevHeight}px a ${currentHeight}px`);
+          
+          // Hacer scroll
+          window.scrollTo(0, document.body.scrollHeight);
+          scrollCount++;
+          
+          // Esperar a que se carguen nuevos elementos
+          await sleep(1000);
+          
+          // Verificar si la altura cambió (si se cargaron nuevos elementos)
+          const newHeight = document.body.scrollHeight;
+          if (newHeight === lastHeight) {
+            noChangeCount++;
+            
+            // Si no hay cambios después de varios intentos, asumir que no hay más resultados
+            if (noChangeCount >= 3) {
+              console.log('No se detectaron más resultados después de varios intentos de scroll');
+              updateStatus(`Scroll ${scrollCount}/${maxScrolls} completado, no hay más resultados`, 80);
+              break;
+            }
+          } else {
+            // Resetear contador si la altura cambió
+            noChangeCount = 0;
+            lastHeight = newHeight;
+          }
+          
+          // Actualizar estado
+          const progress = 50 + (scrollCount / maxScrolls) * 30;
+          updateStatus(`Scroll ${scrollCount}/${maxScrolls} completado...`, progress);
+          console.log(`Scroll ${scrollCount}/${maxScrolls} completado...`);
+          
+          // Notificar al background script sobre el progreso
+          if (chrome.runtime && chrome.runtime.sendMessage) {
+            try {
+              chrome.runtime.sendMessage({
+                type: 'status_update',
+                message: `Scroll ${scrollCount}/${maxScrolls} completado...`,
+                progress: progress,
+                scrollCount: scrollCount,
+                maxScrolls: maxScrolls
+              });
+            } catch (e) {
+              console.error('Error al enviar actualización de scroll:', e);
+            }
+          }
         }
         
-        // Verificar si hemos llegado al final de la página
-        const scrollY = window.scrollY;
-        const visibleHeight = window.innerHeight;
-        const totalHeight = documentHeight;
+        console.log(`Scroll completado: ${scrollCount}/${maxScrolls}`);
+        updateStatus(`Scroll completado: ${scrollCount}/${maxScrolls}`, 80);
         
-        console.log(`Scroll actual: ${scrollY}px, Altura visible: ${visibleHeight}px, Altura total: ${totalHeight}px`);
+        // Notificar que el scroll ha terminado y se debe continuar con el proceso
+        notifyBackgroundOfProgress(`Scroll completado. Procesando ${scrollCount} resultados...`, 85, { 
+          scrollCompleted: true,
+          scrollCount: scrollCount
+        });
         
-        // Si estamos cerca del final de la página y no hay cambios, podríamos haber llegado al final
-        if (scrollY + visibleHeight >= totalHeight - 200 && noChangeCount >= 2) {
-          console.log('Llegamos al final de la página.');
-          updateStatus('Llegamos al final de la página', 60);
-          break;
-        }
+        // Importante: Continuar con el procesamiento de perfiles incluso si el scroll termina temprano
+        return scrollCount;
+      } catch (error) {
+        console.error('Error durante el scroll:', error);
         
-        // Hacer scroll hasta el final del contenedor y un poco más allá para forzar la carga
-        window.scrollTo(0, document.body.scrollHeight + 1000);
+        // Incluso en caso de error, intentar continuar con los resultados que tenemos
+        notifyBackgroundOfProgress(`Error durante scroll, pero continuando con ${scrollCount} resultados...`, 80, {
+          scrollCompleted: true,
+          scrollCount: scrollCount,
+          error: error.message
+        });
         
-        // Esperar a que se carguen nuevos resultados (aumentamos el tiempo de espera)
-        await sleep(2000);
-        
-        prevHeight = currentHeight;
-        scrollCount++;
-        
-        console.log(`Scroll ${scrollCount}/${maxScrolls} completado`);
-        updateStatus(`Scroll ${scrollCount}/${maxScrolls} completado`, 50 + Math.floor((scrollCount / maxScrolls) * 10));
+        return scrollCount;
       }
-      
-      console.log(`Scroll finalizado después de ${scrollCount} iteraciones.`);
-      updateStatus(`Scroll finalizado después de ${scrollCount} iteraciones`, 60);
-      // Dar tiempo para que se carguen los últimos resultados
-      await sleep(2000);
     };
     
     // Realizar scroll para cargar más resultados
-    await scrollForMoreResults();
+    const scrollInfo = await scrollForMoreResults();
     
+    console.log(`Total de scrolls realizados: ${scrollInfo}`);
+    updateStatus(`Total de scrolls realizados: ${scrollInfo}`, 65);
+    
+    // Asegurarse de que el proceso continúe incluso si el scroll termina temprano
+    if (!isProcessing) {
+      console.log('El proceso fue detenido durante el scroll, abortando búsqueda de perfiles');
+      return [];
+    }
+    
+    // Forzar la continuación del proceso
+    console.log('Scroll completado, continuando con la extracción de perfiles...');
+    updateStatus('Extrayendo perfiles de los resultados...', 70);
     // Obtener todos los resultados
+    feedContainer = document.querySelector(SELECTORS.PROFILE_CONTAINER);
+    if (!feedContainer) {
+      console.error('No se encontró el contenedor de resultados');
+      throw new Error('No se encontró el contenedor de resultados');
+    }
+    
+    // Obtener los resultados dentro del contenedor
     const results = feedContainer.querySelectorAll(':scope > div');
     console.log(`Se encontraron ${results.length} resultados en bruto`);
-    updateStatus(`Se encontraron ${results.length} resultados en bruto`, 65);
+    updateStatus(`Se encontraron ${results.length} resultados en bruto`, 75);
     
     if (results.length === 0) {
       throw new Error('No se encontraron resultados de búsqueda');
@@ -926,45 +1024,28 @@ async function findProfiles() {
     
     // Iterar sobre cada resultado para extraer información
     updateStatus('Analizando perfiles...', 70);
+    let validProfilesCount = 0;
+    
+    console.log(`Procesando ${results.length} resultados...`);
+    updateStatus(`Procesando ${results.length} resultados...`, 75);
+    
     for (let i = 0; i < results.length; i++) {
-      const result = results[i];
-      
       try {
-        // Verificar si el resultado contiene un enlace de perfil
-        const profileLink = result.querySelector(SELECTORS.PROFILE_LINK);
+        const result = results[i];
         
-        if (profileLink) {
-          const profileUrl = profileLink.href;
-          const profileName = profileLink.textContent.trim();
+        // Actualizar progreso
+        const extractionProgress = 75 + Math.floor((i / results.length) * 20);
+        updateStatus(`Analizando perfil ${i+1}/${results.length}...`, extractionProgress);
+        
+        // Extraer información del perfil
+        const profileInfo = await extractProfileInfo(result);
+        
+        if (profileInfo) {
+          profiles.push(profileInfo);
+          validProfilesCount++;
           
-          // Verificar si ya existe un perfil con la misma URL
-          if (!profiles.some(p => p.url === profileUrl)) {
-            // Extraer información adicional si está disponible
-            let additionalInfo = '';
-            const infoElements = result.querySelectorAll('span');
-            for (const infoEl of infoElements) {
-              const text = infoEl.textContent.trim();
-              if (text && text !== profileName && text.length < 100) {
-                additionalInfo += text + ' ';
-              }
-            }
-            
-            profiles.push({
-              id: `profile-${i}`,
-              name: profileName,
-              url: profileUrl,
-              index: i,
-              processed: false,
-              info: additionalInfo.trim()
-            });
-            
-            console.log(`Perfil encontrado: ${profileName} (${profileUrl})`);
-            
-            // Actualizar contador cada 5 perfiles
-            if (profiles.length % 5 === 0) {
-              updateStatus(`Perfiles encontrados: ${profiles.length}`, 70 + Math.min(20, Math.floor((profiles.length / results.length) * 20)));
-            }
-          }
+          // Log detallado para cada perfil válido
+          console.log(`Perfil ${validProfilesCount} extraído:`, profileInfo.name);
         }
       } catch (error) {
         console.error(`Error al procesar resultado ${i}:`, error);
@@ -972,38 +1053,69 @@ async function findProfiles() {
       }
     }
     
-    console.log(`Total de perfiles únicos encontrados: ${profiles.length}`);
-    updateStatus(`Total de perfiles únicos encontrados: ${profiles.length}`, 90);
+    console.log(`Extracción completada. Perfiles válidos: ${validProfilesCount}/${results.length}`);
+    updateStatus(`Extracción completada. Perfiles válidos: ${validProfilesCount}/${results.length}`, 95);
     
-    // Guardar perfiles encontrados en localStorage para conservarlos después de recargas
+    // Mostrar resumen completo de la búsqueda
+    const searchSummary = {
+      searchTerm: searchTerm,
+      searchLocation: searchData.location || 'No especificada',
+      totalScrolls: scrollInfo,
+      maxScrolls: 50, // El máximo configurado
+      scrollCompleted: scrollInfo >= 50 ? 'Sí' : 'No',
+      resultsFound: results.length,
+      validProfiles: profiles.length,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log('Resumen de búsqueda:', searchSummary);
+    
+    // Crear mensaje de resumen para mostrar al usuario
+    const summaryMessage = `
+      Búsqueda completada:
+      - Término: ${searchSummary.searchTerm}
+      - Ubicación: ${searchSummary.searchLocation}
+      - Scrolls realizados: ${searchSummary.totalScrolls}/${searchSummary.maxScrolls}
+      - Scrolls completados: ${searchSummary.scrollCompleted}
+      - Resultados encontrados: ${searchSummary.resultsFound}
+      - Perfiles válidos: ${searchSummary.validProfiles}
+    `;
+    
+    updateStatus(summaryMessage, 95);
+    
+    // Guardar el resumen en localStorage para referencia futura
+    try {
+      const savedSearches = JSON.parse(localStorage.getItem('snapLeadManager_searches') || '[]');
+      savedSearches.push(searchSummary);
+      localStorage.setItem('snapLeadManager_searches', JSON.stringify(savedSearches));
+    } catch (error) {
+      console.error('Error al guardar resumen de búsqueda:', error);
+    }
+    
+    // Notificar al background script sobre los perfiles encontrados
     if (profiles.length > 0) {
-      localStorage.setItem('snap_lead_manager_profiles', JSON.stringify(profiles));
-      
-      // Notificar al background script sobre los perfiles encontrados
       try {
-        if (chrome.runtime && chrome.runtime.sendMessage) {
-          const response = await new Promise((resolve, reject) => {
-            chrome.runtime.sendMessage({
-              action: 'found_profiles',
-              profiles: profiles
-            }, response => {
-              if (chrome.runtime.lastError) {
-                reject(chrome.runtime.lastError);
-              } else {
-                resolve(response);
-              }
-            });
+        const response = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({
+            action: 'found_profiles',
+            profiles: profiles
+          }, response => {
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError);
+            } else {
+              resolve(response);
+            }
           });
-          
-          console.log('Background script notificado:', response);
-          
-          if (chrome.runtime && chrome.runtime.sendMessage) {
-            chrome.runtime.sendMessage({
-              type: 'status_update',
-              message: `Se encontraron ${profiles.length} perfiles`,
-              progress: 95
-            });
-          }
+        });
+        
+        console.log('Background script notificado:', response);
+        
+        if (chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({
+            type: 'status_update',
+            message: `Se encontraron ${profiles.length} perfiles`,
+            progress: 95
+          });
         }
       } catch (error) {
         console.error('Error al notificar perfiles al background script:', error);
@@ -1014,19 +1126,205 @@ async function findProfiles() {
       throw new Error('No se encontraron perfiles válidos');
     }
     
-    return profiles;
-  } catch (error) {
-    console.error('Error en findProfiles:', error);
-    if (chrome.runtime && chrome.runtime.sendMessage) {
-      chrome.runtime.sendMessage({
-        type: 'status_update',
-        message: `Error al buscar perfiles: ${error.message}`,
-        error: true,
-        progress: 0
-      });
+    // Para este test, abrir el primer perfil en una nueva pestaña
+    if (profiles.length > 0) {
+      // Verificar si el proceso está detenido antes de abrir el perfil
+      if (!isProcessing) {
+        console.log('Proceso detenido, no se abrirán perfiles');
+        updateStatus('Proceso detenido', 0);
+        return { success: true, profiles };
+      }
+      
+      // Mostrar mensaje antes de abrir el primer perfil
+      updateStatus(`Preparando para abrir el primer perfil de ${profiles.length}...`, 98);
+      await sleep(2000); // Dar tiempo para que el usuario vea el resumen
+      
+      try {
+        await openProfileInNewTab(profiles[0].url);
+      } catch (error) {
+        console.error('Error al abrir el primer perfil:', error);
+        // Continuar con el proceso a pesar del error al abrir el perfil
+      }
     }
     
+    // Al final de la función findProfiles(), después de extraer los perfiles:
+
+    // Asegurarse de que los perfiles se envíen correctamente al background
+    if (profiles.length > 0) {
+      console.log(`Enviando ${profiles.length} perfiles al background script...`);
+      
+      // Enviar perfiles al background script
+      try {
+        await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({
+            action: 'found_profiles',
+            profiles: profiles,
+            count: profiles.length,
+            searchTerm: currentSearchTerm,
+            searchData: JSON.parse(localStorage.getItem('snap_lead_manager_search_data') || '{}')
+          }, response => {
+            if (chrome.runtime.lastError) {
+              console.error('Error al enviar perfiles al background:', chrome.runtime.lastError);
+              reject(chrome.runtime.lastError);
+            } else {
+              console.log('Perfiles enviados correctamente al background:', response);
+              resolve(response);
+            }
+          });
+        });
+        
+        // Actualizar UI con el número correcto de perfiles
+        updateStatus(`Búsqueda completada. Se encontraron ${profiles.length} perfiles`, 100);
+        
+        // Notificar directamente al sidebar
+        const iframe = document.getElementById('snap-lead-manager-iframe');
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({
+            action: 'update_profiles',
+            profiles: profiles,
+            count: profiles.length,
+            searchTerm: currentSearchTerm
+          }, '*');
+        }
+      } catch (error) {
+        console.error('Error al comunicar perfiles:', error);
+        // Continuar a pesar del error
+      }
+    } else {
+      console.log('No se encontraron perfiles válidos');
+      updateStatus('No se encontraron perfiles válidos', 100);
+    }
+    
+    // En findProfiles, después de completar el proceso de extracción de perfiles:
+
+    // Asegurarse de que los perfiles se envíen correctamente al background y sidebar
+    console.log(`Búsqueda completada. Se encontraron ${profiles.length} perfiles válidos en ${scrollInfo} scrolls`);
+
+    // Mostrar estadísticas completas
+    const endTime = Date.now();
+    const startTime = parseInt(localStorage.getItem('snap_lead_manager_search_start_time') || endTime);
+    const duration = Math.floor((endTime - startTime) / 1000);
+    const minutes = Math.floor(duration / 60);
+    const seconds = duration % 60;
+
+    const stats = {
+      perfilesEncontrados: profiles.length,
+      scrollsRealizados: scrollInfo,
+      tiempoTotal: `${minutes}m ${seconds}s`,
+      timestamp: new Date().toLocaleTimeString()
+    };
+
+    // Guardar estadísticas para mostrarlas en el sidebar
+    localStorage.setItem('snap_lead_manager_search_stats', JSON.stringify(stats));
+
+    // Actualizar UI con estadísticas
+    updateStatus(`✓ Búsqueda completada en ${stats.tiempoTotal}. Encontrados ${stats.perfilesEncontrados} perfiles en ${stats.scrollsRealizados} scrolls`, 100);
+    
+    return profiles;
+  } catch (error) {
+    // En caso de error, mantener isProcessing como true a menos que sea un error fatal
+    console.error('Error en findProfiles:', error);
+    
+    // Solo cambiar isProcessing a false si es un error que no se puede recuperar
+    if (error.message.includes('No se encontraron resultados') || 
+        error.message.includes('excedió el tiempo límite')) {
+      isProcessing = false;
+    }
+    
+    // Manejar específicamente el error de contexto invalidado
+    if (error.message.includes('Extension context invalidated')) {
+      console.log('Contexto de extensión invalidado, guardando estado para recuperación...');
+      
+      // Guardar estado en localStorage para recuperar después
+      localStorage.setItem('snap_lead_manager_recovery_needed', 'true');
+      localStorage.setItem('snap_lead_manager_last_action', 'findProfiles');
+      
+      updateStatus('Error de conexión con la extensión. Por favor, recarga la página.', 0, true);
+      return false;
+    }
+    
+    // Otros errores
     updateStatus(`Error al buscar perfiles: ${error.message}`, 0, true);
+    return false;
+  }
+}
+
+// Función para abrir un perfil en una nueva pestaña
+async function openProfileInNewTab(profileUrl) {
+  try {
+    // Verificar si el proceso está detenido
+    if (!isProcessing) {
+      console.log('Proceso detenido, no se abrirá el perfil en nueva pestaña');
+      updateStatus('Proceso detenido', 0);
+      return false;
+    }
+    
+    // Verificar si el proceso está pausado
+    if (isPaused) {
+      console.log('Proceso en pausa, esperando para abrir perfil...');
+      updateStatus('Proceso en pausa', currentProgress);
+      // Esperar mientras esté pausado
+      while (isPaused && isProcessing) {
+        await sleep(1000);
+      }
+      // Verificar nuevamente si el proceso fue detenido durante la pausa
+      if (!isProcessing) {
+        console.log('Proceso detenido durante la pausa');
+        updateStatus('Proceso detenido', 0);
+        return false;
+      }
+    }
+    
+    console.log('Abriendo perfil en nueva pestaña:', profileUrl);
+    updateStatus('Abriendo perfil en nueva pestaña...', 95);
+    
+    // Enviar mensaje al background script para abrir el perfil en una nueva pestaña
+    return new Promise((resolve, reject) => {
+      try {
+        chrome.runtime.sendMessage({
+          action: 'open_profile',
+          profileUrl: profileUrl
+        }, response => {
+          // Verificar si hubo algún error en la comunicación
+          const error = chrome.runtime.lastError;
+          if (error) {
+            console.error("Error al enviar mensaje a background:", error.message);
+            updateStatus(`Error al abrir perfil: ${error.message}`, 0, true);
+            reject(new Error(error.message));
+            return;
+          }
+          
+          // Verificar respuesta
+          if (!response) {
+            const msg = "No se recibió respuesta del background script";
+            console.error(msg);
+            updateStatus(msg, 0, true);
+            reject(new Error(msg));
+            return;
+          }
+          
+          if (!response.success) {
+            const msg = response.error || "Error desconocido al abrir perfil";
+            console.error(msg);
+            updateStatus(msg, 0, true);
+            reject(new Error(msg));
+            return;
+          }
+          
+          // Todo ha ido bien
+          console.log('Perfil abierto correctamente en nueva pestaña:', response);
+          updateStatus('Perfil abierto en nueva pestaña', 100);
+          resolve(true);
+        });
+      } catch (err) {
+        console.error("Excepción al enviar mensaje:", err);
+        updateStatus(`Error al comunicarse con background: ${err.message}`, 0, true);
+        reject(err);
+      }
+    });
+  } catch (error) {
+    console.error('Error al abrir perfil en nueva pestaña:', error);
+    updateStatus(`Error al abrir perfil: ${error.message}`, 0, true);
     throw error;
   }
 }
@@ -1062,33 +1360,43 @@ async function selectProfile(index) {
 }
 
 // Función para extraer datos del perfil
-async function extractProfileData() {
+function extractProfileData(resultElement) {
   try {
-    console.log('Extrayendo datos del perfil...');
+    // Verificar si el resultado contiene un enlace de perfil
+    const profileLink = resultElement.querySelector(SELECTORS.PROFILE_LINK);
     
-    // Esta función requeriría un análisis detallado de la estructura de la página de perfil
-    // Por ahora, solo recopilamos información básica
-    
-    const name = document.title.replace(' | Facebook', '');
-    
-    // Recopilar publicaciones recientes (esto es simplificado)
-    const posts = Array.from(document.querySelectorAll('div[role="article"]')).map(post => ({
-      text: post.textContent.substring(0, 200),
-      timestamp: post.querySelector('a[href*="/posts/"] span')?.textContent || 'Desconocido'
-    })).slice(0, 5); // Limitar a 5 publicaciones
-    
-    return {
-      success: true,
-      profileData: {
-        name,
-        url: window.location.href,
-        posts
+    if (profileLink) {
+      const profileUrl = profileLink.href;
+      const profileName = profileLink.textContent.trim();
+      
+      // Extraer información adicional si está disponible
+      let additionalInfo = '';
+      const infoElements = resultElement.querySelectorAll('span');
+      for (const infoEl of infoElements) {
+        const text = infoEl.textContent.trim();
+        if (text && text !== profileName && text.length < 100) {
+          additionalInfo += text + ' ';
+        }
       }
-    };
+      
+      // Generar un ID único para el perfil
+      const profileId = `profile-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+      
+      // Crear objeto con datos del perfil
+      return {
+        id: profileId,
+        name: profileName,
+        url: profileUrl,
+        processed: false,
+        info: additionalInfo.trim(),
+        timestamp: new Date().toISOString()
+      };
+    }
   } catch (error) {
     console.error('Error al extraer datos del perfil:', error);
-    return { success: false, message: error.message };
   }
+  
+  return null;
 }
 
 // Función para enviar solicitud de amistad
@@ -1147,12 +1455,12 @@ async function sendMessage(text) {
     
     // Simular escritura en el campo
     messageInput.focus();
+    await sleep(500);
+    
     messageInput.textContent = text;
     
     // Disparar evento de input para activar el botón de envío
     messageInput.dispatchEvent(new Event('input', { bubbles: true }));
-    
-    // Esperar un momento
     await sleep(500);
     
     // Buscar el botón de envío
@@ -1171,9 +1479,6 @@ async function sendMessage(text) {
         bubbles: true
       }));
     }
-    
-    // Esperar a que se envíe el mensaje
-    await sleep(1000);
     
     return { success: true, message: 'Mensaje enviado' };
   } catch (error) {
@@ -1241,97 +1546,6 @@ function findElementByText(selectors, textFragments, exactMatch = false) {
   
   console.log('No se encontraron elementos con los textos especificados');
   return null;
-}
-
-// Función mejorada para forzar eventos de entrada de texto más realistas
-async function simulateTyping(inputElement, text) {
-  // Asegurarse de que el elemento esté visible y tenga el foco
-  inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  await sleep(300);
-  
-  // Dar foco explícitamente
-  inputElement.focus();
-  await sleep(300);
-  
-  // Limpiar cualquier valor existente
-  inputElement.value = '';
-  
-  // Disparar evento de input para notificar el cambio
-  inputElement.dispatchEvent(new Event('input', { bubbles: true }));
-  await sleep(300);
-  
-  // Establecer el valor completo primero (método directo)
-  inputElement.value = text;
-  
-  // Disparar evento de cambio
-  inputElement.dispatchEvent(new Event('input', { bubbles: true }));
-  await sleep(500);
-  
-  // Simulación más realista de eventos específicos de Facebook
-  // Disparar evento personalizado utilizado por React/Facebook
-  const fbInputEvent = new CustomEvent('input', {
-    bubbles: true,
-    cancelable: true,
-    composed: true,
-    detail: { value: text }
-  });
-  inputElement.dispatchEvent(fbInputEvent);
-  
-  // También disparar eventos nativos de teclado para simular typing
-  // Tecla pulsada inicial
-  const initialKeyEvent = new KeyboardEvent('keydown', {
-    key: text[0],
-    code: `Key${text[0].toUpperCase()}`,
-    keyCode: text.charCodeAt(0),
-    which: text.charCodeAt(0),
-    bubbles: true,
-    cancelable: true
-  });
-  inputElement.dispatchEvent(initialKeyEvent);
-  
-  // Disparar eventos finales
-  inputElement.dispatchEvent(new Event('change', { bubbles: true }));
-  
-  // Disparar eventos keyup
-  const finalKeyEvent = new KeyboardEvent('keyup', {
-    key: text[text.length - 1],
-    code: `Key${text[text.length - 1].toUpperCase()}`,
-    keyCode: text.charCodeAt(text.length - 1),
-    which: text.charCodeAt(text.length - 1),
-    bubbles: true,
-    cancelable: true
-  });
-  inputElement.dispatchEvent(finalKeyEvent);
-  
-  console.log(`Entrada de texto simulada para: "${text}"`);
-  await sleep(500);
-}
-
-// Función para presionar la tecla Enter en un elemento
-async function pressEnter(element) {
-  const enterEvent = new KeyboardEvent('keydown', {
-    key: 'Enter',
-    code: 'Enter',
-    keyCode: 13,
-    which: 13,
-    bubbles: true,
-    cancelable: true
-  });
-  element.dispatchEvent(enterEvent);
-  
-  // También disparar evento keyup
-  const enterUpEvent = new KeyboardEvent('keyup', {
-    key: 'Enter',
-    code: 'Enter',
-    keyCode: 13,
-    which: 13,
-    bubbles: true,
-    cancelable: true
-  });
-  
-  await sleep(100);
-  element.dispatchEvent(enterUpEvent);
-  console.log('Tecla Enter presionada');
 }
 
 // Verificar si hay una búsqueda pendiente después de la recarga
@@ -1433,6 +1647,34 @@ const initialize = async () => {
   
   console.log('Detectada página de Facebook, iniciando Snap Lead Manager');
   
+  // Verificar primero si la extensión fue detenida explícitamente
+  if (chrome.runtime && chrome.runtime.sendMessage) {
+    chrome.storage.local.get(['extension_stopped'], function(result) {
+      if (result.extension_stopped === true) {
+        console.log('La extensión fue detenida explícitamente. No se reanudarán acciones.');
+        // No continuar con ninguna acción pendiente
+        
+        // Limpiar datos de búsqueda pendientes
+        localStorage.removeItem('snap_lead_manager_search_pending');
+        localStorage.removeItem('snap_lead_manager_city_filter_applied');
+        
+        // Se puede inyectar el sidebar pero sin reanudar acciones
+        injectSidebar();
+        
+        return;
+      } else {
+        // Si no fue detenida, continuar con la inicialización normal
+        continueInitialization();
+      }
+    });
+  } else {
+    // Si no podemos verificar el estado, continuar normalmente
+    continueInitialization();
+  }
+};
+
+// Función para continuar con la inicialización normal
+const continueInitialization = () => {
   // Verificar si debemos restaurar el sidebar desde el background script
   if (chrome.runtime && chrome.runtime.sendMessage) {
     chrome.runtime.sendMessage({ action: 'restore_sidebar' }, (response) => {
@@ -1459,7 +1701,7 @@ const initialize = async () => {
   observer.observe(document.body, { childList: true, subtree: true });
   
   // Comprobar si hay una búsqueda pendiente
-  await checkPendingSearch();
+  checkPendingSearch();
 };
 
 // Iniciar content script cuando se carga la página
@@ -1504,7 +1746,7 @@ setTimeout(() => {
     const iframe = document.getElementById('snap-lead-manager-iframe');
     if (iframe && iframe.contentWindow) {
       iframe.contentWindow.postMessage({
-        action: 'restore_search_info',
+        type: 'restore_search_info',
         searchTerm: searchTerm,
         searchData: searchData,
         fullQuery: fullQuery
@@ -1512,3 +1754,606 @@ setTimeout(() => {
     }
   }
 }, 2000);
+
+// Función para manejar la acción de detener y limpiar todos los estados
+function handleStopAction() {
+  console.log('Deteniendo todas las operaciones...');
+  
+  // Limpiar todos los timeouts
+  for (const timeout in state.timeouts) {
+    clearTimeout(state.timeouts[timeout]);
+    delete state.timeouts[timeout];
+  }
+  
+  // Restablecer estado de procesamiento
+  isProcessing = false;
+  state.isProcessing = false;
+  
+  // Limpiar datos de búsqueda
+  localStorage.removeItem('snap_lead_manager_search_term');
+  localStorage.removeItem('snap_lead_manager_search_data');
+  localStorage.removeItem('snap_lead_manager_full_query');
+  localStorage.removeItem('snap_lead_manager_search_pending');
+  localStorage.removeItem('snap_lead_manager_city_filter_applied');
+  
+  // Limpiar perfiles almacenados
+  localStorage.removeItem('snap_lead_manager_profiles');
+  
+  // Notificar al background script sobre la detención de operaciones
+  if (chrome.runtime && chrome.runtime.sendMessage) {
+    chrome.runtime.sendMessage({
+      type: 'status_update',
+      isRunning: false,
+      isPaused: false,
+      progress: 0,
+      message: 'Proceso detenido',
+      suppressResponse: true  // Evitar respuestas en bucle
+    });
+  }
+  
+  console.log('Todas las operaciones detenidas y estado limpiado');
+}
+
+// Función para aplicar el filtro de ciudad
+async function applyCityFilter() {
+  try {
+    console.log('Verificando si se debe aplicar filtro de ciudad...');
+    
+    // Verificar si ya se aplicó el filtro
+    const cityFilterApplied = localStorage.getItem('snap_lead_manager_city_filter_applied') === 'true';
+    if (cityFilterApplied) {
+      console.log('El filtro de ciudad ya está aplicado, continuando...');
+      updateStatus('El filtro de ciudad ya está aplicado, continuando...', 35);
+      
+      // Iniciar automáticamente la búsqueda de perfiles
+      console.log('Iniciando búsqueda de perfiles después de verificar filtro de ciudad...');
+      findProfiles().catch(error => {
+        console.error('Error al buscar perfiles después de verificar filtro de ciudad:', error);
+      });
+      
+      return { success: true, message: 'El filtro de ciudad ya estaba aplicado' };
+    }
+    
+    // Obtener datos de búsqueda del localStorage
+    const searchDataStr = localStorage.getItem('snap_lead_manager_search_data');
+    if (!searchDataStr) {
+      console.log('No hay datos de búsqueda en localStorage');
+      localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+      return { success: false, message: 'No hay datos de búsqueda disponibles' };
+    }
+    
+    const searchData = JSON.parse(searchDataStr);
+    
+    // Verificar si hay una ciudad especificada en los datos de búsqueda
+    if (!searchData || !searchData.city || searchData.city.trim() === '') {
+      console.log('No hay ciudad especificada en los datos de búsqueda');
+      localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+      return { success: true, message: 'No hay ciudad para filtrar' };
+    }
+    
+    // Marcar que estamos aplicando el filtro
+    localStorage.setItem('snap_lead_manager_city_filter_applied', 'false');
+    
+    updateStatus('Aplicando filtro de ciudad...', 20);
+    console.log('Comenzando a aplicar filtro de ciudad:', searchData.city);
+    
+    // Establecer un timeout para continuar con el proceso incluso si no se puede aplicar el filtro
+    const filterTimeout = setTimeout(() => {
+      console.log('Tiempo de espera agotado para el filtro de ciudad. Continuando con el proceso...');
+      localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+      updateStatus('Continuando sin filtro de ciudad debido a timeout', 40);
+      // No es necesario hacer nada más aquí, el código continuará después del try/catch
+    }, 30000); // Aumentamos el timeout a 30 segundos para dar más tiempo
+    
+    // Esperar a que se cargue completamente la página de resultados
+    await sleep(3000);
+    
+    // ENFOQUE MEJORADO PARA SELECCIONAR ESPECÍFICAMENTE EL PRIMER ELEMENTO DEL LISTBOX
+    console.log('Aplicando filtro de ciudad con enfoque mejorado...');
+    
+    // 1. Buscar el input de ciudad específicamente con los selectores proporcionados
+    console.log('Buscando input de ciudad...');
+    let cityInput = document.querySelector('input[aria-label="Ciudad"][role="combobox"][placeholder="Ciudad"]');
+    
+    if (!cityInput) {
+      console.log('No se encontró el input de ciudad con el selector exacto, intentando alternativas...');
+      
+      // Probar con múltiples selectores alternativos basados en el HTML proporcionado
+      const alternativeSelectors = [
+        'input[placeholder="Ciudad"]',
+        'input[aria-label="Ciudad"]',
+        'input.x1i10hfl[role="combobox"]',
+        'div.x1n2onr6 > input',
+        'input[role="combobox"][type="search"]'
+      ];
+      
+      for (const selector of alternativeSelectors) {
+        const input = document.querySelector(selector);
+        if (input) {
+          console.log(`Input de ciudad encontrado con selector alternativo: ${selector}`);
+          cityInput = input;
+          break;
+        }
+      }
+      
+      if (!cityInput) {
+        console.error('No se pudo encontrar el input de ciudad con ningún selector');
+        clearTimeout(filterTimeout);
+        localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+        updateStatus('No se pudo encontrar el campo de ciudad, continuando sin filtro', 40);
+        return { success: false, message: 'No se pudo encontrar el campo de ciudad' };
+      }
+    }
+    
+    console.log('Campo de entrada para ciudad encontrado:', cityInput);
+    
+    // 2. Focus y establecer el valor directamente
+    cityInput.focus();
+    await sleep(500);
+    
+    // 3. Establecer el valor directamente sin usar simulateTyping
+    console.log('Estableciendo la ciudad directamente:', searchData.city);
+    cityInput.value = searchData.city;
+    cityInput.dispatchEvent(new Event('input', { bubbles: true }));
+    cityInput.dispatchEvent(new Event('change', { bubbles: true }));
+    
+    // Verificar que el texto se haya establecido correctamente
+    console.log('Valor actual del input después de establecer:', cityInput.value);
+    if (cityInput.value !== searchData.city) {
+      console.warn('El valor no se estableció correctamente. Intentando método alternativo...');
+      // Método alternativo: usar execCommand
+      cityInput.select();
+      document.execCommand('insertText', false, searchData.city);
+      await sleep(500);
+    }
+    
+    // 4. Esperar a que aparezcan las sugerencias
+    console.log('Esperando a que aparezcan las sugerencias...');
+    await sleep(3000);
+    
+    // 5. Verificar que el listbox de sugerencias esté visible
+    let listbox = null;
+    let listboxFound = false;
+    
+    // Intentar encontrar el listbox con diferentes selectores
+    const listboxSelectors = [
+      'ul[role="listbox"]',
+      'div.x1y1aw1k ul',
+      'ul.x1iyjqo2',
+      'div[role="dialog"] ul',
+      'div[role="menu"] ul',
+      'div.x78zum5 ul',
+      'div.x1n2onr6 ul',
+      'ul.x6s0dn4',
+      'ul.x1jx94hy',
+      'div[aria-expanded="true"] ul'
+    ];
+    
+    for (const selector of listboxSelectors) {
+      const possibleListbox = document.querySelector(selector);
+      if (possibleListbox && possibleListbox.offsetParent !== null) { // Verificar que sea visible
+        console.log(`Listbox encontrado con selector: ${selector}`);
+        listbox = possibleListbox;
+        listboxFound = true;
+        break;
+      }
+    }
+    
+    if (!listboxFound) {
+      console.log('No se encontró el listbox de sugerencias. Intentando activarlo...');
+      
+      // Intentar activar el listbox con teclas de flecha
+      cityInput.focus();
+      await sleep(500);
+      
+      // Presionar tecla de flecha abajo varias veces
+      for (let i = 0; i < 3; i++) {
+        cityInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        await sleep(500);
+        
+        // Verificar si apareció el listbox después de cada intento
+        for (const selector of listboxSelectors) {
+          const visibleListbox = document.querySelector(selector);
+          if (visibleListbox && visibleListbox.offsetParent !== null) {
+            console.log(`Listbox encontrado después de presionar flecha abajo (intento ${i+1}) con selector: ${selector}`);
+            listbox = visibleListbox;
+            listboxFound = true;
+            break;
+          }
+        }
+        
+        if (listboxFound) break;
+      }
+      
+      // Si aún no encontramos el listbox, intentamos con más eventos
+      if (!listboxFound) {
+        console.log('Intentando activar el listbox con más eventos...');
+        
+        // Simular clic en el input
+        cityInput.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await sleep(1000);
+        
+        // Verificar nuevamente
+        for (const selector of listboxSelectors) {
+          const visibleListbox = document.querySelector(selector);
+          if (visibleListbox && visibleListbox.offsetParent !== null) {
+            console.log(`Listbox encontrado después de eventos adicionales con selector: ${selector}`);
+            listbox = visibleListbox;
+            listboxFound = true;
+            break;
+          }
+        }
+      }
+    }
+    
+    // Si encontramos el listbox, intentamos seleccionar la primera opción
+    if (listboxFound && listbox) {
+      console.log('Listbox encontrado, intentando seleccionar la primera opción...');
+      
+      // Obtener todas las opciones del listbox con selectores más amplios
+      const options = listbox.querySelectorAll('li[role="option"], li[aria-selected="false"]');
+      console.log(`Encontradas ${options.length} opciones en el listbox`);
+      
+      if (options.length > 0) {
+        // Obtener la primera opción
+        const firstOption = options[0];
+        console.log('Primera opción encontrada:', firstOption.textContent.trim());
+        
+        // Intentar hacer clic en la primera opción con múltiples estrategias
+        console.log('Haciendo clic en la primera opción...');
+        
+        // Estrategia 1: Buscar y hacer clic en el div clickeable dentro del li
+        try {
+          // Buscar el div clickeable con la clase x1i10hfl (según el HTML proporcionado)
+          const clickableDiv = firstOption.querySelector('div.x1i10hfl');
+          if (clickableDiv) {
+            console.log('Elemento div.x1i10hfl encontrado, haciendo clic en él');
+            clickableDiv.click();
+          } else {
+            console.log('No se encontró div.x1i10hfl, intentando clic directo en el li');
+            firstOption.click();
+          }
+          console.log('Click directo ejecutado en la primera opción');
+        } catch (e) {
+          console.error('Error al hacer click directo:', e);
+        }
+        
+        // Estrategia 2: Eventos de mouse más completos
+        try {
+          firstOption.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+          await sleep(300);
+          firstOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+          await sleep(300);
+          firstOption.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+          await sleep(300);
+          firstOption.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          console.log('Eventos de mouse ejecutados en la primera opción');
+        } catch (e) {
+          console.error('Error al disparar eventos de mouse:', e);
+        }
+        
+        // Estrategia 3: Usar teclas de flecha y Enter
+        if (!document.querySelector('ul[role="listbox"]')?.offsetParent) {
+          console.log('El listbox ya no está visible después de eventos de mouse');
+          clearTimeout(filterTimeout);
+          localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+          updateStatus('Filtro de ciudad aplicado, cargando resultados...', 40);
+          await sleep(3000);
+          return { success: true, message: 'Filtro de ciudad aplicado con eventos de mouse' };
+        }
+        
+        // Estrategia 4: Simular tecla Tab y luego Enter
+        cityInput.focus();
+        await sleep(500);
+        cityInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+        await sleep(1000);
+        cityInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        await sleep(2000);
+        
+        // Verificar una última vez
+        if (!document.querySelector('ul[role="listbox"]')?.offsetParent) {
+          console.log('El listbox ya no está visible después del método de respaldo final');
+          clearTimeout(filterTimeout);
+          localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+          updateStatus('Filtro de ciudad aplicado, cargando resultados...', 40);
+          await sleep(3000);
+          return { success: true, message: 'Filtro de ciudad aplicado con método de respaldo final' };
+        }
+      }
+    }
+    
+    // Verificar si el filtro se aplicó correctamente
+    console.log('Verificando si el filtro se aplicó correctamente...');
+    
+    // Esperar a que se actualice la UI después de seleccionar la ciudad
+    await sleep(3000);
+    
+    // Verificar si hay algún indicador visual de que se aplicó el filtro
+    const filterIndicators = document.querySelectorAll('.x1i10hfl, .x1qjc9v5, .xjbqb8w');
+    let filterApplied = false;
+    
+    for (const indicator of filterIndicators) {
+      if (indicator.textContent.includes(searchData.city)) {
+        console.log('Indicador visual encontrado de que el filtro se aplicó:', indicator.textContent);
+        filterApplied = true;
+        break;
+      }
+    }
+    
+    if (filterApplied || !document.querySelector('ul[role="listbox"]')?.offsetParent) {
+      console.log('Filtro de ciudad aplicado con éxito');
+      clearTimeout(filterTimeout);
+      
+      // Actualizar el estado del filtro
+      updateFilterStatus(true);
+      
+      updateStatus('Filtro de ciudad aplicado, cargando resultados...', 40);
+      
+      // Iniciar automáticamente la búsqueda de perfiles
+      console.log('Iniciando búsqueda de perfiles después de aplicar filtro de ciudad...');
+      findProfiles().catch(error => {
+        console.error('Error al buscar perfiles después de aplicar filtro de ciudad:', error);
+      });
+      
+      // Marcar explícitamente que el filtro se ha aplicado
+      localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+      
+      // Notificar al sidebar sobre el cambio de estado
+      const iframe = document.getElementById('snap-lead-manager-iframe');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({
+          type: 'filter_applied',
+          success: true,
+          message: 'Filtro de ciudad aplicado correctamente'
+        }, '*');
+      }
+      
+      // También notificar al background script
+      if (chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'status_update',
+          message: 'Filtro de ciudad aplicado correctamente',
+          progress: 40,
+          filterApplied: true
+        });
+      }
+      
+      // Mejora en la función applyCityFilter para asegurar que continúe con findProfiles
+      // Añadir hacia el final de la función applyCityFilter, justo después de aplicar el filtro exitosamente:
+
+      localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+      updateStatus('Filtro de ciudad aplicado, iniciando búsqueda de perfiles...', 45);
+
+      // Iniciar explícitamente findProfiles con un pequeño retraso para asegurar que se carguen los resultados
+      setTimeout(() => {
+        isProcessing = true; // Asegurarse de que isProcessing sea true
+        console.log('Iniciando búsqueda de perfiles después de aplicar filtro...');
+        findProfiles()
+          .then(profiles => {
+            if (profiles && profiles.length > 0) {
+              console.log(`Búsqueda completada con éxito. Se encontraron ${profiles.length} perfiles`);
+              
+              // Mostrar resumen con estadísticas
+              const endTime = Date.now();
+              const startTime = parseInt(localStorage.getItem('snap_lead_manager_search_start_time') || endTime);
+              const duration = Math.floor((endTime - startTime) / 1000);
+              const minutes = Math.floor(duration / 60);
+              const seconds = duration % 60;
+              
+              updateStatus(`✓ Búsqueda completada en ${minutes}m ${seconds}s. Encontrados ${profiles.length} perfiles`, 100);
+            }
+          })
+          .catch(error => {
+            console.error('Error en búsqueda de perfiles:', error);
+          });
+      }, 2000);
+      
+      return { success: true, message: 'Filtro de ciudad aplicado con éxito' };
+    }
+    
+    // Si llegamos hasta aquí, intentamos un último método de respaldo
+    console.log('Intentando método de respaldo final...');
+    
+    // Método de respaldo: simular tecla Tab y luego Enter
+    cityInput.focus();
+    await sleep(500);
+    cityInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    await sleep(1000);
+    cityInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await sleep(2000);
+    
+    // Verificar una última vez
+    if (!document.querySelector('ul[role="listbox"]')?.offsetParent) {
+      console.log('El listbox ya no está visible después del método de respaldo final');
+      clearTimeout(filterTimeout);
+      localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+      updateStatus('Filtro de ciudad aplicado, cargando resultados...', 40);
+      await sleep(3000);
+      return { success: true, message: 'Filtro de ciudad aplicado con método de respaldo final' };
+    }
+    
+    // Si todo falla, marcamos como aplicado para continuar con el proceso
+    console.log('No se pudo aplicar el filtro de ciudad después de múltiples intentos');
+    clearTimeout(filterTimeout);
+    localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+    updateStatus('No se pudo aplicar el filtro de ciudad, continuando sin filtro', 40);
+    
+    // Iniciar automáticamente la búsqueda de perfiles cuando el filtro falla
+    console.log('Iniciando búsqueda de perfiles a pesar de fallo en filtro de ciudad...');
+    findProfiles().catch(error => {
+      console.error('Error al buscar perfiles después de fallo en filtro de ciudad:', error);
+    });
+    
+    return { success: false, message: 'No se pudo aplicar el filtro de ciudad, pero continuamos el proceso' };
+  } catch (error) {
+    console.error('Error al aplicar filtro de ciudad:', error);
+    updateStatus('Error al aplicar filtro de ciudad, continuando sin filtro', 40);
+    localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+    return { success: false, error: error.message };
+  }
+}
+
+// Función para simular la escritura en un campo de texto
+async function simulateTyping(element, text) {
+  console.log(`Simulando escritura de: "${text}" en elemento:`, element);
+  
+  // Enfocar el elemento primero
+  element.focus();
+  
+  // Limpiar el campo si tiene contenido - MÉTODO MEJORADO
+  console.log('Valor actual antes de limpiar:', element.value);
+  
+  // Método 1: Establecer valor vacío
+  element.value = '';
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  
+  // Método 2: Seleccionar todo el texto y eliminarlo
+  element.select();
+  document.execCommand('delete');
+  
+  // Método 3: Simular Control+A y luego Delete
+  element.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true }));
+  element.dispatchEvent(new KeyboardEvent('keyup', { key: 'a', ctrlKey: true, bubbles: true }));
+  element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+  element.dispatchEvent(new KeyboardEvent('keyup', { key: 'Delete', bubbles: true }));
+  
+  // Verificar que el campo esté vacío
+  console.log('Valor después de limpiar:', element.value);
+  if (element.value !== '') {
+    console.warn('El campo no se limpió correctamente. Intentando método alternativo...');
+    
+    // Método alternativo: Simular Backspace múltiples veces
+    const currentLength = element.value.length;
+    for (let i = 0; i < currentLength; i++) {
+      element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+      element.dispatchEvent(new KeyboardEvent('keyup', { key: 'Backspace', bubbles: true }));
+      // Actualizar manualmente el valor
+      element.value = element.value.slice(0, -1);
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+  
+  await sleep(500);
+  
+  // Verificar nuevamente antes de escribir
+  if (element.value !== '') {
+    console.error('No se pudo limpiar el campo. Estableciendo valor directamente.');
+    element.value = text;
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+  
+  // Escribir el texto caracter por caracter
+  console.log('Comenzando a escribir texto:', text);
+  for (let i = 0; i < text.length; i++) {
+    // Agregar el caracter actual al valor del elemento
+    element.value += text[i];
+    
+    // Disparar eventos para simular una escritura real
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new KeyboardEvent('keydown', { key: text[i], bubbles: true }));
+    element.dispatchEvent(new KeyboardEvent('keypress', { key: text[i], bubbles: true }));
+    element.dispatchEvent(new KeyboardEvent('keyup', { key: text[i], bubbles: true }));
+    
+    // Pequeña pausa entre cada caracter para simular escritura humana
+    await sleep(50);
+  }
+  
+  // Disparar evento change al finalizar
+  element.dispatchEvent(new Event('change', { bubbles: true }));
+  
+  // Verificar el valor final
+  console.log(`Escritura completada. Valor final: "${element.value}"`);
+  if (element.value !== text) {
+    console.warn(`El valor final (${element.value}) no coincide con el texto deseado (${text})`);
+  }
+  
+  await sleep(500);
+  
+  return true;
+}
+
+// Función para actualizar el estado del filtro en el sidebar
+function updateFilterStatus(applied = true) {
+  // Actualizar localStorage
+  localStorage.setItem('snap_lead_manager_city_filter_applied', applied ? 'true' : 'false');
+  
+  // Enviar mensaje al iframe del sidebar
+  const iframe = document.getElementById('snap-lead-manager-iframe');
+  if (iframe && iframe.contentWindow) {
+    iframe.contentWindow.postMessage({
+      action: 'filter_status_update',
+      filterApplied: applied,
+      message: applied ? 'Filtro de ciudad aplicado correctamente' : 'Filtro de ciudad pendiente de aplicar'
+    }, '*');
+  }
+  
+  // También notificar al background script
+  if (chrome.runtime && chrome.runtime.sendMessage) {
+    chrome.runtime.sendMessage({
+      type: 'filter_status_update',
+      filterApplied: applied,
+      message: applied ? 'Filtro de ciudad aplicado correctamente' : 'Filtro de ciudad pendiente de aplicar'
+    });
+  }
+}
+
+// Modificar la función que envía mensajes al background para manejar errores de contexto invalidado
+function notifyBackgroundOfProgress(message, progress, data = {}) {
+  if (chrome.runtime && chrome.runtime.sendMessage) {
+    try {
+      chrome.runtime.sendMessage({
+        type: 'status_update',
+        message: message,
+        progress: progress,
+        ...data
+      }, function(response) {
+        // Verificar si hay un error de contexto invalidado
+        if (chrome.runtime.lastError) {
+          console.warn('Error al enviar mensaje al background:', chrome.runtime.lastError);
+          
+          // Si el contexto está invalidado, intentar recuperarse
+          if (chrome.runtime.lastError.message.includes('Extension context invalidated')) {
+            console.log('Contexto de extensión invalidado, intentando recuperar...');
+            
+            // Guardar el estado actual en localStorage para recuperarlo después
+            localStorage.setItem('snap_lead_manager_last_status', JSON.stringify({
+              message: message,
+              progress: progress,
+              data: data,
+              timestamp: Date.now()
+            }));
+          }
+        }
+      });
+    } catch (e) {
+      console.error('Error al notificar al background:', e);
+    }
+  }
+}
+
+// Usar esta función en lugar de las llamadas directas a chrome.runtime.sendMessage
+
+// Añadir al inicio del script (después de las declaraciones de variables)
+// Verificar si el proceso estaba detenido al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+  const wasStopped = localStorage.getItem('snap_lead_manager_process_stopped') === 'true';
+  
+  if (wasStopped) {
+    console.log('El proceso estaba detenido, manteniendo estado detenido');
+    isProcessing = false;
+    isPaused = false;
+    updateStatus('Proceso detenido', 0);
+  } else {
+    // Verificar si hay una búsqueda pendiente
+    const searchPending = localStorage.getItem('snap_lead_manager_search_pending') === 'true';
+    
+    if (searchPending) {
+      console.log('Hay una búsqueda pendiente, verificando si debemos continuar...');
+      
+      // Aquí podrías implementar lógica para preguntar al usuario si desea continuar
+      // o continuar automáticamente
+    }
+  }
+});

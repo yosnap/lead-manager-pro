@@ -27,7 +27,8 @@
         </div>
         <div class="button-group">
           <button id="search-button" class="btn">Buscar</button>
-          <button id="apply-filters-button" class="btn btn-secondary">Aplicar Filtros</button>
+          <button id="pause-button" class="btn btn-secondary">Pausar</button>
+          <button id="stop-button" class="btn btn-secondary">Detener</button>
         </div>
         
         <!-- Contenedor para mostrar información de búsqueda actual -->
@@ -63,15 +64,6 @@
         </div>
       </section>
       
-      <section class="controls-section">
-        <h2>Controles</h2>
-        <div class="control-buttons">
-          <button id="start-button" class="btn">Iniciar</button>
-          <button id="pause-button" class="btn btn-secondary" disabled>Pausar</button>
-          <button id="stop-button" class="btn btn-secondary" disabled>Detener</button>
-        </div>
-      </section>
-      
       <section class="results-section">
         <h2>Resultados</h2>
         <div id="results-summary" class="results-summary"></div>
@@ -81,7 +73,9 @@
     
     <footer>
       <p>Snap Lead Manager v1.0.0</p>
-      <button id="toggle-sidebar" class="toggle-btn">Ocultar</button>
+      <div class="footer-buttons">
+        <button id="open-window-btn" class="toggle-btn">Abrir en ventana</button>
+      </div>
     </footer>
   </div>
   

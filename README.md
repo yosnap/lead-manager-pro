@@ -6,13 +6,13 @@
 - Se ha creado la estructura básica del proyecto para la extensión "Snap Lead Manager"
 - Se ha configurado el manifest.json con los permisos necesarios (tabs, storage, scripting, webNavigation, windows)
 - Se ha establecido el esquema de colores blanco y negro para la interfaz
-- Se ha creado la interfaz básica de la extensión (popup.html)
+- Se ha creado la interfaz básica de la extensión (sidebar)
 
 ### Componentes implementados
 - **manifest.json**: Configuración principal de la extensión con permisos y estructura
-- **popup.html**: Interfaz de usuario con diseño en blanco y negro
-- **popup.css**: Estilos para la interfaz de usuario
-- **popup.js**: Funcionalidad básica para la interacción con la interfaz
+- **sidebar.html**: Interfaz de usuario con diseño en blanco y negro
+- **sidebar.css**: Estilos para la interfaz de usuario
+- **sidebar.js**: Funcionalidad básica para la interacción con la interfaz
 - **background.js**: Script en segundo plano para gestionar el estado de la extensión
 - **content.js**: Script para interactuar con las páginas de Facebook
 
@@ -21,7 +21,7 @@
 - Controles para iniciar, pausar y detener el proceso
 - Indicador de progreso y mensajes de estado
 - Comunicación entre los diferentes componentes de la extensión
-- Opción para mantener el popup abierto como una ventana independiente durante las operaciones
+- Opción para mantener el sidebar abierto como una ventana independiente durante las operaciones
 
 ## Notas de Implementación
 
@@ -51,6 +51,13 @@ La implementación involucró:
 - Restauración de la información de búsqueda y resultados
 
 ## Actualizaciones recientes
+
+### Mejora en la experiencia de usuario
+- Se ha simplificado la interfaz eliminando completamente el popup
+- Al hacer clic en el icono de la extensión, se muestra directamente el sidebar en la página de Facebook
+- Si no se está en Facebook, se abre una nueva pestaña con Facebook y se muestra el sidebar
+- Los botones de control (iniciar, pausar, detener) ahora funcionan independientemente del estado
+- Se ha mejorado la experiencia general al hacer que la interfaz sea más intuitiva y directa
 
 ### Mejoras en la interfaz del sidebar
 - Se ha implementado un sidebar visible en el lado derecho de Facebook
@@ -100,11 +107,6 @@ Antes de cargar la extensión, necesitas generar los iconos:
 4. Selecciona la carpeta raíz del proyecto "Snap Lead Manager"
 5. La extensión debería aparecer en la lista de extensiones y estar lista para usar
 6. Haz clic en el icono de la extensión en la barra de herramientas para abrir la interfaz
-
-### Uso de la ventana independiente
-1. Al hacer clic en el icono de la extensión, se abrirá el popup tradicional
-2. En la parte inferior del popup, encontrarás un botón "Abrir en ventana"
-3. Al hacer clic en este botón, se abrirá una ventana independiente que permanecerá abierta mientras navegas
 
 ### Uso del sidebar en Facebook
 1. Navega a Facebook.com

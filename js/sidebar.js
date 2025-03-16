@@ -16,15 +16,13 @@ let state = {
 let searchTermInput;
 let searchCityInput;
 let searchButton;
-let startButton;
-let stopButton;
 let pauseButton;
+let stopButton;
 let statusMessage;
 let progressBar;
 let searchResultsList;
 let currentSearchInfo;
-let toggleSidebarButton;
-let applyFiltersButton;
+let openWindowButton; // Mantenemos solo esta referencia
 
 // Referencias a elementos de UI detallada
 let searchStatusContainer;
@@ -179,7 +177,7 @@ function updateStatus(message, progress = state.progress, isError = false) {
   if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
     try {
       chrome.runtime.sendMessage({
-        action: 'update_status',
+        type: 'status_update',
         message: message,
         progress: progress,
         error: isError
@@ -195,23 +193,67 @@ function updateStatus(message, progress = state.progress, isError = false) {
 // Función para actualizar la UI basada en el estado actual
 function updateUI() {
   // Verificar que los botones existen antes de modificar sus propiedades
-  if (startButton) {
-    startButton.disabled = state.isRunning && !state.isPaused;
-  }
-  
   if (pauseButton) {
-    pauseButton.disabled = !state.isRunning || state.isPaused;
+    pauseButton.disabled = false;
   }
   
   if (stopButton) {
-    stopButton.disabled = !state.isRunning;
+    stopButton.disabled = false;
   }
   
   // Actualizar operación actual
-  if (currentOperation) {
-    currentOperation.textContent = state.isRunning 
-      ? (state.isPaused ? "Pausado" : "Ejecutando") 
-      : "Inactivo";
+  if (statusMessage) {
+    let statusText = state.isRunning 
+      ? (state.isPaused ? 'Pausado' : 'En ejecución') 
+      : 'Listo para comenzar';
+    
+    if (state.currentOperation) {
+      statusText += `: ${state.currentOperation}`;
+    }
+    
+    if (state.error) {
+      statusText += ` (Error: ${state.error})`;
+    }
+    
+    statusMessage.textContent = statusText;
+  }
+  
+  // Actualizar barra de progreso
+  if (progressBar) {
+    progressBar.style.width = `${state.progress}%`;
+  }
+  
+  // Actualizar información de búsqueda actual
+  updateSearchInfo();
+}
+
+function updateCurrentSearchInfo() {
+  if (state.currentSearchTerm) {
+    let searchInfoHTML = `<p><strong>Término de búsqueda:</strong> ${state.currentSearchTerm}</p>`;
+    
+    if (state.currentSearchCity) {
+      searchInfoHTML += `<p><strong>Ciudad:</strong> ${state.currentSearchCity}</p>`;
+    }
+    
+    // Mostrar término completo (combinado con ciudad)
+    if (state.currentSearchCity) {
+      searchInfoHTML += `<p><strong>Búsqueda completa:</strong> ${state.currentSearchTerm} (Ciudad: ${state.currentSearchCity})</p>`;
+      
+      // Agregar un mensaje de estado para el filtro de ciudad
+      const cityFilterApplied = localStorage.getItem('snap_lead_manager_city_filter_applied') === 'true';
+      if (cityFilterApplied) {
+        searchInfoHTML += `<p class="status success"><i>✓ Filtro de ciudad aplicado correctamente</i></p>`;
+      } else {
+        searchInfoHTML += `<p class="status"><i>Filtro de ciudad pendiente de aplicar...</i></p>`;
+      }
+    }
+    
+    if (currentSearchInfo) {
+      currentSearchInfo.innerHTML = searchInfoHTML;
+      currentSearchInfo.style.display = 'block';
+    }
+  } else if (currentSearchInfo) {
+    currentSearchInfo.style.display = 'none';
   }
 }
 
@@ -225,111 +267,40 @@ function performSearch() {
       throw new Error('Por favor ingresa un término de búsqueda');
     }
     
-    // Ocultar cualquier error previo
-    clearError();
+    console.log('Iniciando búsqueda con término:', searchTerm, 'y ciudad:', searchCity);
     
-    // Actualizar estado de la UI
-    state.searchStartTime = new Date();
-    
-    // Limpiar log y resultados
-    state.logEntries = [];
-    state.profiles = [];
-    
-    // Actualizar UI
-    updateUI();
-    updateResultsList([]);
-    updateScrollLog();
-    
-    // Mostrar panel de detalles
-    if (searchStatusContainer) {
-      searchStatusContainer.style.display = 'block';
-    } else {
-      console.warn('searchStatusContainer no está disponible');
-    }
-    
-    updateStatus('Iniciando búsqueda...', 5);
-    addLogEntry(`Iniciando búsqueda de "${searchTerm}" ${searchCity ? `en ${searchCity}` : ''}`);
-    
-    // Crear el objeto de datos de búsqueda
-    const searchData = {
-      term: searchTerm,
-      city: searchCity
+    // Crear mensaje con estructura exacta
+    const searchMessage = {
+      action: 'search',
+      searchTerm: searchTerm,
+      searchData: {
+        city: searchCity,
+        term: searchTerm
+      }
     };
     
-    // Almacenar los datos de búsqueda en el estado
-    state.currentSearchTerm = searchTerm;
-    state.currentSearchCity = searchCity;
+    console.log('Enviando mensaje de búsqueda:', searchMessage);
     
-    // Actualizar el display de info de búsqueda
-    updateSearchInfo();
-    
-    // Enviar mensaje al script de fondo para iniciar la búsqueda
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-      try {
-        console.log('Enviando solicitud de búsqueda al background...', {
-          searchTerm,
-          searchData
-        });
-        
-        chrome.runtime.sendMessage({
-          action: 'search',
-          searchTerm: searchTerm,
-          searchData: searchData
-        }, function(response) {
-          // Verifica si hay un error de runtime
-          if (chrome.runtime.lastError) {
-            const errorMsg = chrome.runtime.lastError.message;
-            console.error('Error de runtime al enviar mensaje:', errorMsg);
-            addLogEntry(`Error de comunicación: ${errorMsg}`, true);
-            showError(`Error de comunicación: ${errorMsg}`);
-            return;
-          }
-          
-          console.log('Respuesta recibida:', response);
-          
-          if (response && response.success) {
-            console.log('Búsqueda iniciada con éxito');
-            addLogEntry('Búsqueda iniciada con éxito, navegando a Facebook...');
-            
-            // Registrar que estamos usando filtro de ciudad
-            if (searchCity) {
-              addLogEntry(`Utilizando filtro de ciudad: "${searchCity}"`);
-            }
-          } else {
-            const errorMsg = response?.error || 'Acción no reconocida';
-            console.error('Error al iniciar búsqueda:', errorMsg);
-            addLogEntry(`Error al iniciar búsqueda: ${errorMsg}`, true);
-            showError(`Error: ${errorMsg}`);
-          }
-        });
-      } catch (error) {
-        console.error('Error al enviar mensaje de búsqueda:', error);
-        addLogEntry(`Error: ${error.message}`, true);
-        showError(`Error: ${error.message}`);
-      }
-    } else {
-      // Si chrome.runtime.sendMessage no está disponible, intentamos con window.parent.postMessage
-      console.warn('chrome.runtime.sendMessage no está disponible, utilizando postMessage');
+    // Enviar mensaje con estructura verificada
+    chrome.runtime.sendMessage(searchMessage, function(response) {
+      console.log('Respuesta completa de búsqueda:', response);
       
-      try {
-        window.parent.postMessage({
-          from: 'snap-lead-manager',
-          action: 'search',
-          searchTerm: searchTerm,
-          data: searchData
-        }, '*');
-        
-        console.log('Mensaje de búsqueda enviado vía postMessage:', searchTerm, searchData);
-        addLogEntry('Solicitud de búsqueda enviada al contenido principal');
-      } catch (error) {
-        console.error('Error al enviar mensaje vía postMessage:', error);
-        addLogEntry(`Error: ${error.message}`, true);
-        showError(`Error: ${error.message}`);
+      if (chrome.runtime.lastError) {
+        console.error('Error de runtime:', chrome.runtime.lastError);
+        addLogEntry('Error de comunicación: ' + chrome.runtime.lastError.message, true);
+        return;
       }
-    }
+      
+      if (response && response.success) {
+        console.log('Búsqueda iniciada con éxito');
+      } else {
+        console.error('Error en respuesta:', response);
+        addLogEntry('Error al iniciar búsqueda: ' + (response?.error || 'Respuesta inválida'), true);
+      }
+    });
     
   } catch (error) {
-    console.error('Error en la búsqueda:', error);
+    console.error('Error al ejecutar búsqueda:', error);
     addLogEntry('Error en la búsqueda: ' + error.message, true);
     showError('Error: ' + error.message);
   }
@@ -415,26 +386,39 @@ async function pauseProcess() {
 }
 
 async function stopProcess() {
-  if (!state.isRunning) return;
-  
   try {
+    console.log('Sidebar: Solicitando detención del proceso');
     updateStatus('Deteniendo proceso...', state.progress);
     
+    // Actualizar estado local inmediatamente para mejor UX
+    state.isRunning = false;
+    state.isPaused = false;
+    updateUI();
+    
+    // Enviar mensaje al background script
     const response = await chrome.runtime.sendMessage({
       action: 'stop'
     });
     
+    console.log('Respuesta a solicitud de detención:', response);
+    
     if (response && response.success) {
       updateStatus('Proceso detenido', 0);
-      state.isRunning = false;
-      state.isPaused = false;
-      updateUI();
     } else {
-      throw new Error(response?.message || 'Error al detener el proceso');
+      console.warn('Respuesta de detención no exitosa:', response);
+      // Aún así, mantener el estado como detenido
+      updateStatus('Proceso detenido (con advertencias)', 0);
     }
   } catch (error) {
-    console.error('Error al detener:', error);
-    showError('Error: ' + error.message);
+    console.error('Error al detener proceso:', error);
+    
+    // A pesar del error, asegurar que la UI muestre el estado como detenido
+    state.isRunning = false;
+    state.isPaused = false;
+    updateUI();
+    
+    updateStatus('Proceso detenido (con errores)', 0);
+    showError('Error al detener: ' + (error.message || 'Error desconocido'));
   }
 }
 
@@ -468,16 +452,21 @@ function updateResultsList(profiles) {
   });
 }
 
-// Función para alternar la visibilidad del sidebar
-function toggleSidebar() {
-  const sidebar = document.querySelector('.sidebar-container');
-  sidebar.classList.toggle('collapsed');
+// Función para abrir el sidebar en una ventana separada
+function openSidebarInWindow() {
+  // Verificar si estamos en un iframe
+  const isInIframe = window !== window.top;
   
-  if (sidebar.classList.contains('collapsed')) {
-    toggleSidebarButton.textContent = 'Mostrar';
-  } else {
-    toggleSidebarButton.textContent = 'Ocultar';
+  // Si ya estamos en una ventana separada, no hacer nada
+  if (!isInIframe) {
+    return;
   }
+  
+  // Enviar mensaje al content script para que notifique al background
+  window.parent.postMessage({
+    from: 'snap-lead-manager',
+    action: 'open_in_window'
+  }, '*');
 }
 
 // Listener para mensajes del iframe
@@ -594,6 +583,18 @@ window.addEventListener('message', (event) => {
           }
         }
       });
+    } else if (event.data.action === 'filter_status_update') {
+      // Actualizar el estado del filtro en la UI
+      const filterStatusElement = document.querySelector('#current-search-info p.status i');
+      if (filterStatusElement) {
+        if (event.data.filterApplied) {
+          filterStatusElement.textContent = '✓ Filtro de ciudad aplicado correctamente';
+          filterStatusElement.parentElement.className = 'status success';
+        } else {
+          filterStatusElement.textContent = 'Filtro de ciudad pendiente de aplicar...';
+          filterStatusElement.parentElement.className = 'status';
+        }
+      }
     }
   }
 });
@@ -691,23 +692,16 @@ function initializeDOMReferences() {
   searchTermInput = document.getElementById('search-term');
   searchCityInput = document.getElementById('search-city');
   searchButton = document.getElementById('search-button');
-  applyFiltersButton = document.getElementById('apply-filters-button');
-  startButton = document.getElementById('start-button');
   pauseButton = document.getElementById('pause-button');
   stopButton = document.getElementById('stop-button');
-  toggleSidebarButton = document.getElementById('toggle-sidebar');
+  openWindowButton = document.getElementById('open-window-btn');
   statusMessage = document.getElementById('status-message');
   progressBar = document.getElementById('progress-bar');
-  searchResults = document.getElementById('search-results');
-  searchResultsList = document.getElementById('search-results-list');
+  searchResultsList = document.getElementById('search-results');
   currentSearchInfo = document.getElementById('current-search-info');
   
   // Elementos detallados
   searchStatusContainer = document.getElementById('search-status-container'); // Asegurarse de que el ID sea correcto
-  statusContainer = document.getElementById('status-container');
-  controlsContainer = document.getElementById('controls-container');
-  logContainer = document.getElementById('log-container');
-  logList = document.getElementById('log-list');
   detailedStatusMessage = document.getElementById('detailed-status-message');
   detailedProgressBar = document.getElementById('detailed-progress-bar');
   progressPercentage = document.getElementById('progress-percentage');
@@ -722,7 +716,6 @@ function initializeDOMReferences() {
     searchCityInput: !!searchCityInput,
     searchButton: !!searchButton,
     searchStatusContainer: !!searchStatusContainer,
-    startButton: !!startButton,
     pauseButton: !!pauseButton,
     stopButton: !!stopButton
   });
@@ -968,11 +961,9 @@ document.addEventListener('DOMContentLoaded', () => {
   searchTermInput = document.getElementById('search-term');
   searchCityInput = document.getElementById('search-city');
   searchButton = document.getElementById('search-button');
-  applyFiltersButton = document.getElementById('apply-filters-button');
-  startButton = document.getElementById('start-button');
-  stopButton = document.getElementById('stop-button');
   pauseButton = document.getElementById('pause-button');
-  toggleSidebarButton = document.getElementById('toggle-sidebar');
+  stopButton = document.getElementById('stop-button');
+  openWindowButton = document.getElementById('open-window-btn');
   statusMessage = document.getElementById('status-message');
   progressBar = document.getElementById('progress-bar');
   searchResultsList = document.getElementById('search-results');
@@ -1007,7 +998,45 @@ document.addEventListener('DOMContentLoaded', () => {
   // Event listener para botón de búsqueda
   searchButton.addEventListener('click', () => {
     try {
-      performSearch();
+      const searchTerm = searchTermInput.value.trim();
+      const searchCity = searchCityInput.value.trim();
+      
+      if (!searchTerm) {
+        throw new Error('Por favor ingresa un término de búsqueda');
+      }
+      
+      console.log('Iniciando búsqueda con término:', searchTerm, 'y ciudad:', searchCity);
+      
+      // Crear mensaje con estructura exacta
+      const searchMessage = {
+        action: 'search',
+        searchTerm: searchTerm,
+        searchData: {
+          city: searchCity,
+          term: searchTerm
+        }
+      };
+      
+      console.log('Enviando mensaje de búsqueda:', searchMessage);
+      
+      // Enviar mensaje con estructura verificada
+      chrome.runtime.sendMessage(searchMessage, function(response) {
+        console.log('Respuesta completa de búsqueda:', response);
+        
+        if (chrome.runtime.lastError) {
+          console.error('Error de runtime:', chrome.runtime.lastError);
+          addLogEntry('Error de comunicación: ' + chrome.runtime.lastError.message, true);
+          return;
+        }
+        
+        if (response && response.success) {
+          console.log('Búsqueda iniciada con éxito');
+        } else {
+          console.error('Error en respuesta:', response);
+          addLogEntry('Error al iniciar búsqueda: ' + (response?.error || 'Respuesta inválida'), true);
+        }
+      });
+      
     } catch (error) {
       console.error('Error al ejecutar búsqueda:', error);
       addLogEntry('Error en la búsqueda: ' + error.message, true);
@@ -1015,79 +1044,85 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
-  // Event listener para botón de aplicar filtros
-  applyFiltersButton.addEventListener('click', () => {
-    const currentCity = searchCityInput.value.trim();
-    
-    if (!currentCity) {
-      showError('Por favor, ingresa una ciudad para aplicar el filtro');
-      return;
+  // Event listener para tecla Enter en campos de búsqueda
+  searchTermInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      try {
+        performSearch();
+      } catch (error) {
+        console.error('Error al ejecutar búsqueda con Enter:', error);
+        addLogEntry('Error en la búsqueda: ' + error.message, true);
+        showError('Error: ' + error.message);
+      }
     }
-    
-    console.log('Solicitando aplicar filtro de ciudad:', currentCity);
-    
-    // Actualizar los datos de búsqueda en localStorage
-    const searchTerm = searchTermInput.value.trim() || localStorage.getItem('snap_lead_manager_search_term') || '';
-    const searchData = {
-      city: currentCity
-    };
-    
-    localStorage.setItem('snap_lead_manager_search_term', searchTerm);
-    localStorage.setItem('snap_lead_manager_search_data', JSON.stringify(searchData));
-    
-    // Resetear el indicador de filtro aplicado
-    localStorage.setItem('snap_lead_manager_city_filter_applied', 'false');
-    
-    // Mostrar información actualizada
-    currentSearchInfo.innerHTML = `
-      <strong>Búsqueda actual:</strong> ${searchTerm}
-      <br><strong>Ciudad:</strong> ${currentCity}
-      <br><em>Aplicando filtro de ciudad...</em>
-    `;
-    currentSearchInfo.style.display = 'block';
-    
-    // Enviar mensaje para aplicar los filtros
-    window.parent.postMessage({
-      from: 'snap-lead-manager',
-      action: 'apply_filters'
-    }, '*');
-    
-    console.log('Mensaje para aplicar filtros enviado');
+  });
+  
+  searchCityInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      try {
+        performSearch();
+      } catch (error) {
+        console.error('Error al ejecutar búsqueda con Enter:', error);
+        addLogEntry('Error en la búsqueda: ' + error.message, true);
+        showError('Error: ' + error.message);
+      }
+    }
   });
   
   // Event listeners para botones de control
-  startButton.addEventListener('click', () => {
-    console.log('Botón inicio presionado');
-    window.parent.postMessage({
-      from: 'snap-lead-manager',
-      action: 'start'
-    }, '*');
-  });
-  
   pauseButton.addEventListener('click', () => {
     console.log('Botón pausa presionado');
+    
+    // Enviar mensaje al content script
     window.parent.postMessage({
       from: 'snap-lead-manager',
       action: 'pause'
     }, '*');
+    
+    // También enviar mensaje al background script
+    chrome.runtime.sendMessage({
+      action: 'pause'
+    }, (response) => {
+      console.log('Respuesta del background script a pause:', response);
+    });
+    
+    // Actualizar UI
+    state.isPaused = !state.isPaused;
+    updateStatus(state.isPaused ? 'Proceso pausado' : 'Reanudando proceso...', state.progress);
+    updateUI();
   });
   
   stopButton.addEventListener('click', () => {
     console.log('Botón detener presionado');
+    
+    // Enviar mensaje al content script
     window.parent.postMessage({
       from: 'snap-lead-manager',
       action: 'stop'
     }, '*');
+    
+    // También enviar mensaje al background script
+    chrome.runtime.sendMessage({
+      action: 'stop'
+    }, (response) => {
+      console.log('Respuesta del background script a stop:', response);
+    });
+    
+    // Actualizar UI
+    state.isRunning = false;
+    state.isPaused = false;
+    updateStatus('Proceso detenido', 0);
+    updateUI();
   });
   
-  // Event listener para botón de toggle
-  toggleSidebarButton.addEventListener('click', () => {
-    console.log('Botón toggle presionado');
-    window.parent.postMessage({
-      from: 'snap-lead-manager',
-      action: 'toggle_sidebar'
-    }, '*');
-  });
+  // Event listener para botón de abrir en ventana
+  openWindowButton.addEventListener('click', openSidebarInWindow);
+  
+  // Asegurarnos de que los botones estén habilitados independientemente del estado
+  if (pauseButton) pauseButton.disabled = false;
+  if (stopButton) stopButton.disabled = false;
   
   // Verificar estado inicial
   chrome.runtime.sendMessage({ action: 'get_status' }, (response) => {
@@ -1099,32 +1134,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // Función para actualizar el estado en la UI
   function updateUIStatus(status) {
     if (status.isRunning) {
-      startButton.disabled = true;
       pauseButton.disabled = false;
       stopButton.disabled = false;
       
-      if (status.isPaused) {
-        statusMessage.textContent = 'Pausado: ' + status.message;
-        pauseButton.textContent = 'Reanudar';
-      } else {
-        statusMessage.textContent = status.message || 'Procesando...';
-        pauseButton.textContent = 'Pausar';
+      statusMessage.textContent = status.message || 'En ejecución';
+      
+      if (status.progress !== undefined) {
+        progressBar.style.width = `${status.progress}%`;
       }
     } else {
-      startButton.disabled = false;
-      pauseButton.disabled = true;
-      stopButton.disabled = true;
+      pauseButton.disabled = false;
+      stopButton.disabled = false;
       statusMessage.textContent = status.message || 'Listo para comenzar';
     }
     
-    // Actualizar barra de progreso
+    // Actualizar la barra de progreso
     if (status.progress !== undefined) {
       progressBar.style.width = `${status.progress}%`;
-    }
-    
-    // Si hay un error, mostrarlo
-    if (status.error) {
-      showError(status.message || 'Error en la operación');
     }
   }
 });

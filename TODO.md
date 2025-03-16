@@ -13,14 +13,14 @@ Desarrollar "Snap Lead Manager", una extensión de Chrome que permita buscar per
 - [x] Implementar funcionalidad para mantener el popup abierto durante las operaciones
 
 ### Funcionalidad 1: Búsqueda en Facebook
-- [ ] Crear campo de entrada para términos de búsqueda
-- [ ] Desarrollar script para navegar a la página de búsqueda de Facebook
-- [ ] Inyectar término de búsqueda en el campo correspondiente
-- [ ] Ejecutar búsqueda
+- [x] Crear campo de entrada para términos de búsqueda
+- [x] Desarrollar script para navegar a la página de búsqueda de Facebook
+- [x] Inyectar término de búsqueda en el campo correspondiente
+- [x] Ejecutar búsqueda
 
 ### Funcionalidad 2: Identificación y selección de perfiles
-- [ ] Desarrollar algoritmo para identificar contenedores de resultados
-- [ ] Filtrar solo perfiles personales (excluir páginas y grupos)
+- [x] Desarrollar algoritmo para identificar contenedores de resultados
+- [x] Filtrar solo perfiles personales (excluir páginas y grupos)
 - [ ] Implementar selección del primer perfil encontrado
 
 ### Funcionalidad 3: Navegación y análisis de perfil

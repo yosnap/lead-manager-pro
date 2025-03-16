@@ -154,13 +154,41 @@ select:focus {
 /* Grupo de botones */
 .button-group {
   display: flex;
-  gap: 10px;
+  gap: 5px;
   margin-top: 10px;
   margin-bottom: 10px;
+  justify-content: space-between;
 }
 
 .button-group .btn {
   flex: 1;
+  text-align: center;
+  padding: 10px 5px;
+}
+
+/* Estilos específicos para los botones de acción */
+#search-button {
+  background-color: #0066cc;
+}
+
+#search-button:hover {
+  background-color: #0055aa;
+}
+
+#pause-button {
+  background-color: #ff9900;
+}
+
+#pause-button:hover {
+  background-color: #e68a00;
+}
+
+#stop-button {
+  background-color: #cc3333;
+}
+
+#stop-button:hover {
+  background-color: #aa2222;
 }
 
 /* Información de estado */
@@ -249,6 +277,28 @@ footer {
   font-size: 11px;
   color: var(--secondary-color);
   border-top: 1px solid var(--border-color);
+}
+
+.footer-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.toggle-btn {
+  background-color: var(--secondary-color);
+  color: var(--light-color);
+  border: none;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.toggle-btn:hover {
+  background-color: var(--primary-color);
 }
 
 /* Estado del proceso */

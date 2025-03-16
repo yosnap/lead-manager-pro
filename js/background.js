@@ -17,7 +17,9 @@ let state = {
 
 // Manejador de mensajes
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Background recibió mensaje:', message);
+  console.log('Background recibió mensaje:', message, 'de:', sender);
+  
+  let requestHandled = false; // Flag para verificar si se manejó la solicitud
   
   // Manejar diferentes tipos de mensajes
   if (message.type === 'status_update') {
@@ -30,8 +32,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Enviar actualización a todas las pestañas abiertas
     updateAllTabs();
     sendResponse({ success: true });
+    requestHandled = true;
   } else if (message.action === 'search') {
-    console.log('Recibida solicitud de búsqueda en background:', message.searchTerm);
+    console.log('Procesando acción de búsqueda con término:', message.searchTerm);
+    
+    // Limpiar el flag de detención cuando se inicia una nueva búsqueda
+    chrome.storage.local.remove(['extension_stopped'], function() {
+      console.log('Flag de detención limpiado para nueva búsqueda');
+    });
     
     // Guardar información de búsqueda
     state.currentSearchTerm = message.searchTerm;
@@ -84,6 +92,74 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     
     return true; // Mantener el puerto abierto para respuesta asíncrona
+  } else if (message.action === 'start') {
+    // Iniciar proceso
+    console.log('Background: Iniciando proceso');
+    state.isRunning = true;
+    state.isPaused = false;
+    
+    // Enviar mensaje a la pestaña activa
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      if (tabs.length > 0) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: 'start'
+        }, function(response) {
+          console.log('Respuesta de la pestaña a start:', response);
+        });
+      }
+    });
+    
+    // Actualizar estado
+    state.statusMessage = 'Proceso iniciado';
+    broadcastStatusUpdate();
+    
+    sendResponse({ success: true });
+    return false;
+  } else if (message.action === 'pause') {
+    // Pausar/reanudar proceso
+    console.log('Background: Pausando/reanudando proceso');
+    state.isPaused = !state.isPaused;
+    
+    // Enviar mensaje a la pestaña activa
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      if (tabs.length > 0) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: 'pause',
+          isPaused: state.isPaused
+        }, function(response) {
+          console.log('Respuesta de la pestaña a pause:', response);
+        });
+      }
+    });
+    
+    // Actualizar estado
+    state.statusMessage = state.isPaused ? 'Proceso pausado' : 'Proceso reanudado';
+    broadcastStatusUpdate();
+    
+    // Notificar a todas las pestañas sobre el cambio de estado
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        if (tab.url && tab.url.includes('facebook.com')) {
+          chrome.tabs.sendMessage(tab.id, {
+            action: 'update_state',
+            isPaused: state.isPaused,
+            isRunning: state.isRunning
+          }).catch(err => console.log(`Error al enviar mensaje a pestaña ${tab.id}:`, err));
+        }
+      });
+    });
+    
+    sendResponse({ success: true });
+    return false;
+  } else if (message.action === 'stop') {
+    console.log('Recibida solicitud de detención en background');
+    
+    // Manejar la solicitud de detención
+    handleStop(sendResponse);
+    
+    // Indicar que se manejará la respuesta de forma asíncrona
+    requestHandled = true;
+    return true; // Mantener el canal abierto para respuesta asíncrona
   } else if (message.action === 'toggle_sidebar') {
     // Cambiar estado de visibilidad del sidebar
     toggleSidebar(message.visible);
@@ -149,14 +225,126 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Si ya tenemos los datos, proceder directamente
     applyFiltersToActiveTab(sendResponse);
     return true; // Mantener el puerto abierto para respuesta asíncrona
+  } else if (message.action === 'open_profile') {
+    console.log('Recibida solicitud para abrir perfil en nueva pestaña:', message.profileUrl);
+    
+    if (!message.profileUrl) {
+      console.error('Error: No se proporcionó URL del perfil');
+      sendResponse({
+        success: false,
+        error: 'No se proporcionó URL del perfil'
+      });
+      return false;
+    }
+    
+    try {
+      // Abrir el perfil en una nueva pestaña
+      chrome.tabs.create({ url: message.profileUrl }, (tab) => {
+        if (chrome.runtime.lastError) {
+          console.error('Error al crear nueva pestaña:', chrome.runtime.lastError);
+          sendResponse({
+            success: false,
+            error: 'Error al crear nueva pestaña: ' + chrome.runtime.lastError.message
+          });
+          return;
+        }
+        
+        if (!tab) {
+          console.error('Error: No se pudo crear la pestaña');
+          sendResponse({
+            success: false,
+            error: 'No se pudo crear la pestaña'
+          });
+          return;
+        }
+        
+        console.log('Pestaña creada con ID:', tab.id);
+        
+        // Guardar el ID de la pestaña para referencia futura
+        state.currentProfileTabId = tab.id;
+        
+        // Actualizar el contador de perfiles procesados
+        state.profilesProcessed = (state.profilesProcessed || 0) + 1;
+        
+        // Notificar que se ha abierto un nuevo perfil
+        broadcastMessage({
+          type: 'profile_opened',
+          tabId: tab.id,
+          url: message.profileUrl,
+          profilesProcessed: state.profilesProcessed
+        });
+        
+        sendResponse({ 
+          success: true, 
+          tabId: tab.id,
+          profilesProcessed: state.profilesProcessed
+        });
+      });
+    } catch (error) {
+      console.error('Error al abrir perfil en nueva pestaña:', error);
+      sendResponse({ 
+        success: false, 
+        error: 'Error al abrir perfil: ' + error.message 
+      });
+    }
+    
+    return true; // Mantener el puerto abierto para respuesta asíncrona
+  } else if (message.action === 'open_sidebar_window') {
+    console.log('Recibida solicitud para abrir sidebar en ventana separada');
+    
+    // Verificar si ya hay una ventana de sidebar abierta
+    chrome.windows.getAll({ populate: true }, (windows) => {
+      let sidebarWindowExists = false;
+      const sidebarURL = chrome.runtime.getURL('sidebar.html');
+      
+      // Buscar si ya existe una ventana con el sidebar
+      for (const window of windows) {
+        for (const tab of window.tabs) {
+          if (tab.url === sidebarURL) {
+            // Si existe, enfocarla
+            chrome.windows.update(window.id, { focused: true });
+            sidebarWindowExists = true;
+            sendResponse({ success: true, windowId: window.id, alreadyOpen: true });
+            break;
+          }
+        }
+        if (sidebarWindowExists) break;
+      }
+      
+      // Si no existe, crear una nueva ventana con el sidebar
+      if (!sidebarWindowExists) {
+        const width = 400;
+        const height = 600;
+        const left = (screen.width - width) / 2;
+        const top = (screen.height - height) / 2;
+        
+        chrome.windows.create({
+          url: sidebarURL,
+          type: 'popup',
+          width: width,
+          height: height,
+          left: Math.round(left),
+          top: Math.round(top)
+        }, (window) => {
+          console.log('Ventana de sidebar creada con ID:', window.id);
+          sendResponse({ success: true, windowId: window.id, alreadyOpen: false });
+        });
+      }
+    });
+    
+    return true; // Mantener el puerto abierto para respuesta asíncrona
   }
   
-  // Si no manejamos el mensaje específicamente, enviar respuesta genérica
-  if (!message.action && !message.type) {
-    sendResponse({ success: false, error: 'Mensaje no reconocido' });
+  // Si no se reconoce la acción, proporcionar un mensaje de error más detallado
+  if (!requestHandled) {
+    console.warn('Acción no reconocida:', message.action || message.type, 'Mensaje completo:', message);
+    sendResponse({ 
+      success: false, 
+      error: `Acción no reconocida: ${message.action || message.type}. Verifique que el formato del mensaje sea correcto.` 
+    });
   }
-  
-  return true; // Mantener el puerto abierto para respuesta asíncrona
+
+  return true; // Siempre mantener puerto abierto para respuestas asíncronas
 });
 
 // Listener para eventos de navegación para restaurar el sidebar si es necesario
@@ -280,6 +468,49 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
+// Listener para el clic en el icono de la extensión
+chrome.action.onClicked.addListener((tab) => {
+  console.log('Clic en el icono de la extensión detectado');
+  
+  // Verificar si estamos en Facebook
+  if (tab.url && tab.url.includes('facebook.com')) {
+    // Enviar mensaje al content script para mostrar el sidebar
+    chrome.tabs.sendMessage(tab.id, { action: 'toggle_sidebar' }, (response) => {
+      // Si hay un error (por ejemplo, content script no cargado), inyectar el script
+      if (chrome.runtime.lastError) {
+        console.log('Error al enviar mensaje al content script:', chrome.runtime.lastError);
+        
+        // Inyectar el content script si no está cargado
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['js/content.js']
+        }, () => {
+          // Intentar nuevamente después de inyectar el script
+          setTimeout(() => {
+            chrome.tabs.sendMessage(tab.id, { action: 'toggle_sidebar' });
+          }, 500);
+        });
+      }
+    });
+  } else {
+    // Si no estamos en Facebook, abrir Facebook en una nueva pestaña
+    chrome.tabs.create({ url: 'https://www.facebook.com/' }, (newTab) => {
+      // Esperar a que la página cargue y luego mostrar el sidebar
+      chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, tab) {
+        if (tabId === newTab.id && changeInfo.status === 'complete') {
+          // Eliminar este listener para evitar múltiples ejecuciones
+          chrome.tabs.onUpdated.removeListener(listener);
+          
+          // Esperar un poco más para asegurar que todo esté cargado
+          setTimeout(() => {
+            chrome.tabs.sendMessage(tabId, { action: 'toggle_sidebar' });
+          }, 1000);
+        }
+      });
+    });
+  }
+});
+
 // Función para manejar la búsqueda
 async function handleSearch(searchTerm, searchData, tabId, sendResponse) {
   if (!searchTerm) {
@@ -339,43 +570,73 @@ function handlePause(sendResponse) {
   
   state.isPaused = true;
   updateStatus('Proceso pausado');
+  
+  // Notificar a todas las pestañas sobre el cambio de estado
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      if (tab.url && tab.url.includes('facebook.com')) {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'update_state',
+          isPaused: state.isPaused,
+          isRunning: state.isRunning
+        }).catch(err => console.log(`Error al enviar mensaje a pestaña ${tab.id}:`, err));
+      }
+    });
+  });
+  
   sendResponse({ success: true });
 }
 
 // Función para detener el proceso
 function handleStop(sendResponse) {
   if (!state.isRunning) {
+    console.log('No hay proceso en ejecución para detener');
     sendResponse({ success: false, message: 'No hay proceso en ejecución' });
     return;
   }
   
+  console.log('Deteniendo proceso en background script');
+  
+  // Actualizar estado local
   state.isRunning = false;
   state.isPaused = false;
   state.progress = 0;
   state.profilesQueue = [];
   state.currentProfileIndex = 0;
   
-  updateStatus('Proceso detenido', 0);
-  sendResponse({ success: true });
-}
-
-// Función para actualizar el estado y notificar
-function updateStatus(message, progress = null) {
-  state.statusMessage = message;
+  // Guardar estado de detención en storage para persistir entre recargas
+  chrome.storage.local.set({
+    'extension_stopped': true,
+    'extension_running': false,
+    'extension_paused': false
+  }, function() {
+    console.log('Estado de detención guardado en storage');
+  });
   
-  if (progress !== null) {
-    state.progress = progress;
-  }
-  
-  // Notificar al content script sobre el cambio de estado
-  if (state.currentTabId) {
-    chrome.tabs.sendMessage(state.currentTabId, {
-      type: 'status_update',
-      message: state.statusMessage,
-      progress: state.progress,
-      finished: !state.isRunning
+  // Notificar a todas las pestañas abiertas
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      if (tab.url && tab.url.includes('facebook.com')) {
+        try {
+          chrome.tabs.sendMessage(tab.id, {
+            action: 'stop',
+            suppressResponse: true // Evitar ciclos de respuesta
+          }, function(response) {
+            if (chrome.runtime.lastError) {
+              console.log(`Error al enviar mensaje de detención a pestaña ${tab.id}:`, chrome.runtime.lastError);
+            } else {
+              console.log(`Mensaje de detención enviado a pestaña ${tab.id}:`, response);
+            }
+          });
+        } catch (e) {
+          console.error(`Error al enviar mensaje de detención a pestaña ${tab.id}:`, e);
+        }
+      }
     });
-  }
+  });
+  
+  updateStatus('Proceso detenido', 0);
+  sendResponse({ success: true, message: 'Proceso detenido correctamente' });
 }
 
 // Función para manejar perfiles encontrados
@@ -502,16 +763,36 @@ function sleep(ms) {
 console.log('Snap Lead Manager background script cargado');
 
 // Función para enviar actualización a todas las pestañas abiertas
+// Añadimos una variable para controlar la frecuencia de actualizaciones
+let lastUpdateTime = 0;
+const UPDATE_THROTTLE_MS = 500; // Limitar actualizaciones a una cada 500ms
+
 function updateAllTabs() {
+  const now = Date.now();
+  
+  // Evitar actualizaciones demasiado frecuentes para romper bucles infinitos
+  if (now - lastUpdateTime < UPDATE_THROTTLE_MS) {
+    console.log('Actualización de pestañas throttled para evitar bucle');
+    return;
+  }
+  
+  lastUpdateTime = now;
+  
   chrome.tabs.query({}, (tabs) => {
     tabs.forEach(tab => {
       if (tab.url && tab.url.includes('facebook.com')) {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'status_update',
-          message: state.statusMessage,
-          progress: state.progress,
-          finished: !state.isRunning
-        });
+        try {
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'status_update',
+            message: state.statusMessage,
+            progress: state.progress,
+            finished: !state.isRunning,
+            // Añadir flag para evitar que el receptor responda con otro mensaje de estado
+            suppressResponse: true
+          });
+        } catch (e) {
+          console.log(`Error al enviar mensaje a pestaña ${tab.id}:`, e);
+        }
       }
     });
   });
@@ -554,4 +835,66 @@ function applyFiltersToActiveTab(sendResponse) {
       sendResponse(response || { success: false, error: 'No se recibió respuesta de la pestaña' });
     });
   });
+}
+
+// Función para enviar actualización de estado a todas las pestañas
+function broadcastStatusUpdate() {
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      if (tab.url && tab.url.includes('facebook.com')) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'status_update',
+          message: state.statusMessage,
+          progress: state.progress,
+          finished: !state.isRunning
+        });
+      }
+    });
+  });
+}
+
+// Función para actualizar el estado y notificar
+function updateStatus(message, progress = null) {
+  state.statusMessage = message;
+  
+  if (progress !== null) {
+    state.progress = progress;
+  }
+  
+  // Notificar al content script sobre el cambio de estado
+  if (state.currentTabId) {
+    chrome.tabs.sendMessage(state.currentTabId, {
+      type: 'status_update',
+      message: state.statusMessage,
+      progress: state.progress,
+      finished: !state.isRunning,
+      suppressResponse: true // Evitar ciclos de respuesta
+    });
+  }
+}
+
+// Función para manejar perfiles encontrados
+function handleFoundProfiles(profiles, tabId, sendResponse) {
+  console.log(`Recibidos ${profiles.length} perfiles del content script`);
+  
+  // Almacenar los perfiles en el estado
+  state.profilesQueue = profiles;
+  state.currentProfileIndex = 0;
+  
+  // Actualizar el estado y notificar
+  updateStatus(`Encontrados ${profiles.length} perfiles`, 30);
+  
+  // Notificar a todas las pestañas sobre los nuevos perfiles
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      if (tab.url && tab.url.includes('facebook.com')) {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'update_profiles',
+          profiles: profiles
+        });
+      }
+    });
+  });
+  
+  sendResponse({ success: true });
 }
