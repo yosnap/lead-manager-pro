@@ -238,6 +238,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     
     try {
+      // Guardar información para indicar que esta apertura de pestaña es para un perfil
+      // y no debe iniciar automáticamente una búsqueda
+      chrome.storage.local.set({
+        opening_profile: true,
+        profile_url: message.profileUrl,
+        search_should_not_auto_start: true
+      }, () => {
+        console.log('Marcado que la próxima pestaña es para un perfil y no debe iniciar búsqueda automáticamente');
+      });
+      
       // Abrir el perfil en una nueva pestaña
       chrome.tabs.create({ url: message.profileUrl }, (tab) => {
         if (chrome.runtime.lastError) {
@@ -447,24 +457,45 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url && tab.url.includes('facebook.com')) {
     state.currentTabId = tabId;
     
-    // Restaurar el sidebar si estaba abierto
-    if (state.sidebarOpen) {
-      chrome.tabs.sendMessage(tabId, { 
-        action: 'restore_sidebar',
-        searchTerm: state.currentSearchTerm,
-        searchData: state.searchData
+    // Verificar si esta pestaña es para ver un perfil y no debe iniciar búsqueda automáticamente
+    chrome.storage.local.get(['opening_profile', 'search_should_not_auto_start'], (data) => {
+      const isOpeningProfile = data.opening_profile === true;
+      const shouldNotAutoStart = data.search_should_not_auto_start === true;
+      
+      console.log('Estado al cargar pestaña:', {
+        isOpeningProfile,
+        shouldNotAutoStart,
+        url: tab.url
       });
-    }
-    
-    // Si estábamos en medio de una búsqueda y se recargó la página,
-    // intentar aplicar los filtros nuevamente
-    if (state.isRunning && state.searchData && state.searchData.city) {
-      setTimeout(() => {
+      
+      // Restaurar el sidebar si estaba abierto
+      if (state.sidebarOpen) {
         chrome.tabs.sendMessage(tabId, { 
-          action: 'apply_filters'
+          action: 'restore_sidebar',
+          searchTerm: state.currentSearchTerm,
+          searchData: state.searchData,
+          isProfileView: isOpeningProfile,
+          shouldNotAutoStart: shouldNotAutoStart
         });
-      }, 2000); // Esperar a que la página termine de cargar
-    }
+      }
+      
+      // Si estábamos en medio de una búsqueda y se recargó la página,
+      // intentar aplicar los filtros nuevamente - SOLO si no es una vista de perfil
+      if (state.isRunning && state.searchData && state.searchData.city && !isOpeningProfile && !shouldNotAutoStart) {
+        setTimeout(() => {
+          chrome.tabs.sendMessage(tabId, { 
+            action: 'apply_filters'
+          });
+        }, 2000); // Esperar a que la página termine de cargar
+      }
+      
+      // Si era una apertura de perfil, limpiar el flag después de usarlo
+      if (isOpeningProfile) {
+        chrome.storage.local.remove(['opening_profile', 'search_should_not_auto_start'], () => {
+          console.log('Flags de apertura de perfil limpiados');
+        });
+      }
+    });
   }
 });
 

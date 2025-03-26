@@ -133,7 +133,21 @@ function injectSidebar(options = {}) {
     return;
   }
   
-  console.log('Inyectando sidebar...');
+  console.log('Inyectando sidebar con opciones:', options);
+  
+  // Verificar si esta es una vista de perfil y no debe iniciar búsqueda automáticamente
+  const isProfileView = options.isProfileView === true;
+  const shouldNotAutoStart = options.shouldNotAutoStart === true;
+  
+  if (isProfileView || shouldNotAutoStart) {
+    console.log('Esta es una vista de perfil o no debe iniciar búsqueda automáticamente');
+    
+    // Marcar explícitamente que la búsqueda está completada para evitar inicios automáticos
+    localStorage.setItem('snap_lead_manager_search_pending', 'false');
+    localStorage.setItem('snap_lead_manager_search_completed', 'true');
+    localStorage.setItem('is_profile_view', isProfileView ? 'true' : 'false');
+    localStorage.setItem('should_not_auto_start', shouldNotAutoStart ? 'true' : 'false');
+  }
   
   // Crear el overlay que contendrá el sidebar
   const overlay = document.createElement('div');
@@ -166,17 +180,19 @@ function injectSidebar(options = {}) {
   if (savedState === 'collapsed') {
     // Si estaba colapsado, colapsar ahora
     toggleSidebar();
+  } else {
+    // Si no estaba colapsado, mantenerlo expandido
+    overlay.classList.remove('collapsed');
   }
-  
-  // Agregar clase al body para ajustar el contenido
-  document.body.classList.add('snap-lead-manager-active');
   
   console.log('Sidebar inyectado correctamente');
   
   // Notificar al background script que el sidebar se ha inyectado
   if (chrome.runtime && chrome.runtime.sendMessage) {
     chrome.runtime.sendMessage({
-      action: 'sidebar_injected'
+      action: 'sidebar_injected',
+      isProfileView: isProfileView,
+      shouldNotAutoStart: shouldNotAutoStart
     });
   }
 }
@@ -212,6 +228,19 @@ function toggleSidebar() {
 // Función principal de búsqueda
 async function performSearch(searchTerm, searchData) {
   console.log('Realizando búsqueda:', searchTerm, 'Datos adicionales:', searchData);
+  
+  // Verificar si esta es una vista de perfil y no debe iniciar búsqueda automáticamente
+  const isProfileView = localStorage.getItem('is_profile_view') === 'true';
+  const shouldNotAutoStart = localStorage.getItem('should_not_auto_start') === 'true';
+  const searchCompleted = localStorage.getItem('snap_lead_manager_search_completed') === 'true';
+  
+  // Si es una vista de perfil o no debe iniciar búsqueda automáticamente, y no es una búsqueda iniciada por el usuario
+  if ((isProfileView || shouldNotAutoStart || searchCompleted) && !searchData.userInitiated) {
+    console.log('No se iniciará búsqueda automáticamente en vista de perfil o búsqueda ya completada');
+    updateStatus('No se iniciará búsqueda automáticamente en esta vista', 0);
+    return { success: false, message: 'No se iniciará búsqueda automáticamente en esta vista' };
+  }
+  
   currentSearchTerm = searchTerm; // Guardar el término de búsqueda en la variable global
   
   // Guardar tiempo de inicio
@@ -551,27 +580,24 @@ window.addEventListener('message', async (event) => {
     return;
   }
   
-  console.log('Content script recibió mensaje del iframe:', event.data);
+  console.log('Mensaje recibido del sidebar:', event.data);
   
-  const { action, from, searchTerm, data } = event.data;
+  // Extraer acción y datos
+  const { action, data = {} } = event.data;
   
-  if (from === 'snap-lead-manager') {
+  // Procesar diferentes acciones
+  if (action) {
     switch (action) {
-      case 'toggle_sidebar':
-        toggleSidebar();
-        break;
-      case 'sidebar_loaded':
-        console.log('Sidebar cargado correctamente');
-        break;
       case 'search':
-        // Manejar búsqueda enviada vía postMessage (cuando chrome.runtime no está disponible)
-        console.log('Recibida solicitud de búsqueda vía postMessage:', searchTerm, data);
+        console.log('Recibida acción de búsqueda desde el sidebar:', data);
         
+        // Verificar si ya hay una búsqueda en proceso
         if (!isProcessing) {
+          console.log('Iniciando nueva búsqueda...');
           isProcessing = true;
           
           // Realizar la búsqueda y responder
-          performSearch(searchTerm, data)
+          performSearch(data.searchTerm, {...data, userInitiated: true})
             .then(result => {
               console.log('Búsqueda iniciada con éxito:', result);
               isProcessing = false;
@@ -654,10 +680,10 @@ window.addEventListener('message', async (event) => {
 // Escuchar mensajes del background script
 if (chrome.runtime && chrome.runtime.onMessage) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('Content script recibió mensaje:', message);
+    console.log('Mensaje recibido:', message);
     
     if (message.action === 'search') {
-      console.log('Content script recibió solicitud de búsqueda:', message);
+      console.log('Recibida solicitud de búsqueda:', message);
       
       // Ejecutar la búsqueda en un try-catch para manejar errores
       try {
@@ -715,7 +741,7 @@ if (chrome.runtime && chrome.runtime.onMessage) {
       sendResponse({ success: true });
       return true;
     } else if (message.action === 'start') {
-      console.log('Content script recibió comando de inicio');
+      console.log('Recibido comando de inicio');
       
       // Si hay una búsqueda guardada, reanudarla
       const savedSearchTerm = localStorage.getItem('snap_lead_manager_search_term');
@@ -745,7 +771,7 @@ if (chrome.runtime && chrome.runtime.onMessage) {
             })
             .catch(error => {
               console.error('Error en búsqueda:', error);
-              updateStatus('Error: ' + error.message, 0, true);
+              updateStatus('Error al iniciar: ' + error.message, 0, true);
             });
         } catch (error) {
           console.error('Error al iniciar proceso:', error);
@@ -1347,19 +1373,35 @@ async function openProfileInNewTab(profileUrl) {
       return false;
     }
     
-    // Resto del código existente...
+    // Marcar explícitamente que la búsqueda está completada para evitar inicios automáticos
+    localStorage.setItem('snap_lead_manager_search_pending', 'false');
+    localStorage.setItem('snap_lead_manager_search_completed', 'true');
     
-    // Al final de la función, después de abrir el perfil:
-    console.log('Perfil abierto en nueva pestaña. Acción completada.');
+    // Enviar mensaje al background script para abrir el perfil en una nueva pestaña
+    console.log('Enviando solicitud para abrir perfil en nueva pestaña:', profileUrl);
     
-    // Actualizar el estado para indicar que ya no estamos procesando
-    isProcessing = false;
-    
-    updateStatus('Proceso completado. Perfil abierto en nueva pestaña.', 100);
-    
-    return true;
+    return new Promise((resolve, reject) => {
+      try {
+        chrome.runtime.sendMessage({
+          action: 'open_profile',
+          profileUrl: profileUrl
+        }, response => {
+          if (chrome.runtime.lastError) {
+            console.error('Error al enviar mensaje para abrir perfil:', chrome.runtime.lastError);
+            reject(chrome.runtime.lastError);
+          } else {
+            console.log('Perfil abierto en nueva pestaña:', response);
+            resolve(true);
+          }
+        });
+      } catch (error) {
+        console.error('Error al intentar abrir perfil en nueva pestaña:', error);
+        reject(error);
+      }
+    });
   } catch (error) {
-    // Código existente para manejo de errores...
+    console.error('Error general al abrir perfil en nueva pestaña:', error);
+    throw error;
   }
 }
 
@@ -1586,6 +1628,10 @@ function findElementByText(selectors, textFragments, exactMatch = false) {
 const checkPendingSearch = async () => {
   const pendingSearch = localStorage.getItem('snap_lead_manager_search_pending');
   const searchTerm = localStorage.getItem('snap_lead_manager_search_term');
+  const isProfileView = localStorage.getItem('is_profile_view') === 'true';
+  const shouldNotAutoStart = localStorage.getItem('should_not_auto_start') === 'true';
+  const searchCompleted = localStorage.getItem('snap_lead_manager_search_completed') === 'true';
+  
   let searchData = null;
   
   try {
@@ -1606,7 +1652,10 @@ const checkPendingSearch = async () => {
       iframe.contentWindow.postMessage({
         action: 'restore_search_info',
         searchTerm: searchTerm,
-        searchData: searchData
+        searchData: searchData,
+        isProfileView: isProfileView,
+        shouldNotAutoStart: shouldNotAutoStart,
+        searchCompleted: searchCompleted
       }, '*');
     }
     
@@ -1634,57 +1683,35 @@ const checkPendingSearch = async () => {
     }
   }
   
-  // Si hay una búsqueda pendiente, procesarla
-  if (pendingSearch === 'true' && searchTerm) {
-    console.log('Detectada búsqueda pendiente después de recarga:', searchTerm);
-    // Esperar a que la página se cargue completamente
-    await sleep(3000);
+  // Si hay una búsqueda pendiente y no estamos en una vista de perfil, reanudar la búsqueda
+  if (pendingSearch === 'true' && searchTerm && !isProfileView && !shouldNotAutoStart && !searchCompleted) {
+    console.log('Detectada búsqueda pendiente, reanudando...');
     
-    // Verificar si estamos en la página de búsqueda de personas
-    const currentUrl = window.location.href;
-    const isSearchPeoplePage = currentUrl.includes('/search/people');
-    
-    if (isSearchPeoplePage) {
-      // Si tenemos datos de ciudad, aplicar filtros
-      const searchDataStr = localStorage.getItem('snap_lead_manager_search_data');
-      if (searchDataStr) {
-        try {
-          const searchData = JSON.parse(searchDataStr);
-          if (searchData.city && searchData.city.trim() !== '') {
-            // Aplicar filtros de búsqueda específicos (como el filtro de ciudad)
-            await applySearchFilters();
-            
-            // Después de aplicar los filtros, buscar perfiles
-            await findProfiles();
-            
-            // Marcar la búsqueda como completada para evitar bucles
-            localStorage.setItem('snap_lead_manager_search_pending', 'false');
-            localStorage.setItem('snap_lead_manager_search_completed', 'true');
-            
-            // Actualizar el estado en la UI
-            updateStatus('Búsqueda completada', 100);
-            return;
-          }
-        } catch (e) {
-          console.error('Error al procesar datos de búsqueda:', e);
-          // Marcar la búsqueda como no pendiente para evitar bucles infinitos
-          localStorage.setItem('snap_lead_manager_search_pending', 'false');
-        }
+    // Verificar si estamos en la página de resultados de búsqueda
+    if (window.location.href.includes('/search/')) {
+      console.log('Estamos en la página de resultados, aplicando filtros...');
+      
+      // Intentar aplicar filtros y continuar con la búsqueda
+      try {
+        await applySearchFilters();
+      } catch (error) {
+        console.error('Error al aplicar filtros después de recarga:', error);
+        updateStatus('Error al reanudar búsqueda: ' + error.message, 0);
       }
-      
-      // Si no hay datos de ciudad o hubo un error, proceder con la búsqueda normal
-      await findProfiles();
-      
-      // Marcar la búsqueda como completada para evitar bucles
-      localStorage.setItem('snap_lead_manager_search_pending', 'false');
-      localStorage.setItem('snap_lead_manager_search_completed', 'true');
-      
-      // Actualizar el estado en la UI
-      updateStatus('Búsqueda completada', 100);
     } else {
-      // Si no estamos en una página de búsqueda, redirigir
-      await performSearch(searchTerm, searchData);
+      console.log('No estamos en la página de resultados, iniciando nueva búsqueda...');
+      
+      // Iniciar una nueva búsqueda
+      try {
+        await performSearch(searchTerm, searchData || {});
+      } catch (error) {
+        console.error('Error al reanudar búsqueda:', error);
+        updateStatus('Error al reanudar búsqueda: ' + error.message, 0);
+      }
     }
+  } else if (isProfileView || shouldNotAutoStart || searchCompleted) {
+    console.log('No se reanudará búsqueda automáticamente en vista de perfil o búsqueda ya completada');
+    updateStatus('No se iniciará búsqueda automáticamente en esta vista', 0);
   }
 };
 

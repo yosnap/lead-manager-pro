@@ -1159,136 +1159,120 @@ document.addEventListener('DOMContentLoaded', () => {
 function displayProfileLinks(profiles) {
   console.log('Mostrando perfiles como lista numerada', profiles);
   
-  // Crear o obtener el contenedor de resultados
-  let resultsContainer = document.getElementById('profile-results');
-  if (!resultsContainer) {
-    resultsContainer = document.createElement('div');
-    resultsContainer.id = 'profile-results';
-    resultsContainer.className = 'profile-results-container';
-    
-    // Añadir al contenido principal
-    const mainContent = document.querySelector('.sidebar-content') || document.body;
-    mainContent.appendChild(resultsContainer);
+  // Verificar si ya estamos en proceso de mostrar perfiles para evitar bucles
+  if (window.isDisplayingProfiles) {
+    console.log('Ya hay un proceso de mostrar perfiles en curso, evitando bucle');
+    return;
   }
   
-  // Limpiar contenido anterior
-  resultsContainer.innerHTML = '';
+  // Marcar que estamos en proceso de mostrar perfiles
+  window.isDisplayingProfiles = true;
   
-  // Título de la sección
-  const headerDiv = document.createElement('div');
-  headerDiv.className = 'results-header';
-  headerDiv.innerHTML = `<h3>RESULTADOS</h3><p>Se encontraron ${profiles.length} perfiles</p>`;
-  resultsContainer.appendChild(headerDiv);
-  
-  // Crear lista con IDs explícitos para mantener compatibilidad
-  const searchResults = document.createElement('ul');
-  searchResults.id = 'search-results';
-  searchResults.className = 'results-list numbered';
-  
-  // Añadir cada perfil a la lista con número incluido
-  profiles.forEach((profile, index) => {
-    // Verificar que el perfil tenga los datos necesarios
-    if (!profile || !profile.url) {
-      console.warn('Perfil inválido en posición', index, profile);
-      return; // Saltar este perfil
+  try {
+    // Crear o obtener el contenedor de resultados
+    let resultsContainer = document.getElementById('profile-results');
+    if (!resultsContainer) {
+      resultsContainer = document.createElement('div');
+      resultsContainer.id = 'profile-results';
+      resultsContainer.className = 'profile-results-container';
+      
+      // Añadir al contenido principal
+      const mainContent = document.querySelector('.sidebar-content') || document.body;
+      mainContent.appendChild(resultsContainer);
     }
     
-    const resultItem = document.createElement('li');
-    resultItem.className = 'result-item';
+    // Limpiar contenido anterior
+    resultsContainer.innerHTML = '';
     
-    // Determinar el nombre a mostrar
-    let displayName = profile.name;
-    if (!displayName || displayName === 'Nombre no disponible') {
-      // Intentar extraer un nombre de la URL como último recurso
-      const urlParts = profile.url.split('/');
-      const lastPart = urlParts[urlParts.length - 1];
-      if (lastPart) {
-        displayName = lastPart.replace(/\./g, ' ').replace(/-/g, ' ');
-        displayName = displayName.split(' ').map(word => 
-          word.charAt(0).toUpperCase() + word.slice(1)
-        ).join(' ');
-      } else {
-        displayName = 'Nombre no disponible';
+    // Título de la sección
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'results-header';
+    headerDiv.innerHTML = `<h3>RESULTADOS</h3><p>Se encontraron ${profiles.length} perfiles</p>`;
+    resultsContainer.appendChild(headerDiv);
+    
+    // Crear lista con IDs explícitos para mantener compatibilidad
+    const searchResults = document.createElement('ul');
+    searchResults.id = 'search-results';
+    searchResults.className = 'results-list numbered';
+    
+    // Añadir cada perfil a la lista con número incluido
+    profiles.forEach((profile, index) => {
+      // Verificar que el perfil tenga los datos necesarios
+      if (!profile || !profile.url) {
+        console.warn('Perfil inválido en posición', index, profile);
+        return; // Saltar este perfil
       }
+      
+      const resultItem = document.createElement('li');
+      resultItem.className = 'result-item';
+      
+      // Determinar el nombre a mostrar
+      let displayName = profile.name;
+      if (!displayName || displayName === 'Nombre no disponible') {
+        // Intentar extraer un nombre de la URL como último recurso
+        const urlParts = profile.url.split('/');
+        const lastPart = urlParts[urlParts.length - 1];
+        if (lastPart) {
+          displayName = lastPart.replace(/\./g, ' ').replace(/-/g, ' ');
+          displayName = displayName.split(' ').map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1)
+          ).join(' ');
+        } else {
+          displayName = 'Nombre no disponible';
+        }
+      }
+      
+      // Incluir el número como parte del nombre del perfil
+      resultItem.innerHTML = `
+        <div class="result-header">
+          <span class="result-name"><span class="result-number">${index + 1}.</span> ${displayName}</span>
+          <a href="#" class="result-link" data-profile-url="${profile.url}">Ver</a>
+        </div>
+      `;
+      
+      searchResults.appendChild(resultItem);
+    });
+    
+    resultsContainer.appendChild(searchResults);
+    
+    // Añadir evento click a los enlaces "Ver"
+    const viewLinks = document.querySelectorAll('.result-link');
+    viewLinks.forEach(link => {
+      // Remover eventos anteriores para evitar duplicación
+      const newLink = link.cloneNode(true);
+      link.parentNode.replaceChild(newLink, link);
+      
+      newLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        const profileUrl = this.getAttribute('data-profile-url');
+        if (profileUrl) {
+          console.log('Solicitando abrir perfil:', profileUrl);
+          // Enviar mensaje al content script para abrir el perfil
+          chrome.runtime.sendMessage({
+            action: 'open_profile',
+            profileUrl: profileUrl
+          });
+        }
+      });
+    });
+    
+    // Actualizar el resumen de búsqueda una sola vez
+    if (!window.summaryUpdated) {
+      updateSearchSummary();
+      window.summaryUpdated = true;
     }
     
-    // Modificación clave: Incluir el número como parte del nombre del perfil
-    resultItem.innerHTML = `
-      <div class="result-header">
-        <span class="result-name"><span class="result-number">${index + 1}.</span> ${displayName}</span>
-        <a href="${profile.url}" target="_blank" class="result-link">Ver</a>
-      </div>
-    `;
+    // Marcar la búsqueda como completada
+    localStorage.setItem('snap_lead_manager_search_pending', 'false');
+    localStorage.setItem('snap_lead_manager_search_completed', 'true');
     
-    searchResults.appendChild(resultItem);
-  });
-  
-  resultsContainer.appendChild(searchResults);
-  
-  // Añadir estilos para asegurar que los números sean visibles
-  const style = document.createElement('style');
-  style.textContent = `
-    .profile-results-container {
-      margin-top: 20px;
-      border-top: 1px solid #ddd;
-      padding-top: 10px;
-      max-height: 400px;
-      overflow-y: auto;
-    }
-    .results-header {
-      margin-bottom: 15px;
-    }
-    .results-header h3 {
-      margin-bottom: 5px;
-      font-size: 18px;
-      font-weight: bold;
-    }
-    .results-header p {
-      margin: 0;
-      color: #555;
-    }
-    .results-list {
-      padding: 0;
-      margin: 0;
-      list-style: none;
-      border: 1px solid #eee;
-      border-radius: 5px;
-    }
-    .result-item {
-      padding: 8px 10px;
-      border-bottom: 1px solid #eee;
-      background-color: #f9f9f9;
-    }
-    .result-item:last-child {
-      border-bottom: none;
-    }
-    .result-item:nth-child(odd) {
-      background-color: #f5f5f5;
-    }
-    .result-number {
-      font-weight: bold;
-      color: #4267B2;
-      margin-right: 5px;
-    }
-    .result-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .result-name {
-      flex: 1;
-    }
-    .result-link {
-      color: #4267B2;
-      font-weight: bold;
-      text-decoration: none;
-      margin-left: 10px;
-    }
-    .result-link:hover {
-      text-decoration: underline;
-    }
-  `;
-  document.head.appendChild(style);
+    console.log('Perfiles mostrados correctamente');
+  } catch (error) {
+    console.error('Error al mostrar perfiles:', error);
+  } finally {
+    // Siempre desmarcar el proceso al finalizar
+    window.isDisplayingProfiles = false;
+  }
 }
 
 // Escuchar el mensaje para mostrar perfiles - ÚNICO EVENT LISTENER
@@ -1307,71 +1291,91 @@ window.addEventListener('message', handleDisplayProfileLinks);
 function numerateSearchResults() {
   console.log('Numerando resultados de búsqueda');
   
-  // Obtener todos los elementos de resultado
-  const resultItems = document.querySelectorAll('#search-results .result-item');
-  
-  if (resultItems.length === 0) {
-    console.log('No se encontraron elementos para numerar');
+  // Verificar si ya estamos en proceso de numeración para evitar bucles
+  if (window.isNumeratingResults) {
+    console.log('Ya hay un proceso de numeración en curso, evitando bucle');
     return;
   }
   
-  console.log(`Numerando ${resultItems.length} elementos`);
+  // Marcar que estamos en proceso de numeración
+  window.isNumeratingResults = true;
   
-  // Agregar número a cada elemento (solo si no tiene ya uno)
-  resultItems.forEach((item, index) => {
-    const nameElement = item.querySelector('.result-name');
+  try {
+    // Obtener todos los elementos de resultado
+    const resultItems = document.querySelectorAll('#search-results .result-item');
     
-    // Verificar si ya tiene numeración para evitar duplicados
-    if (nameElement && !nameElement.querySelector('.result-number')) {
-      // Crear número
-      const numberElement = document.createElement('span');
-      numberElement.className = 'result-number';
-      numberElement.textContent = `${index + 1}. `;
-      numberElement.style.fontWeight = 'bold';
-      numberElement.style.color = '#4267B2';
-      numberElement.style.marginRight = '5px';
-      
-      // Insertar número al inicio del nombre
-      nameElement.insertBefore(numberElement, nameElement.firstChild);
+    if (resultItems.length === 0) {
+      console.log('No se encontraron elementos para numerar');
+      window.isNumeratingResults = false;
+      return;
     }
-  });
-  
-  // Actualizar el resumen de búsqueda
-  updateSearchSummary();
-  
-  // Marcar la búsqueda como completada si hay resultados
-  if (resultItems.length > 0) {
-    // Verificar si la búsqueda ya está marcada como completada
-    const isCompleted = localStorage.getItem('snap_lead_manager_search_completed') === 'true';
     
-    if (!isCompleted) {
-      console.log('Marcando búsqueda como completada después de numerar resultados');
+    console.log(`Numerando ${resultItems.length} elementos`);
+    
+    // Agregar número a cada elemento (solo si no tiene ya uno)
+    resultItems.forEach((item, index) => {
+      const nameElement = item.querySelector('.result-name');
       
-      // Notificar al content script que la búsqueda ha sido completada
-      chrome.runtime.sendMessage({
-        action: 'search_completed',
-        results: resultItems.length,
-        message: `Búsqueda completada. Se encontraron ${resultItems.length} perfiles.`
-      });
-      
-      // Actualizar el estado en localStorage
-      localStorage.setItem('snap_lead_manager_search_pending', 'false');
-      localStorage.setItem('snap_lead_manager_search_completed', 'true');
-      
-      // Actualizar el estado visual
-      const statusElement = document.getElementById('status-message');
-      if (statusElement) {
-        statusElement.textContent = `Búsqueda completada. Se encontraron ${resultItems.length} perfiles.`;
-        statusElement.style.color = '#4CAF50'; // Verde para indicar éxito
+      // Verificar si ya tiene numeración para evitar duplicados
+      if (nameElement && !nameElement.querySelector('.result-number')) {
+        // Crear número
+        const numberElement = document.createElement('span');
+        numberElement.className = 'result-number';
+        numberElement.textContent = `${index + 1}. `;
+        numberElement.style.fontWeight = 'bold';
+        numberElement.style.color = '#4267B2';
+        numberElement.style.marginRight = '5px';
+        
+        // Insertar número al inicio del nombre
+        nameElement.insertBefore(numberElement, nameElement.firstChild);
       }
+    });
+    
+    // Actualizar el resumen de búsqueda (solo una vez)
+    if (!window.summaryUpdated) {
+      updateSearchSummary();
+      window.summaryUpdated = true;
+    }
+    
+    // Marcar la búsqueda como completada si hay resultados
+    if (resultItems.length > 0) {
+      // Verificar si la búsqueda ya está marcada como completada
+      const isCompleted = localStorage.getItem('snap_lead_manager_search_completed') === 'true';
       
-      // Actualizar la barra de progreso
-      const progressBar = document.getElementById('progress-bar');
-      if (progressBar) {
-        progressBar.style.width = '100%';
-        progressBar.style.backgroundColor = '#4CAF50'; // Verde para indicar éxito
+      if (!isCompleted) {
+        console.log('Marcando búsqueda como completada después de numerar resultados');
+        
+        // Notificar al content script que la búsqueda ha sido completada
+        chrome.runtime.sendMessage({
+          action: 'search_completed',
+          results: resultItems.length,
+          message: `Búsqueda completada. Se encontraron ${resultItems.length} perfiles.`
+        });
+        
+        // Actualizar el estado en localStorage
+        localStorage.setItem('snap_lead_manager_search_pending', 'false');
+        localStorage.setItem('snap_lead_manager_search_completed', 'true');
+        
+        // Actualizar el estado visual
+        const statusElement = document.getElementById('status-message');
+        if (statusElement) {
+          statusElement.textContent = `Búsqueda completada. Se encontraron ${resultItems.length} perfiles.`;
+          statusElement.style.color = '#4CAF50'; // Verde para indicar éxito
+        }
+        
+        // Actualizar la barra de progreso
+        const progressBar = document.getElementById('progress-bar');
+        if (progressBar) {
+          progressBar.style.width = '100%';
+          progressBar.style.backgroundColor = '#4CAF50'; // Verde para indicar éxito
+        }
       }
     }
+  } catch (error) {
+    console.error('Error al numerar resultados:', error);
+  } finally {
+    // Siempre desmarcar el proceso de numeración al finalizar
+    window.isNumeratingResults = false;
   }
 }
 
@@ -1518,5 +1522,83 @@ function markSearchAsCompleted(profiles) {
   if (progressBar) {
     progressBar.style.width = '100%';
     progressBar.style.backgroundColor = '#4CAF50'; // Verde para indicar éxito
+  }
+}
+
+// Función para mostrar el resumen de búsqueda basado en la información visible
+function updateSearchSummary() {
+  console.log('Actualizando resumen de búsqueda desde la interfaz');
+  
+  // Verificar si ya estamos en proceso de actualización para evitar bucles
+  if (window.isUpdatingSummary) {
+    console.log('Ya hay un proceso de actualización en curso, evitando bucle');
+    return;
+  }
+  
+  // Marcar que estamos en proceso de actualización
+  window.isUpdatingSummary = true;
+  
+  try {
+    // Obtener la información de búsqueda actual
+    const currentSearchTerm = document.getElementById('search-term')?.value || '';
+    const currentSearchCity = document.getElementById('search-city')?.value || '';
+    
+    // Contar resultados actuales
+    const resultItems = document.querySelectorAll('#search-results .result-item');
+    const totalResults = resultItems.length;
+    
+    // Obtener el elemento para el resumen (o crearlo si no existe)
+    let summaryElement = document.getElementById('results-summary');
+    if (!summaryElement) {
+      console.log('Creando elemento de resumen de búsqueda');
+      const resultsSection = document.querySelector('.results-section');
+      
+      if (resultsSection) {
+        summaryElement = document.createElement('div');
+        summaryElement.id = 'results-summary';
+        summaryElement.className = 'results-summary';
+        
+        // Insertarlo después del título de la sección
+        const titleElement = resultsSection.querySelector('h2');
+        if (titleElement) {
+          titleElement.insertAdjacentElement('afterend', summaryElement);
+        } else {
+          resultsSection.insertBefore(summaryElement, resultsSection.firstChild);
+        }
+      } else {
+        console.log('No se encontró la sección de resultados');
+        return;
+      }
+    }
+    
+    // Actualizar el contenido del resumen
+    summaryElement.innerHTML = `
+      <p>
+        <strong>Búsqueda:</strong> ${currentSearchTerm || 'No especificado'}<br>
+        <strong>Ubicación:</strong> ${currentSearchCity || 'No especificada'}<br>
+        <strong>Resultados encontrados:</strong> ${totalResults} perfiles
+      </p>
+    `;
+    
+    console.log('Resumen de búsqueda actualizado con éxito');
+  } catch (error) {
+    console.error('Error al actualizar resumen de búsqueda:', error);
+  } finally {
+    // Siempre desmarcar el proceso de actualización al finalizar
+    window.isUpdatingSummary = false;
+  }
+}
+
+// Función para actualizar el estado en la UI
+function updateStatusUI(message, progress) {
+  const statusElement = document.getElementById('status-message');
+  const progressBar = document.getElementById('progress-bar');
+  
+  if (statusElement) {
+    statusElement.textContent = message;
+  }
+  
+  if (progressBar) {
+    progressBar.style.width = `${progress}%`;
   }
 }
