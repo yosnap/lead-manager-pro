@@ -498,28 +498,49 @@ async function applySearchFilters() {
 }
 
 // Función para actualizar el estado y enviar información al sidebar
-function updateStatus(message, progress = 0, isError = false) {
-  console.log(message);
-  
-  // Verificar si chrome.runtime está disponible antes de enviar mensaje
-  if (chrome.runtime && chrome.runtime.sendMessage) {
-    chrome.runtime.sendMessage({
-      type: 'status_update',
-      message: message,
-      progress: progress,
-      error: isError
-    });
+let lastStatusMessage = '';
+let lastStatusProgress = 0;
+function updateStatus(message, progress = 0, options = {}) {
+  // Evitar actualizaciones de estado innecesarias si el mensaje es el mismo
+  if (lastStatusMessage === message && lastStatusProgress === progress) {
+    return; // No actualizar si es el mismo mensaje y progreso
   }
   
-  // También enviar actualización al iframe del sidebar si existe
-  const iframe = document.getElementById('snap-lead-manager-iframe');
-  if (iframe && iframe.contentWindow) {
-    iframe.contentWindow.postMessage({
-      type: 'status_update',
-      message: message,
-      progress: progress,
-      error: isError
-    }, '*');
+  // Guardar el último mensaje y progreso
+  lastStatusMessage = message;
+  lastStatusProgress = progress;
+  
+  // Solo registrar en consola si es un cambio significativo o un mensaje importante
+  if (progress % 10 === 0 || progress === 100 || message.includes('Error') || message.includes('Completada')) {
+    console.log(`Estado: ${message} (${progress}%)`);
+  }
+  
+  try {
+    // Actualizar el estado en el iframe si existe
+    const iframe = document.getElementById('snap-lead-manager-iframe');
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage({
+        action: 'update_status',
+        message: message,
+        progress: progress,
+        ...options
+      }, '*');
+    }
+    
+    // Enviar actualización al background script
+    if (chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage({
+        type: 'status_update',
+        message: message,
+        progress: progress,
+        ...options
+      });
+    }
+  } catch (error) {
+    // Solo registrar errores reales, no intentos fallidos de comunicación
+    if (!(error.message && error.message.includes('Extension context invalidated'))) {
+      console.error('Error al actualizar estado:', error);
+    }
   }
 }
 
@@ -1632,17 +1653,36 @@ const checkPendingSearch = async () => {
           if (searchData.city && searchData.city.trim() !== '') {
             // Aplicar filtros de búsqueda específicos (como el filtro de ciudad)
             await applySearchFilters();
+            
+            // Después de aplicar los filtros, buscar perfiles
+            await findProfiles();
+            
+            // Marcar la búsqueda como completada para evitar bucles
+            localStorage.setItem('snap_lead_manager_search_pending', 'false');
+            localStorage.setItem('snap_lead_manager_search_completed', 'true');
+            
+            // Actualizar el estado en la UI
+            updateStatus('Búsqueda completada', 100);
             return;
           }
         } catch (e) {
           console.error('Error al procesar datos de búsqueda:', e);
+          // Marcar la búsqueda como no pendiente para evitar bucles infinitos
+          localStorage.setItem('snap_lead_manager_search_pending', 'false');
         }
       }
       
       // Si no hay datos de ciudad o hubo un error, proceder con la búsqueda normal
       await findProfiles();
+      
+      // Marcar la búsqueda como completada para evitar bucles
+      localStorage.setItem('snap_lead_manager_search_pending', 'false');
+      localStorage.setItem('snap_lead_manager_search_completed', 'true');
+      
+      // Actualizar el estado en la UI
+      updateStatus('Búsqueda completada', 100);
     } else {
-      // Si no estamos en la página de búsqueda, redirigir
+      // Si no estamos en una página de búsqueda, redirigir
       await performSearch(searchTerm, searchData);
     }
   }
@@ -2156,8 +2196,20 @@ async function applyCityFilter() {
               const duration = Math.floor((endTime - startTime) / 1000);
               const minutes = Math.floor(duration / 60);
               const seconds = duration % 60;
-              
-              updateStatus(`✓ Búsqueda completada en ${minutes}m ${seconds}s. Encontrados ${profiles.length} perfiles`, 100);
+
+              const stats = {
+                perfilesEncontrados: profiles.length,
+                scrollsRealizados: 50, // El máximo configurado
+                tiempoTotal: `${minutes}m ${seconds}s`,
+                searchTerm: currentSearchTerm,
+                timestamp: new Date().toLocaleTimeString()
+              };
+
+              // Guardar estadísticas para mostrarlas en el sidebar
+              localStorage.setItem('snap_lead_manager_search_stats', JSON.stringify(stats));
+
+              // Actualizar UI con estadísticas
+              updateStatus(`✓ Búsqueda completada en ${stats.tiempoTotal}. Encontrados ${stats.perfilesEncontrados} perfiles en ${stats.scrollsRealizados} scrolls`, 100);
             }
           })
           .catch(error => {
@@ -2317,7 +2369,19 @@ function updateFilterStatus(applied = true) {
 }
 
 // Modificar la función que envía mensajes al background para manejar errores de contexto invalidado
+let lastNotificationMessage = '';
+let lastNotificationTime = 0;
 function notifyBackgroundOfProgress(message, progress, data = {}) {
+  // Evitar enviar el mismo mensaje repetidamente en un corto período de tiempo
+  const now = Date.now();
+  if (message === lastNotificationMessage && (now - lastNotificationTime) < 2000) {
+    return; // No enviar el mismo mensaje más de una vez cada 2 segundos
+  }
+  
+  // Actualizar el último mensaje y tiempo
+  lastNotificationMessage = message;
+  lastNotificationTime = now;
+  
   if (chrome.runtime && chrome.runtime.sendMessage) {
     try {
       chrome.runtime.sendMessage({
@@ -2328,13 +2392,9 @@ function notifyBackgroundOfProgress(message, progress, data = {}) {
       }, function(response) {
         // Verificar si hay un error de contexto invalidado
         if (chrome.runtime.lastError) {
-          console.warn('Error al enviar mensaje al background:', chrome.runtime.lastError);
-          
-          // Si el contexto está invalidado, intentar recuperarse
+          // Solo registrar errores de contexto invalidado una vez
           if (chrome.runtime.lastError.message.includes('Extension context invalidated')) {
-            console.log('Contexto de extensión invalidado, intentando recuperar...');
-            
-            // Guardar el estado actual en localStorage para recuperarlo después
+            // Guardar estado en localStorage para recuperarlo después
             localStorage.setItem('snap_lead_manager_last_status', JSON.stringify({
               message: message,
               progress: progress,
@@ -2345,7 +2405,7 @@ function notifyBackgroundOfProgress(message, progress, data = {}) {
         }
       });
     } catch (e) {
-      console.error('Error al notificar al background:', e);
+      // No registrar errores repetitivos de comunicación
     }
   }
 }

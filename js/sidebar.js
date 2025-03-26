@@ -471,7 +471,7 @@ function openSidebarInWindow() {
 
 // Listener para mensajes del iframe
 window.addEventListener('message', (event) => {
-  // Solo procesar mensajes de nuestro iframe
+  // Verificar que el mensaje viene de nuestra extensión
   if (event.data && event.data.from === 'snap-lead-manager') {
     console.log('Sidebar recibió mensaje:', event.data);
     
@@ -1291,62 +1291,19 @@ function displayProfileLinks(profiles) {
   document.head.appendChild(style);
 }
 
-// Escuchar el mensaje para mostrar perfiles
-window.addEventListener('message', function(event) {
+// Escuchar el mensaje para mostrar perfiles - ÚNICO EVENT LISTENER
+window.removeEventListener('message', handleDisplayProfileLinks); // Eliminar cualquier listener previo
+function handleDisplayProfileLinks(event) {
   if (event.data && event.data.action === 'display_profile_links') {
     displayProfileLinks(event.data.profiles);
-  }
-});
-
-// Función para mostrar el resumen de búsqueda basado en la información visible
-function updateSearchSummary() {
-  console.log('Actualizando resumen de búsqueda desde la interfaz');
-  
-  // Obtener la información de búsqueda actual
-  const currentSearchTerm = document.getElementById('search-term')?.value || '';
-  const currentSearchCity = document.getElementById('search-city')?.value || '';
-  
-  // Contar resultados actuales
-  const resultItems = document.querySelectorAll('#search-results .result-item');
-  const totalResults = resultItems.length;
-  
-  // Obtener el elemento para el resumen (o crearlo si no existe)
-  let summaryElement = document.getElementById('results-summary');
-  if (!summaryElement) {
-    console.log('Creando elemento de resumen de búsqueda');
-    const resultsSection = document.querySelector('.results-section');
     
-    if (resultsSection) {
-      summaryElement = document.createElement('div');
-      summaryElement.id = 'results-summary';
-      summaryElement.className = 'results-summary';
-      
-      // Insertarlo después del título de la sección
-      const titleElement = resultsSection.querySelector('h2');
-      if (titleElement) {
-        titleElement.insertAdjacentElement('afterend', summaryElement);
-      } else {
-        resultsSection.insertBefore(summaryElement, resultsSection.firstChild);
-      }
-    } else {
-      console.log('No se encontró la sección de resultados');
-      return;
-    }
+    // Esperar a que se rendericen los resultados
+    setTimeout(numerateSearchResults, 300);
   }
-  
-  // Actualizar el contenido del resumen
-  summaryElement.innerHTML = `
-    <p>
-      <strong>Búsqueda:</strong> ${currentSearchTerm || 'No especificado'}<br>
-      <strong>Ubicación:</strong> ${currentSearchCity || 'No especificada'}<br>
-      <strong>Resultados encontrados:</strong> ${totalResults} perfiles
-    </p>
-  `;
-  
-  console.log('Resumen de búsqueda actualizado con éxito');
 }
+window.addEventListener('message', handleDisplayProfileLinks);
 
-// Modificar la función de numeración para que también actualice el resumen
+// Función para numerar resultados de búsqueda
 function numerateSearchResults() {
   console.log('Numerando resultados de búsqueda');
   
@@ -1381,6 +1338,41 @@ function numerateSearchResults() {
   
   // Actualizar el resumen de búsqueda
   updateSearchSummary();
+  
+  // Marcar la búsqueda como completada si hay resultados
+  if (resultItems.length > 0) {
+    // Verificar si la búsqueda ya está marcada como completada
+    const isCompleted = localStorage.getItem('snap_lead_manager_search_completed') === 'true';
+    
+    if (!isCompleted) {
+      console.log('Marcando búsqueda como completada después de numerar resultados');
+      
+      // Notificar al content script que la búsqueda ha sido completada
+      chrome.runtime.sendMessage({
+        action: 'search_completed',
+        results: resultItems.length,
+        message: `Búsqueda completada. Se encontraron ${resultItems.length} perfiles.`
+      });
+      
+      // Actualizar el estado en localStorage
+      localStorage.setItem('snap_lead_manager_search_pending', 'false');
+      localStorage.setItem('snap_lead_manager_search_completed', 'true');
+      
+      // Actualizar el estado visual
+      const statusElement = document.getElementById('status-message');
+      if (statusElement) {
+        statusElement.textContent = `Búsqueda completada. Se encontraron ${resultItems.length} perfiles.`;
+        statusElement.style.color = '#4CAF50'; // Verde para indicar éxito
+      }
+      
+      // Actualizar la barra de progreso
+      const progressBar = document.getElementById('progress-bar');
+      if (progressBar) {
+        progressBar.style.width = '100%';
+        progressBar.style.backgroundColor = '#4CAF50'; // Verde para indicar éxito
+      }
+    }
+  }
 }
 
 // Agregar un observador del DOM optimizado
@@ -1452,8 +1444,10 @@ if (document.readyState === 'loading') {
 }
 
 // Asegurarse de que solo hay un listener para mensajes
-window.addEventListener('message', function numerateAfterDisplay(event) {
+window.addEventListener('message', function(event) {
   if (event.data && event.data.action === 'display_profile_links') {
+    displayProfileLinks(event.data.profiles);
+    
     // Esperar a que se rendericen los resultados
     setTimeout(numerateSearchResults, 300);
   }
@@ -1461,3 +1455,68 @@ window.addEventListener('message', function numerateAfterDisplay(event) {
 
 // Ejecutar la numeración ahora para elementos ya existentes
 numerateSearchResults();
+
+// Eliminar cualquier listener previo si existe
+if (window.messageHandler) {
+  window.removeEventListener('message', window.messageHandler);
+}
+
+// Crear un único manejador de mensajes centralizado
+window.messageHandler = function(event) {
+  // Verificar que el mensaje viene de una fuente confiable
+  if (!event.data || typeof event.data !== 'object') return;
+  
+  // Manejar diferentes tipos de mensajes
+  switch (event.data.action) {
+    case 'display_profile_links':
+      // Mostrar los enlaces de perfiles
+      displayProfileLinks(event.data.profiles);
+      
+      // Esperar a que se rendericen los resultados y numerarlos
+      setTimeout(numerateSearchResults, 300);
+      break;
+      
+    case 'update_status':
+      // Actualizar el estado en la UI
+      updateStatusUI(event.data.message, event.data.progress);
+      break;
+      
+    case 'update_search_info':
+      // Actualizar información de búsqueda
+      updateSearchInfo(event.data);
+      break;
+      
+    case 'search_completed':
+      // Marcar la búsqueda como completada
+      markSearchAsCompleted(event.data.profiles);
+      break;
+      
+    // Otros casos según sea necesario
+  }
+};
+
+// Registrar el único manejador de mensajes
+window.addEventListener('message', window.messageHandler);
+
+// Función para marcar la búsqueda como completada
+function markSearchAsCompleted(profiles) {
+  console.log('Marcando búsqueda como completada');
+  
+  // Actualizar el estado en localStorage
+  localStorage.setItem('snap_lead_manager_search_pending', 'false');
+  localStorage.setItem('snap_lead_manager_search_completed', 'true');
+  
+  // Actualizar el estado visual
+  const statusElement = document.getElementById('status-message');
+  if (statusElement) {
+    statusElement.textContent = `Búsqueda completada. Se encontraron ${profiles ? profiles.length : 0} perfiles.`;
+    statusElement.style.color = '#4CAF50'; // Verde para indicar éxito
+  }
+  
+  // Actualizar la barra de progreso
+  const progressBar = document.getElementById('progress-bar');
+  if (progressBar) {
+    progressBar.style.width = '100%';
+    progressBar.style.backgroundColor = '#4CAF50'; // Verde para indicar éxito
+  }
+}
