@@ -1,113 +1,71 @@
-// Script de depuración para ayudar a identificar problemas con el sidebar
-console.log('Script de depuración iniciado');
+/**
+ * Script de depuración para Lead Manager Pro
+ * Versión compatible con CSP
+ */
 
-// Función para registrar información sobre el DOM
-function logDOMInfo() {
-  console.log('=== INFORMACIÓN DEL DOM ===');
-  console.log('- Sidebar existe:', !!document.getElementById('snap-lead-manager-overlay'));
-  console.log('- Body tiene clase snap-lead-manager-active:', document.body.classList.contains('snap-lead-manager-active'));
-  console.log('- Body tiene clase snap-lead-manager-collapsed:', document.body.classList.contains('snap-lead-manager-collapsed'));
-  console.log('- Estado del localStorage:', localStorage.getItem('snap-lead-manager-state'));
-}
+// Esta versión no intenta inyectar scripts
+console.log('Lead Manager Pro - Debug: Inicializando...');
 
-// Función para forzar la inyección del sidebar
-function forceInjectSidebar() {
-  console.log('Forzando la inyección del sidebar...');
+// Función para mostrar el estado actual de las funciones
+function displayDebugInfo() {
+  console.group('Lead Manager Pro - Estado de depuración');
   
-  // Eliminar el sidebar existente si lo hay
-  const existingSidebar = document.getElementById('snap-lead-manager-overlay');
-  if (existingSidebar) {
-    existingSidebar.remove();
-    console.log('Sidebar existente eliminado');
+  console.log('Objeto de depuración:', window._debug_leadManagerPro ? 'Disponible ✅' : 'No disponible ❌');
+  
+  if (window._debug_leadManagerPro) {
+    const functionNames = Object.keys(window._debug_leadManagerPro);
+    console.log('Funciones disponibles:', functionNames.join(', '));
+    
+    // Verificar cada función principal
+    const functions = [
+      'applyCityFilter', 
+      'findProfiles', 
+      'selectFirstCitySuggestion', 
+      'sleep', 
+      'updateStatus'
+    ];
+    
+    const functionStatus = functions.map(name => ({
+      name,
+      exists: typeof window._debug_leadManagerPro[name] === 'function' ? '✅' : '❌'
+    }));
+    
+    console.table(functionStatus);
   }
   
-  document.body.classList.remove('snap-lead-manager-active');
-  document.body.classList.remove('snap-lead-manager-collapsed');
-  
-  // Crear el contenedor del sidebar
-  const overlay = document.createElement('div');
-  overlay.id = 'snap-lead-manager-overlay';
-  overlay.style.position = 'fixed';
-  overlay.style.top = '0';
-  overlay.style.right = '0';
-  overlay.style.bottom = '0';
-  overlay.style.width = '300px';
-  overlay.style.backgroundColor = 'white';
-  overlay.style.boxShadow = '-2px 0 5px rgba(0, 0, 0, 0.2)';
-  overlay.style.zIndex = '9999';
-  overlay.style.display = 'flex';
-  overlay.style.flexDirection = 'column';
-  
-  // Crear la manija para mostrar/ocultar
-  const handle = document.createElement('div');
-  handle.id = 'snap-lead-manager-handle';
-  handle.innerHTML = '⟪';
-  handle.title = 'Mostrar/Ocultar Snap Lead Manager';
-  handle.style.position = 'absolute';
-  handle.style.left = '-30px';
-  handle.style.top = '50%';
-  handle.style.transform = 'translateY(-50%)';
-  handle.style.width = '30px';
-  handle.style.height = '60px';
-  handle.style.backgroundColor = 'black';
-  handle.style.color = 'white';
-  handle.style.display = 'flex';
-  handle.style.alignItems = 'center';
-  handle.style.justifyContent = 'center';
-  handle.style.cursor = 'pointer';
-  handle.style.borderRadius = '5px 0 0 5px';
-  
-  // Crear el iframe para el contenido del sidebar
-  const iframe = document.createElement('iframe');
-  iframe.id = 'snap-lead-manager-iframe';
-  iframe.src = chrome.runtime.getURL('sidebar.html');
-  iframe.style.width = '100%';
-  iframe.style.height = '100%';
-  iframe.style.border = 'none';
-  
-  // Ensamblar el sidebar
-  overlay.appendChild(handle);
-  overlay.appendChild(iframe);
-  document.body.appendChild(overlay);
-  
-  // Añadir clase al body para el margen
-  document.body.classList.add('snap-lead-manager-active');
-  
-  console.log('Sidebar inyectado forzosamente');
-  
-  // Manejar eventos de la manija
-  handle.addEventListener('click', () => {
-    console.log('Click en la manija');
-    const isVisible = !overlay.classList.contains('collapsed');
-    
-    if (isVisible) {
-      overlay.classList.add('collapsed');
-      overlay.style.transform = 'translateX(290px)';
-      handle.innerHTML = '⟫';
-      document.body.classList.add('snap-lead-manager-collapsed');
-      localStorage.setItem('snap-lead-manager-state', 'collapsed');
-    } else {
-      overlay.classList.remove('collapsed');
-      overlay.style.transform = '';
-      handle.innerHTML = '⟪';
-      document.body.classList.remove('snap-lead-manager-collapsed');
-      localStorage.setItem('snap-lead-manager-state', 'expanded');
-    }
-  });
+  console.groupEnd();
 }
 
-// Esperar a que el DOM esté listo
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    logDOMInfo();
-    setTimeout(forceInjectSidebar, 1000);
+// Verificar después de un tiempo para dar oportunidad a que se cargue el script principal
+setTimeout(() => {
+  console.log('Lead Manager Pro - Verificando estado (3s):');
+  displayDebugInfo();
+}, 3000);
+
+// Verificar de nuevo después de más tiempo
+setTimeout(() => {
+  console.log('Lead Manager Pro - Verificando estado (6s):');
+  displayDebugInfo();
+}, 6000);
+
+// Exponer función global para facilitar el debug manual
+window.checkLeadManagerStatus = function() {
+  console.log('Lead Manager Pro - Verificación manual:');
+  displayDebugInfo();
+  
+  return {
+    functions: window._debug_leadManagerPro || {},
+    status: window._debug_leadManagerPro ? 'disponible' : 'no disponible'
+  };
+};
+
+// Intentar acceder a chrome.storage para verificar permisos
+try {
+  chrome.storage.local.get(['snap_lead_manager_city_filter_applied', 'snap_lead_manager_search_data'], function(result) {
+    console.log('Lead Manager Pro - Estado del almacenamiento:', result);
   });
-} else {
-  logDOMInfo();
-  setTimeout(forceInjectSidebar, 1000);
+} catch (error) {
+  console.log('Lead Manager Pro - Error al acceder al almacenamiento:', error.message);
 }
 
-// Registrar cualquier error
-window.addEventListener('error', (event) => {
-  console.error('Error capturado:', event.error);
-});
+console.log('Lead Manager Pro - Debug: Script de depuración cargado');

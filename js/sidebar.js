@@ -7,14 +7,17 @@ let state = {
   statusMessage: 'Listo',
   currentSearchTerm: '',
   currentSearchCity: '',
+  currentSearchType: 'people', // Tipo de búsqueda por defecto: personas
   searchStartTime: null,
   logEntries: [], // Almacenar entradas de log para el scroll y los perfiles
   restored: false  // Indicador de si el estado fue restaurado
 };
 
 // Referencias a elementos del DOM
+let searchTypeSelect;
 let searchTermInput;
 let searchCityInput;
+let cityFilterGroup;
 let searchButton;
 let pauseButton;
 let stopButton;
@@ -99,8 +102,10 @@ function showError(message) {
 }
 
 function clearError() {
-  statusMessage.textContent = 'Listo';
-  statusMessage.className = 'status';
+  if (statusMessage) {
+    statusMessage.textContent = 'Listo';
+    statusMessage.className = 'status';
+  }
 }
 
 function updateStatus(message, progress = state.progress, isError = false) {
@@ -136,7 +141,7 @@ function updateStatus(message, progress = state.progress, isError = false) {
   }
   
   if (detailedProgressBar) {
-    detailedProgressBar.value = progress;
+    detailedProgressBar.style.width = `${progress}%`;
   }
   
   if (progressPercentage) {
@@ -173,49 +178,31 @@ function updateStatus(message, progress = state.progress, isError = false) {
     }, 5000);
   }
   
-  // Enviar actualización de estado a otras partes de la extensión
-  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-    try {
-      chrome.runtime.sendMessage({
-        type: 'status_update',
-        message: message,
-        progress: progress,
-        error: isError
-      });
-    } catch (error) {
-      console.error('Error al enviar mensaje de actualización de estado:', error);
-    }
-  } else {
-    console.warn('chrome.runtime.sendMessage no está disponible');
-  }
+  // Enviar actualización de estado a la página principal
+  window.parent.postMessage({
+    action: 'status_update',
+    status: message,
+    progress: progress
+  }, '*');
 }
 
 // Función para actualizar la UI basada en el estado actual
 function updateUI() {
   // Verificar que los botones existen antes de modificar sus propiedades
   if (pauseButton) {
-    pauseButton.disabled = false;
+    pauseButton.disabled = !state.isRunning;
+    pauseButton.textContent = state.isPaused ? 'Reanudar' : 'Pausar';
   }
   
   if (stopButton) {
-    stopButton.disabled = false;
+    stopButton.disabled = !state.isRunning;
   }
   
   // Actualizar operación actual
-  if (statusMessage) {
-    let statusText = state.isRunning 
+  if (currentOperation) {
+    currentOperation.textContent = state.isRunning 
       ? (state.isPaused ? 'Pausado' : 'En ejecución') 
-      : 'Listo para comenzar';
-    
-    if (state.currentOperation) {
-      statusText += `: ${state.currentOperation}`;
-    }
-    
-    if (state.error) {
-      statusText += ` (Error: ${state.error})`;
-    }
-    
-    statusMessage.textContent = statusText;
+      : 'Inactivo';
   }
   
   // Actualizar barra de progreso
@@ -227,17 +214,15 @@ function updateUI() {
   updateSearchInfo();
 }
 
-function updateCurrentSearchInfo() {
+function updateSearchInfo() {
+  if (!currentSearchInfo) return;
+  
   if (state.currentSearchTerm) {
-    let searchInfoHTML = `<p><strong>Término de búsqueda:</strong> ${state.currentSearchTerm}</p>`;
+    let searchInfoHTML = `<p><strong>Tipo de búsqueda:</strong> ${state.currentSearchType === 'people' ? 'Personas' : 'Grupos'}</p>`;
+    searchInfoHTML += `<p><strong>Término de búsqueda:</strong> ${state.currentSearchTerm}</p>`;
     
     if (state.currentSearchCity) {
       searchInfoHTML += `<p><strong>Ciudad:</strong> ${state.currentSearchCity}</p>`;
-    }
-    
-    // Mostrar término completo (combinado con ciudad)
-    if (state.currentSearchCity) {
-      searchInfoHTML += `<p><strong>Búsqueda completa:</strong> ${state.currentSearchTerm} (Ciudad: ${state.currentSearchCity})</p>`;
       
       // Agregar un mensaje de estado para el filtro de ciudad
       const cityFilterApplied = localStorage.getItem('snap_lead_manager_city_filter_applied') === 'true';
@@ -248,11 +233,9 @@ function updateCurrentSearchInfo() {
       }
     }
     
-    if (currentSearchInfo) {
-      currentSearchInfo.innerHTML = searchInfoHTML;
-      currentSearchInfo.style.display = 'block';
-    }
-  } else if (currentSearchInfo) {
+    currentSearchInfo.innerHTML = searchInfoHTML;
+    currentSearchInfo.style.display = 'block';
+  } else {
     currentSearchInfo.style.display = 'none';
   }
 }
@@ -260,6 +243,7 @@ function updateCurrentSearchInfo() {
 // Función para realizar la búsqueda
 function performSearch() {
   try {
+    const searchType = searchTypeSelect.value;
     const searchTerm = searchTermInput.value.trim();
     const searchCity = searchCityInput.value.trim();
     
@@ -267,158 +251,161 @@ function performSearch() {
       throw new Error('Por favor ingresa un término de búsqueda');
     }
     
-    console.log('Iniciando búsqueda con término:', searchTerm, 'y ciudad:', searchCity);
+    // Guardar datos de búsqueda
+    state.currentSearchTerm = searchTerm;
+    state.currentSearchCity = searchCity;
+    state.currentSearchType = searchType;
     
-    // Crear mensaje con estructura exacta
-    const searchMessage = {
-      action: 'search',
-      searchTerm: searchTerm,
-      searchData: {
-        city: searchCity,
-        term: searchTerm
-      }
+    // Actualizar información de búsqueda
+    updateSearchInfo();
+    
+    // Crear mensaje para enviar a la página con formato unificado
+    const searchData = {
+      type: searchType,
+      term: searchTerm,
+      city: searchCity,
+      timestamp: Date.now(),
+      userInitiated: true // Marcar explícitamente como iniciado por el usuario
     };
     
-    console.log('Enviando mensaje de búsqueda:', searchMessage);
+    // Limpiar cualquier estado de búsqueda previo
+    localStorage.removeItem('snap_lead_manager_force_reload');
+    localStorage.removeItem('snap_lead_manager_search_url');
     
-    // Enviar mensaje con estructura verificada
-    chrome.runtime.sendMessage(searchMessage, function(response) {
-      console.log('Respuesta completa de búsqueda:', response);
-      
-      if (chrome.runtime.lastError) {
-        console.error('Error de runtime:', chrome.runtime.lastError);
-        addLogEntry('Error de comunicación: ' + chrome.runtime.lastError.message, true);
-        return;
-      }
-      
-      if (response && response.success) {
-        console.log('Búsqueda iniciada con éxito');
-      } else {
-        console.error('Error en respuesta:', response);
-        addLogEntry('Error al iniciar búsqueda: ' + (response?.error || 'Respuesta inválida'), true);
-      }
-    });
+    // Guardar en localStorage para que el content script pueda acceder
+    localStorage.setItem('snap_lead_manager_search_data', JSON.stringify(searchData));
     
-  } catch (error) {
-    console.error('Error al ejecutar búsqueda:', error);
-    addLogEntry('Error en la búsqueda: ' + error.message, true);
-    showError('Error: ' + error.message);
-  }
-}
-
-// Función para actualizar la información de búsqueda
-function updateSearchInfo() {
-  if (state.currentSearchTerm) {
-    let searchInfoHTML = `<p><strong>Término de búsqueda:</strong> ${state.currentSearchTerm}</p>`;
+    // Reiniciar indicador de filtro aplicado
+    localStorage.setItem('snap_lead_manager_city_filter_applied', 'false');
     
-    if (state.currentSearchCity) {
-      searchInfoHTML += `<p><strong>Ciudad:</strong> ${state.currentSearchCity}</p>`;
-    }
+    // Registrar la acción en la consola para depuración
+    console.log('Iniciando búsqueda con datos:', searchData);
     
-    // Mostrar término completo (combinado con ciudad)
-    if (state.currentSearchCity) {
-      searchInfoHTML += `<p><strong>Búsqueda completa:</strong> ${state.currentSearchTerm} (Ciudad: ${state.currentSearchCity})</p>`;
-      
-      // Agregar un mensaje de estado para el filtro de ciudad
-      const cityFilterApplied = localStorage.getItem('snap_lead_manager_city_filter_applied') === 'true';
-      if (cityFilterApplied) {
-        searchInfoHTML += `<p class="status success"><i>✓ Filtro de ciudad aplicado correctamente</i></p>`;
-      } else {
-        searchInfoHTML += `<p class="status"><i>Filtro de ciudad pendiente de aplicar...</i></p>`;
-      }
-    }
+    // Enviar mensaje a la página para iniciar búsqueda
+    window.parent.postMessage({
+      action: 'find_profiles',
+      searchData: searchData
+    }, '*');
     
-    if (currentSearchInfo) {
-      currentSearchInfo.innerHTML = searchInfoHTML;
-      currentSearchInfo.style.display = 'block';
-    }
-  } else if (currentSearchInfo) {
-    currentSearchInfo.style.display = 'none';
-  }
-}
-
-// Funciones para iniciar, pausar y detener el proceso
-async function startProcess() {
-  if (state.isRunning) return;
-  
-  try {
-    updateStatus('Iniciando proceso...', 10);
-    
-    const response = await chrome.runtime.sendMessage({
-      action: 'start'
-    });
-    
-    if (response && response.success) {
-      updateStatus('Proceso iniciado', 15);
-      state.isRunning = true;
-      state.isPaused = false;
-      updateUI();
-    } else {
-      throw new Error(response?.message || 'Error al iniciar el proceso');
-    }
-  } catch (error) {
-    console.error('Error al iniciar:', error);
-    showError('Error: ' + error.message);
-  }
-}
-
-async function pauseProcess() {
-  if (!state.isRunning || state.isPaused) return;
-  
-  try {
-    updateStatus('Pausando proceso...', state.progress);
-    
-    const response = await chrome.runtime.sendMessage({
-      action: 'pause'
-    });
-    
-    if (response && response.success) {
-      updateStatus('Proceso pausado', state.progress);
-      state.isPaused = true;
-      updateUI();
-    } else {
-      throw new Error(response?.message || 'Error al pausar el proceso');
-    }
-  } catch (error) {
-    console.error('Error al pausar:', error);
-    showError('Error: ' + error.message);
-  }
-}
-
-async function stopProcess() {
-  try {
-    console.log('Sidebar: Solicitando detención del proceso');
-    updateStatus('Deteniendo proceso...', state.progress);
-    
-    // Actualizar estado local inmediatamente para mejor UX
-    state.isRunning = false;
+    // Actualizar estado
+    state.isRunning = true;
     state.isPaused = false;
+    state.searchStartTime = Date.now();
+    state.profiles = []; // Limpiar resultados anteriores
+    
+    // Limpiar los resultados previos
+    if (searchResultsList) {
+      searchResultsList.innerHTML = '';
+    }
+    if (resultsSummary) {
+      resultsSummary.innerHTML = '';
+    }
+    
+    updateStatus(`Iniciando búsqueda de ${searchType === 'people' ? 'personas' : 'grupos'}: ${searchTerm}`, 5);
     updateUI();
     
-    // Enviar mensaje al background script
-    const response = await chrome.runtime.sendMessage({
-      action: 'stop'
-    });
+    // Iniciar verificación del estado
+    startStatusChecking();
     
-    console.log('Respuesta a solicitud de detención:', response);
+    addLogEntry(`Búsqueda iniciada: ${searchTerm}${searchCity ? ` en ${searchCity}` : ''}`);
     
-    if (response && response.success) {
-      updateStatus('Proceso detenido', 0);
+  } catch (error) {
+    console.error('Error al iniciar búsqueda:', error);
+    showError(`Error al iniciar búsqueda: ${error.message}`);
+    addLogEntry(`Error al iniciar búsqueda: ${error.message}`, true);
+  }
+}
+
+// Función para pausar/reanudar la búsqueda
+function togglePauseSearch() {
+  try {
+    if (state.isRunning) {
+      state.isPaused = !state.isPaused;
+      
+      // Enviar mensaje a la página
+      window.parent.postMessage({
+        action: state.isPaused ? 'pause_search' : 'resume_search'
+      }, '*');
+      
+      // Feedback visual inmediato
+      updateStatus(state.isPaused ? 'Pausando búsqueda...' : 'Reanudando búsqueda...', state.progress);
+      
+      // Actualizar UI inmediatamente para dar feedback visual
+      pauseButton.textContent = state.isPaused ? 'Reanudar' : 'Pausar';
+      
+      // Actualización completa de la interfaz
+      updateUI();
+      
+      // Agregar entrada en el log
+      addLogEntry(state.isPaused ? 'Búsqueda pausada por el usuario' : 'Búsqueda reanudada por el usuario');
+      
+      // Feedback visual adicional
+      if (state.isPaused) {
+        pauseButton.classList.add('paused');
+        if (currentOperation) currentOperation.textContent = 'Pausado';
+      } else {
+        pauseButton.classList.remove('paused');
+        if (currentOperation) currentOperation.textContent = 'En ejecución';
+      }
+      
+      console.log(`Búsqueda ${state.isPaused ? 'pausada' : 'reanudada'} correctamente`);
+      
+      return true;
     } else {
-      console.warn('Respuesta de detención no exitosa:', response);
-      // Aún así, mantener el estado como detenido
-      updateStatus('Proceso detenido (con advertencias)', 0);
+      console.warn('No hay búsqueda en curso para pausar/reanudar');
+      return false;
     }
   } catch (error) {
-    console.error('Error al detener proceso:', error);
+    console.error('Error al pausar/reanudar búsqueda:', error);
+    showError(`Error: ${error.message}`);
+    addLogEntry(`Error al pausar/reanudar búsqueda: ${error.message}`, true);
+    return false;
+  }
+}
+
+// Función para detener la búsqueda
+function stopSearch() {
+  try {
+    if (!state.isRunning) {
+      console.warn('No hay búsqueda en curso para detener');
+      return false;
+    }
     
-    // A pesar del error, asegurar que la UI muestre el estado como detenido
+    // Mensaje visual inmediato
+    addLogEntry('Deteniendo búsqueda...');
+    
+    // Enviar mensaje a la página para detener la búsqueda
+    window.parent.postMessage({
+      action: 'stop_search'
+    }, '*');
+    
+    // Actualizar estado inmediatamente para retroalimentación visual
     state.isRunning = false;
     state.isPaused = false;
+    
+    // Detener verificación de estado
+    stopStatusChecking();
+    
+    // Reset UI
+    updateStatus('Búsqueda detenida por el usuario', 0);
+    pauseButton.disabled = true;
+    pauseButton.textContent = 'Pausar';
+    pauseButton.classList.remove('paused');
+    stopButton.disabled = true;
+    
+    // Actualización completa de la interfaz
     updateUI();
     
-    updateStatus('Proceso detenido (con errores)', 0);
-    showError('Error al detener: ' + (error.message || 'Error desconocido'));
+    // Agregar entrada en el log
+    addLogEntry('Búsqueda detenida por el usuario');
+    
+    console.log('Búsqueda detenida correctamente');
+    return true;
+  } catch (error) {
+    console.error('Error al detener búsqueda:', error);
+    showError(`Error al detener búsqueda: ${error.message}`);
+    addLogEntry(`Error al detener búsqueda: ${error.message}`, true);
+    return false;
   }
 }
 
@@ -426,282 +413,89 @@ async function stopProcess() {
 function updateResultsList(profiles) {
   if (!searchResultsList) return;
   
+  // Registrar lo que estamos recibiendo
+  console.log('Actualizando lista de resultados con:', profiles);
+  
   // Limpiar lista de resultados
   searchResultsList.innerHTML = '';
   
   // Actualizar el resumen de resultados
   if (resultsSummary) {
-    resultsSummary.innerHTML = `<p>Se encontraron <strong>${profiles.length}</strong> perfiles</p>`;
+    resultsSummary.innerHTML = `<p>Se encontraron <strong>${profiles.length}</strong> ${state.currentSearchType === 'people' ? 'perfiles' : 'grupos'}</p>`;
+  }
+  
+  // Si no hay perfiles, mostrar mensaje
+  if (!profiles || profiles.length === 0) {
+    if (resultsSummary) {
+      resultsSummary.innerHTML = `<p>Se encontraron <strong>0</strong> ${state.currentSearchType === 'people' ? 'perfiles' : 'grupos'}</p>`;
+    }
+    
+    const emptyMessage = document.createElement('li');
+    emptyMessage.className = 'result-empty';
+    emptyMessage.textContent = `No se encontraron ${state.currentSearchType === 'people' ? 'perfiles' : 'grupos'} para esta búsqueda.`;
+    searchResultsList.appendChild(emptyMessage);
+    return;
   }
   
   // Agregar cada perfil a la lista
-  profiles.forEach(profile => {
+  profiles.forEach((profile, index) => {
     const listItem = document.createElement('li');
     listItem.className = 'result-item';
     
+    // Determinar el tipo de resultado (persona o grupo)
+    const isPerson = !profile.groupUrl;
+    
     // Crear contenido del item
-    listItem.innerHTML = `
+    let htmlContent = `
       <div class="result-header">
-        <span class="result-name">${profile.name}</span>
-        <a href="${profile.url}" target="_blank" class="result-link">Ver</a>
+        <span class="result-name">${profile.name || 'Sin nombre'}</span>
+        <a href="${isPerson ? (profile.profileUrl || '#') : (profile.groupUrl || '#')}" target="_blank" class="result-link">Ver</a>
       </div>
-      ${profile.info ? `<div class="result-info">${profile.info}</div>` : ''}
+      <div class="result-info">
     `;
     
+    // Agregar información adicional según el tipo
+    if (isPerson) {
+      if (profile.location) htmlContent += `<div>📍 ${profile.location}</div>`;
+      if (profile.occupation) htmlContent += `<div>💼 ${profile.occupation}</div>`;
+    } else {
+      if (profile.groupType) htmlContent += `<div>🔒 ${profile.groupType}</div>`;
+      if (profile.members) htmlContent += `<div>👥 ${profile.members}</div>`;
+      if (profile.frequency) htmlContent += `<div>📊 ${profile.frequency}</div>`;
+    }
+    
+    htmlContent += `</div>`;
+    
+    listItem.innerHTML = htmlContent;
     searchResultsList.appendChild(listItem);
   });
 }
 
-// Función para abrir el sidebar en una ventana separada
-function openSidebarInWindow() {
-  // Verificar si estamos en un iframe
-  const isInIframe = window !== window.top;
-  
-  // Si ya estamos en una ventana separada, no hacer nada
-  if (!isInIframe) {
-    return;
-  }
-  
-  // Enviar mensaje al content script para que notifique al background
+// Función para abrir en ventana separada
+function openInWindow() {
+  // Solicitar al script de fondo que abra una ventana con el sidebar
   window.parent.postMessage({
-    from: 'snap-lead-manager',
     action: 'open_in_window'
   }, '*');
 }
 
-// Listener para mensajes del iframe
-window.addEventListener('message', (event) => {
-  // Verificar que el mensaje viene de nuestra extensión
-  if (event.data && event.data.from === 'snap-lead-manager') {
-    console.log('Sidebar recibió mensaje:', event.data);
-    
-    if (event.data.action === 'search') {
-      // Iniciar una búsqueda
-      const searchData = event.data.data || {};
-      console.log('Solicitando búsqueda con datos:', searchData);
-      
-      // Guardar el término de búsqueda y datos completos en localStorage para recuperación
-      if (event.data.searchTerm) {
-        localStorage.setItem('snap_lead_manager_search_term', event.data.searchTerm);
-        if (searchData) {
-          localStorage.setItem('snap_lead_manager_search_data', JSON.stringify(searchData));
-        }
-      }
-      
-      // Actualizar los datos de búsqueda en el estado
-      state.currentSearchTerm = event.data.searchTerm;
-      state.currentSearchCity = searchData.city || '';
-      
-      // Actualizar el display de info de búsqueda
-      updateSearchInfo();
-      
-      // Enviar mensaje al script de fondo para iniciar la búsqueda
-      chrome.runtime.sendMessage({
-        action: 'perform_search',
-        searchTerm: event.data.searchTerm,
-        searchData: searchData
-      }, (response) => {
-        if (response && response.success) {
-          console.log('Búsqueda iniciada correctamente');
-          
-          // Aplicar filtros (específicamente el de ciudad) después de un tiempo para que cargue la página
-          setTimeout(() => {
-            chrome.runtime.sendMessage({ action: 'apply_filters' }, (filterResponse) => {
-              if (filterResponse && filterResponse.success) {
-                console.log('Filtros aplicados correctamente');
-              } else {
-                console.error('Error al aplicar filtros:', filterResponse?.error || 'Sin respuesta');
-              }
-            });
-          }, 5000); // Dar tiempo para que se cargue la página de resultados
-        } else {
-          console.error('Error al iniciar búsqueda:', response?.error || 'Sin respuesta');
-          
-          // Notificar al iframe el error
-          const iframe = document.getElementById('snap-lead-iframe');
-          if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage({
-              action: 'search_error',
-              error: response?.error || 'Error al iniciar la búsqueda'
-            }, '*');
-          }
-        }
-      });
-    } else if (event.data.action === 'close_sidebar') {
-      // Cerrar el sidebar
-      const sidebar = document.getElementById('snap-lead-manager-sidebar');
-      if (sidebar) {
-        document.body.removeChild(sidebar);
-      }
-    } else if (event.data.action === 'toggle_sidebar') {
-      // Alternar visibilidad del sidebar
-      const sidebar = document.getElementById('snap-lead-manager-sidebar');
-      
-      if (sidebar) {
-        // Si está colapsado, expandir y viceversa
-        const isCollapsed = sidebar.classList.contains('snap-lead-manager-collapsed');
-        
-        if (isCollapsed) {
-          sidebar.classList.remove('snap-lead-manager-collapsed');
-        } else {
-          sidebar.classList.add('snap-lead-manager-collapsed');
-        }
-        
-        // Guardar estado en localStorage
-        localStorage.setItem('snap_lead_manager_sidebar_collapsed', isCollapsed ? 'false' : 'true');
-      }
-    } else if (event.data.action === 'apply_filters') {
-      // Solicitar aplicación de filtros
-      console.log('Solicitando aplicar filtros desde sidebar');
-      
-      // Reiniciar el indicador de filtro aplicado
-      localStorage.setItem('snap_lead_manager_city_filter_applied', 'false');
-      
-      // Enviar mensaje a content script para aplicar filtros
-      chrome.runtime.sendMessage({ action: 'apply_filters' }, (response) => {
-        if (response && response.success) {
-          console.log('Filtros aplicados correctamente');
-          
-          // Notificar al iframe del éxito
-          const iframe = document.getElementById('snap-lead-iframe');
-          if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage({
-              action: 'filters_applied',
-              success: true
-            }, '*');
-          }
-        } else {
-          console.error('Error al aplicar filtros:', response?.error || 'Sin respuesta');
-          
-          // Notificar al iframe del error
-          const iframe = document.getElementById('snap-lead-iframe');
-          if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage({
-              action: 'filters_error',
-              error: response?.error || 'Error al aplicar filtros'
-            }, '*');
-          }
-        }
-      });
-    } else if (event.data.action === 'filter_status_update') {
-      // Actualizar el estado del filtro en la UI
-      const filterStatusElement = document.querySelector('#current-search-info p.status i');
-      if (filterStatusElement) {
-        if (event.data.filterApplied) {
-          filterStatusElement.textContent = '✓ Filtro de ciudad aplicado correctamente';
-          filterStatusElement.parentElement.className = 'status success';
-        } else {
-          filterStatusElement.textContent = 'Filtro de ciudad pendiente de aplicar...';
-          filterStatusElement.parentElement.className = 'status';
-        }
-      }
-    }
-  }
-});
-
-// Comunicación con la extensión (background script)
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Sidebar recibió mensaje del background:', message);
-  
-  if (message.action === 'status_update') {
-    try {
-      // Actualizar estado con la información recibida
-      updateStatus(message.message, message.progress || state.progress, message.error || false);
-      sendResponse({ success: true });
-    } catch (error) {
-      console.error('Error al procesar mensaje status_update:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  } else if (message.action === 'update_profiles') {
-    try {
-      // Actualizar perfiles encontrados
-      state.profiles = message.profiles || [];
-      updateResultsList(state.profiles);
-      
-      // Mostrar mensaje en el log
-      addLogEntry(`Se recibieron ${state.profiles.length} perfiles del background`);
-      sendResponse({ success: true });
-    } catch (error) {
-      console.error('Error al procesar mensaje update_profiles:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  } else if (message.type === 'status_update') {
-    try {
-      // Manejar actualización de estado desde el background script
-      updateStatus(message.message, message.progress || state.progress, message.error || false);
-      
-      // Actualizar el estado de ejecución
-      if (message.finished) {
-        state.isRunning = false;
-        state.isPaused = false;
-      }
-      
-      updateUI();
-      sendResponse({ success: true });
-    } catch (error) {
-      console.error('Error al procesar mensaje type:status_update:', error);
-      sendResponse({ success: false, error: error.message });
-    }
-  } else {
-    sendResponse({ success: false, message: 'Acción no reconocida' });
-  }
-  
-  return true; // Mantener la conexión abierta para respuesta asíncrona
-});
-
-// Listener para mensajes del contenido principal
-window.addEventListener('message', (event) => {
-  // Verificar que el mensaje viene de nuestra extensión
-  if (event.data && event.data.action) {
-    console.log('Sidebar recibió mensaje:', event.data);
-    
-    const { action, success, error, message, progress } = event.data;
-    
-    if (action === 'search_response') {
-      // Procesar respuesta de búsqueda enviada vía postMessage
-      if (success) {
-        addLogEntry('Búsqueda iniciada con éxito', false);
-      } else {
-        const errorMsg = error || 'Error desconocido al iniciar la búsqueda';
-        console.error('Error en búsqueda:', errorMsg);
-        addLogEntry(`Error: ${errorMsg}`, true);
-        showError(`Error: ${errorMsg}`);
-      }
-    } else if (action === 'status_update') {
-      // Actualizar estado enviado vía postMessage
-      try {
-        updateStatus(message || 'Actualizando...', progress || 0, !!error);
-        if (error) {
-          addLogEntry(`Error: ${message}`, true);
-        } else {
-          addLogEntry(message || 'Actualizando...', false);
-        }
-        updateUI();
-      } catch (e) {
-        console.error('Error al procesar status_update vía postMessage:', e);
-      }
-    }
-  }
-});
-
-// Inicializar UI
-function initializeDOMReferences() {
-  console.log('Inicializando referencias DOM');
-  
-  // Elementos principales
+// Inicializar referencias a elementos DOM
+function initDOMReferences() {
+  searchTypeSelect = document.getElementById('search-type');
   searchTermInput = document.getElementById('search-term');
   searchCityInput = document.getElementById('search-city');
+  cityFilterGroup = document.getElementById('city-filter-group');
   searchButton = document.getElementById('search-button');
   pauseButton = document.getElementById('pause-button');
   stopButton = document.getElementById('stop-button');
-  openWindowButton = document.getElementById('open-window-btn');
   statusMessage = document.getElementById('status-message');
   progressBar = document.getElementById('progress-bar');
   searchResultsList = document.getElementById('search-results');
   currentSearchInfo = document.getElementById('current-search-info');
+  openWindowButton = document.getElementById('open-window-btn');
   
   // Elementos detallados
-  searchStatusContainer = document.getElementById('search-status-container'); // Asegurarse de que el ID sea correcto
+  searchStatusContainer = document.getElementById('search-status-container');
   detailedStatusMessage = document.getElementById('detailed-status-message');
   detailedProgressBar = document.getElementById('detailed-progress-bar');
   progressPercentage = document.getElementById('progress-percentage');
@@ -709,896 +503,298 @@ function initializeDOMReferences() {
   elapsedTime = document.getElementById('elapsed-time');
   scrollLogContainer = document.getElementById('scroll-log-container');
   resultsSummary = document.getElementById('results-summary');
-  
-  // Realizar un log para depuración
-  console.log('Estado de las variables de elementos críticos:', {
-    searchTermInput: !!searchTermInput,
-    searchCityInput: !!searchCityInput,
-    searchButton: !!searchButton,
-    searchStatusContainer: !!searchStatusContainer,
-    pauseButton: !!pauseButton,
-    stopButton: !!stopButton
-  });
 }
 
-initializeDOMReferences();
+// Función para manejar el cambio de tipo de búsqueda
+function handleSearchTypeChange() {
+  const searchType = searchTypeSelect.value;
+  state.currentSearchType = searchType;
+  
+  // Actualizar el placeholder según el tipo
+  if (searchTermInput) {
+    searchTermInput.placeholder = searchType === 'people' 
+      ? 'Nombre, profesión, etc.' 
+      : 'Nombre o temática del grupo';
+  }
+  
+  // Actualizar placeholder de ciudad
+  if (searchCityInput) {
+    searchCityInput.placeholder = searchType === 'people'
+      ? 'Ej: Madrid, Barcelona'
+      : 'Filtrar grupos por ciudad';
+  }
+}
 
-// Notificar al content script que el sidebar está listo
-try {
-  window.parent.postMessage({ 
-    from: 'snap-lead-manager',
-    action: 'sidebar_loaded' 
+// Manejador de mensajes recibidos de la página
+function handleReceivedMessage(event) {
+  const message = event.data;
+  
+  if (!message || !message.action) return;
+  
+  // No loggear status_update para evitar spam en consola
+  if (message.action !== 'status_update') {
+    console.log('Mensaje recibido:', message.action);
+  }
+  
+  switch (message.action) {
+    case 'search_result':
+      if (message.result) {
+        console.log('Recibido search_result:', message.result);
+        
+        // Aceptar tanto 'profiles' como 'results' para compatibilidad con ambos tipos de búsqueda
+        const results = message.result.profiles || message.result.results || [];
+        state.profiles = results;
+        
+        // Actualizar la cuenta global
+        state.foundCount = results.length;
+        
+        // Actualizar la lista de resultados
+        updateResultsList(state.profiles);
+        
+        // Mostrar mensaje personalizado si hay uno
+        if (message.result.message) {
+          addLogEntry(message.result.message);
+        } else {
+          addLogEntry(`Se encontraron ${state.profiles.length} ${state.currentSearchType === 'people' ? 'perfiles' : 'grupos'}.`);
+        }
+        
+        if (message.result.success) {
+          state.isRunning = false;
+          state.isPaused = false;
+          updateStatus('Búsqueda completada', 100);
+          updateUI();
+        }
+      }
+      break;
+    
+    // Mensaje explícito de que la búsqueda ha terminado
+    case 'search_complete':
+      state.isRunning = false;
+      state.isPaused = false;
+      state.progress = 100;
+      updateStatus('Búsqueda completada', 100);
+      
+      // Detener cualquier actualización de estado
+      clearInterval(state.statusUpdateInterval);
+      
+      // Actualizar la UI
+      updateUI();
+      break;
+    
+    // Nueva acción para manejar resultados enviados con 'found_results'
+    case 'found_results':
+      if (message.results) {
+        console.log('Recibido found_results:', message.results);
+        state.profiles = message.results;
+        state.foundCount = message.results.length;
+        updateResultsList(state.profiles);
+      }
+      break;
+    
+    case 'status_update':
+      updateStatus(message.status || 'Actualizando...', message.progress || state.progress);
+      break;
+    
+    case 'filter_status_update':
+      // Actualizar el estado del filtro de ciudad en la UI
+      if (message.filterApplied && state.currentSearchCity) {
+        const filterStatusElement = document.querySelector('#current-search-info p.status i');
+        if (filterStatusElement) {
+          filterStatusElement.textContent = '✓ Filtro de ciudad aplicado correctamente';
+          filterStatusElement.parentElement.className = 'status success';
+        }
+        localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+      }
+      break;
+      
+    case 'pause_result':
+      // Confirmar que la pausa fue procesada
+      if (message.result && message.result.success) {
+        // Asegurarse de que el estado refleje la pausa
+        if (!state.isPaused && pauseButton.textContent === 'Reanudar') {
+          state.isPaused = true;
+          updateUI();
+          addLogEntry('Búsqueda pausada confirmada');
+        }
+      }
+      break;
+      
+    case 'resume_result':
+      // Confirmar que se reanudó la búsqueda
+      if (message.result && message.result.success) {
+        // Asegurarse de que el estado refleje la reanudación
+        if (state.isPaused && pauseButton.textContent === 'Pausar') {
+          state.isPaused = false;
+          updateUI();
+          addLogEntry('Búsqueda reanudada confirmada');
+        }
+      }
+      break;
+      
+    case 'stop_result':
+      // Confirmar que se detuvo la búsqueda
+      if (message.result && message.result.success) {
+        // Asegurarse de que el estado refleje la detención
+        state.isRunning = false;
+        state.isPaused = false;
+        state.progress = 0;
+        updateStatus('Búsqueda detenida', 0);
+        updateUI();
+        addLogEntry('Búsqueda detenida confirmada');
+      }
+      break;
+      
+    case 'sidebar_ready':
+      // El content script nos informa que está listo para recibir mensajes
+      console.log('Conexión con content script establecida');
+      break;
+  }
+}
+
+// Inicialización al cargar la página
+document.addEventListener('DOMContentLoaded', () => {
+  // Inicializar referencias
+  initDOMReferences();
+  
+  // Añadir estilos CSS adicionales para estados de botones
+  const style = document.createElement('style');
+  style.textContent = `
+    .btn.paused {
+      background-color: #f0ad4e;
+      color: white;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  `;
+  document.head.appendChild(style);
+  
+  // Configurar manejadores de eventos
+  if (searchTypeSelect) {
+    searchTypeSelect.addEventListener('change', handleSearchTypeChange);
+    handleSearchTypeChange(); // Aplicar configuración inicial
+  }
+  
+  if (searchButton) {
+    searchButton.addEventListener('click', performSearch);
+  }
+  
+  if (pauseButton) {
+    pauseButton.addEventListener('click', togglePauseSearch);
+    pauseButton.disabled = !state.isRunning; // Inicialmente deshabilitado
+  }
+  
+  if (stopButton) {
+    stopButton.addEventListener('click', stopSearch);
+    stopButton.disabled = !state.isRunning; // Inicialmente deshabilitado
+  }
+  
+  if (openWindowButton) {
+    openWindowButton.addEventListener('click', openInWindow);
+  }
+  
+  // Configurar manejo de tecla Enter en inputs
+  if (searchTermInput) {
+    searchTermInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        performSearch();
+      }
+    });
+  }
+  
+  if (searchCityInput) {
+    searchCityInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        performSearch();
+      }
+    });
+  }
+  
+  // Restaurar datos de búsqueda guardados si existen
+  const savedSearchData = localStorage.getItem('snap_lead_manager_search_data');
+  if (savedSearchData) {
+    try {
+      const searchData = JSON.parse(savedSearchData);
+      
+      // Actualizar campos de formulario
+      if (searchData.term && searchTermInput) {
+        searchTermInput.value = searchData.term;
+        state.currentSearchTerm = searchData.term;
+      }
+      
+      if (searchData.city && searchCityInput) {
+        searchCityInput.value = searchData.city;
+        state.currentSearchCity = searchData.city;
+      }
+      
+      if (searchData.type && searchTypeSelect) {
+        searchTypeSelect.value = searchData.type;
+        state.currentSearchType = searchData.type;
+        handleSearchTypeChange();
+      }
+      
+      // Actualizar información de búsqueda
+      updateSearchInfo();
+    } catch (error) {
+      console.error('Error al restaurar datos de búsqueda:', error);
+    }
+  }
+  
+  // Revisar si hay búsqueda en curso
+  getSearchStatus();
+  
+  // Notificar que el sidebar está listo
+  window.parent.postMessage({
+    action: 'sidebar_ready'
   }, '*');
   
-  // Solicitar estado actual al background con manejo de errores
-  try {
-    chrome.runtime.sendMessage({ action: 'get_state' }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error al solicitar estado:', chrome.runtime.lastError);
-        return;
-      }
-      
-      if (response) {
-        console.log('Estado recibido del background:', response);
-        
-        // Si hay información de búsqueda, restaurarla
-        if (response.currentSearchTerm) {
-          state.currentSearchTerm = response.currentSearchTerm;
-          
-          if (response.searchData && response.searchData.city) {
-            state.currentSearchCity = response.searchData.city;
-          }
-          
-          // Actualizar campos del formulario si existen
-          if (searchTermInput) searchTermInput.value = state.currentSearchTerm;
-          if (searchCityInput) searchCityInput.value = state.currentSearchCity;
-          
-          // Actualizar información mostrada
-          try {
-            updateSearchInfo();
-          } catch (error) {
-            console.error('Error al actualizar información de búsqueda:', error);
-          }
-          
-          // Marcar como restaurado
-          state.restored = true;
-          try {
-            addLogEntry('Estado de búsqueda restaurado');
-          } catch (error) {
-            console.error('Error al agregar entrada de log:', error);
-          }
-          
-          // Si hay un término de búsqueda, también restaurar los criterios
-          if (state.currentSearchTerm) {
-            try {
-              if (response.fullQuery) {
-                addLogEntry(`Búsqueda restaurada: "${response.fullQuery}"`);
-              } else {
-                const cityInfo = state.currentSearchCity ? ` en ${state.currentSearchCity}` : '';
-                addLogEntry(`Búsqueda restaurada: "${state.currentSearchTerm}${cityInfo}"`);
-              }
-            } catch (error) {
-              console.error('Error al agregar entrada de log de búsqueda:', error);
-            }
-          }
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Error al enviar mensaje get_state:', error);
-  }
-  
-  // Solicitar los perfiles encontrados (si existen)
-  try {
-    chrome.runtime.sendMessage({ action: 'get_profiles' }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error al solicitar perfiles:', chrome.runtime.lastError);
-        return;
-      }
-      
-      if (response && response.success && response.profiles && response.profiles.length > 0) {
-        state.profiles = response.profiles;
-        try {
-          updateResultsList(state.profiles);
-          addLogEntry(`Se recuperaron ${state.profiles.length} perfiles`);
-        } catch (error) {
-          console.error('Error al procesar perfiles:', error);
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Error al enviar mensaje get_profiles:', error);
-  }
-  
-  // Solicitar el estado actual del proceso
-  try {
-    chrome.runtime.sendMessage({ action: 'get_status' }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error al solicitar estatus:', chrome.runtime.lastError);
-        return;
-      }
-      
-      if (response) {
-        state.isRunning = response.isRunning || false;
-        state.isPaused = response.isPaused || false;
-        
-        if (response.message) {
-          try {
-            updateStatus(response.message, response.progress || 0);
-          } catch (error) {
-            console.error('Error al actualizar estado:', error);
-          }
-        }
-        
-        try {
-          updateUI();
-        } catch (error) {
-          console.error('Error al actualizar UI:', error);
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Error al enviar mensaje get_status:', error);
-  }
-  
-} catch (error) {
-  console.error('Error al comunicarse con el content script:', error);
-}
-
-// Listener para mensajes de content script y background
-window.addEventListener('message', (event) => {
-  // Verificar que el mensaje viene de nuestra extensión
-  if (event.data && event.data.action) {
-    console.log('Sidebar recibió mensaje:', event.data);
-    
-    if (event.data.action === 'status_update') {
-      // Actualizar estado con la información recibida
-      updateStatus(event.data.message, event.data.progress || state.progress, event.data.error || false);
-    } else if (event.data.action === 'restore_search_info') {
-      // Restaurar información de búsqueda anterior
-      state.currentSearchTerm = event.data.searchTerm || '';
-      
-      if (event.data.searchData && event.data.searchData.city) {
-        state.currentSearchCity = event.data.searchData.city;
-      }
-      
-      // Actualizar campos del formulario
-      if (searchTermInput) searchTermInput.value = state.currentSearchTerm;
-      if (searchCityInput) searchCityInput.value = state.currentSearchCity;
-      
-      // Actualizar información mostrada
-      updateSearchInfo();
-      
-      // Marcar como restaurado
-      state.restored = true;
-      addLogEntry('Estado de búsqueda restaurado');
-      
-      // Si hay un término de búsqueda, también restaurar los criterios
-      if (state.currentSearchTerm) {
-        if (event.data.fullQuery) {
-          addLogEntry(`Búsqueda restaurada: "${event.data.fullQuery}"`);
-        } else {
-          const cityInfo = state.currentSearchCity ? ` en ${state.currentSearchCity}` : '';
-          addLogEntry(`Búsqueda restaurada: "${state.currentSearchTerm}${cityInfo}"`);
-        }
-      }
-    } else if (event.data.action === 'update_profiles') {
-      // Actualizar perfiles encontrados
-      state.profiles = event.data.profiles || [];
-      updateResultsList(state.profiles);
-      
-      // Mostrar mensaje en el log
-      addLogEntry(`Se actualizaron los perfiles encontrados: ${state.profiles.length} perfiles`);
-    }
-  }
+  updateUI();
 });
 
-// Función para limpiar errores
-function clearError() {
-  const errorElem = document.getElementById('snap-lead-manager-error');
-  if (errorElem) {
-    errorElem.style.display = 'none';
-    errorElem.textContent = '';
+// Función para obtener el estado actual de búsqueda
+function getSearchStatus() {
+  window.parent.postMessage({
+    action: 'get_search_status'
+  }, '*');
+}
+
+// Inicializar un identificador para el intervalo
+state.statusUpdateInterval = null;
+
+// Función para iniciar la verificación periódica del estado
+function startStatusChecking() {
+  // Limpiar cualquier intervalo existente
+  if (state.statusUpdateInterval) {
+    clearInterval(state.statusUpdateInterval);
+  }
+  
+  // Solo iniciar si está en búsqueda activa
+  if (state.isRunning) {
+    state.statusUpdateInterval = setInterval(getSearchStatus, 3000);
+    console.log('Iniciada verificación periódica de estado');
   }
 }
 
-// Función para mostrar errores
-function showError(message) {
-  const sidebar = document.getElementById('snap-lead-manager-sidebar');
-  if (!sidebar) return;
-  
-  let errorElem = document.getElementById('snap-lead-manager-error');
-  
-  if (!errorElem) {
-    errorElem = document.createElement('div');
-    errorElem.id = 'snap-lead-manager-error';
-    errorElem.style.cssText = `
-      position: absolute;
-      bottom: 10px;
-      left: 10px;
-      right: 10px;
-      background-color: #ff4d4d;
-      color: white;
-      padding: 10px;
-      border-radius: 5px;
-      font-size: 14px;
-      z-index: 10000;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-      text-align: center;
-      display: none;
-    `;
-    
-    // Agregar botón para cerrar
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = '✕';
-    closeBtn.style.cssText = `
-      position: absolute;
-      top: 5px;
-      right: 5px;
-      background: none;
-      border: none;
-      color: white;
-      font-size: 16px;
-      cursor: pointer;
-    `;
-    closeBtn.onclick = clearError;
-    
-    errorElem.appendChild(closeBtn);
-    sidebar.appendChild(errorElem);
-  }
-  
-  // Mostrar el mensaje
-  errorElem.style.display = 'block';
-  errorElem.textContent = message;
-  
-  // Cerrar automáticamente después de 10 segundos
-  setTimeout(clearError, 10000);
-}
-
-// Inicialización de la UI
-document.addEventListener('DOMContentLoaded', () => {
-  // Obtener referencias a elementos del DOM
-  searchTermInput = document.getElementById('search-term');
-  searchCityInput = document.getElementById('search-city');
-  searchButton = document.getElementById('search-button');
-  pauseButton = document.getElementById('pause-button');
-  stopButton = document.getElementById('stop-button');
-  openWindowButton = document.getElementById('open-window-btn');
-  statusMessage = document.getElementById('status-message');
-  progressBar = document.getElementById('progress-bar');
-  searchResultsList = document.getElementById('search-results');
-  currentSearchInfo = document.getElementById('current-search-info');
-  
-  // Cargar datos de búsqueda guardados
-  const savedSearchTerm = localStorage.getItem('snap_lead_manager_search_term');
-  const savedSearchData = localStorage.getItem('snap_lead_manager_search_data');
-  
-  if (savedSearchTerm) {
-    searchTermInput.value = savedSearchTerm;
-    
-    if (savedSearchData) {
-      try {
-        const searchData = JSON.parse(savedSearchData);
-        if (searchData.city) {
-          searchCityInput.value = searchData.city;
-        }
-        
-        // Mostrar información de búsqueda actual
-        currentSearchInfo.innerHTML = `
-          <strong>Búsqueda actual:</strong> ${savedSearchTerm}
-          ${searchData.city ? `<br><strong>Ciudad:</strong> ${searchData.city}` : ''}
-        `;
-        currentSearchInfo.style.display = 'block';
-      } catch (error) {
-        console.error('Error al parsear datos de búsqueda guardados:', error);
-      }
-    }
-  }
-  
-  // Event listener para botón de búsqueda
-  searchButton.addEventListener('click', () => {
-    try {
-      const searchTerm = searchTermInput.value.trim();
-      const searchCity = searchCityInput.value.trim();
-      
-      if (!searchTerm) {
-        throw new Error('Por favor ingresa un término de búsqueda');
-      }
-      
-      console.log('Iniciando búsqueda con término:', searchTerm, 'y ciudad:', searchCity);
-      
-      // Crear mensaje con estructura exacta
-      const searchMessage = {
-        action: 'search',
-        searchTerm: searchTerm,
-        searchData: {
-          city: searchCity,
-          term: searchTerm
-        }
-      };
-      
-      console.log('Enviando mensaje de búsqueda:', searchMessage);
-      
-      // Enviar mensaje con estructura verificada
-      chrome.runtime.sendMessage(searchMessage, function(response) {
-        console.log('Respuesta completa de búsqueda:', response);
-        
-        if (chrome.runtime.lastError) {
-          console.error('Error de runtime:', chrome.runtime.lastError);
-          addLogEntry('Error de comunicación: ' + chrome.runtime.lastError.message, true);
-          return;
-        }
-        
-        if (response && response.success) {
-          console.log('Búsqueda iniciada con éxito');
-        } else {
-          console.error('Error en respuesta:', response);
-          addLogEntry('Error al iniciar búsqueda: ' + (response?.error || 'Respuesta inválida'), true);
-        }
-      });
-      
-    } catch (error) {
-      console.error('Error al ejecutar búsqueda:', error);
-      addLogEntry('Error en la búsqueda: ' + error.message, true);
-      showError('Error: ' + error.message);
-    }
-  });
-  
-  // Event listener para tecla Enter en campos de búsqueda
-  searchTermInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      try {
-        performSearch();
-      } catch (error) {
-        console.error('Error al ejecutar búsqueda con Enter:', error);
-        addLogEntry('Error en la búsqueda: ' + error.message, true);
-        showError('Error: ' + error.message);
-      }
-    }
-  });
-  
-  searchCityInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      try {
-        performSearch();
-      } catch (error) {
-        console.error('Error al ejecutar búsqueda con Enter:', error);
-        addLogEntry('Error en la búsqueda: ' + error.message, true);
-        showError('Error: ' + error.message);
-      }
-    }
-  });
-  
-  // Event listeners para botones de control
-  pauseButton.addEventListener('click', () => {
-    console.log('Botón pausa presionado');
-    
-    // Enviar mensaje al content script
-    window.parent.postMessage({
-      from: 'snap-lead-manager',
-      action: 'pause'
-    }, '*');
-    
-    // También enviar mensaje al background script
-    chrome.runtime.sendMessage({
-      action: 'pause'
-    }, (response) => {
-      console.log('Respuesta del background script a pause:', response);
-    });
-    
-    // Actualizar UI
-    state.isPaused = !state.isPaused;
-    updateStatus(state.isPaused ? 'Proceso pausado' : 'Reanudando proceso...', state.progress);
-    updateUI();
-  });
-  
-  stopButton.addEventListener('click', () => {
-    console.log('Botón detener presionado');
-    
-    // Enviar mensaje al content script
-    window.parent.postMessage({
-      from: 'snap-lead-manager',
-      action: 'stop'
-    }, '*');
-    
-    // También enviar mensaje al background script
-    chrome.runtime.sendMessage({
-      action: 'stop'
-    }, (response) => {
-      console.log('Respuesta del background script a stop:', response);
-    });
-    
-    // Actualizar UI
-    state.isRunning = false;
-    state.isPaused = false;
-    updateStatus('Proceso detenido', 0);
-    updateUI();
-  });
-  
-  // Event listener para botón de abrir en ventana
-  openWindowButton.addEventListener('click', openSidebarInWindow);
-  
-  // Asegurarnos de que los botones estén habilitados independientemente del estado
-  if (pauseButton) pauseButton.disabled = false;
-  if (stopButton) stopButton.disabled = false;
-  
-  // Verificar estado inicial
-  chrome.runtime.sendMessage({ action: 'get_status' }, (response) => {
-    if (response) {
-      updateUIStatus(response);
-    }
-  });
-  
-  // Función para actualizar el estado en la UI
-  function updateUIStatus(status) {
-    if (status.isRunning) {
-      pauseButton.disabled = false;
-      stopButton.disabled = false;
-      
-      statusMessage.textContent = status.message || 'En ejecución';
-      
-      if (status.progress !== undefined) {
-        progressBar.style.width = `${status.progress}%`;
-      }
-    } else {
-      pauseButton.disabled = false;
-      stopButton.disabled = false;
-      statusMessage.textContent = status.message || 'Listo para comenzar';
-    }
-    
-    // Actualizar la barra de progreso
-    if (status.progress !== undefined) {
-      progressBar.style.width = `${status.progress}%`;
-    }
-  }
-});
-
-// Función para mostrar perfiles como lista ordenada con numeración visible
-function displayProfileLinks(profiles) {
-  console.log('Mostrando perfiles como lista numerada', profiles);
-  
-  // Verificar si ya estamos en proceso de mostrar perfiles para evitar bucles
-  if (window.isDisplayingProfiles) {
-    console.log('Ya hay un proceso de mostrar perfiles en curso, evitando bucle');
-    return;
-  }
-  
-  // Marcar que estamos en proceso de mostrar perfiles
-  window.isDisplayingProfiles = true;
-  
-  try {
-    // Crear o obtener el contenedor de resultados
-    let resultsContainer = document.getElementById('profile-results');
-    if (!resultsContainer) {
-      resultsContainer = document.createElement('div');
-      resultsContainer.id = 'profile-results';
-      resultsContainer.className = 'profile-results-container';
-      
-      // Añadir al contenido principal
-      const mainContent = document.querySelector('.sidebar-content') || document.body;
-      mainContent.appendChild(resultsContainer);
-    }
-    
-    // Limpiar contenido anterior
-    resultsContainer.innerHTML = '';
-    
-    // Título de la sección
-    const headerDiv = document.createElement('div');
-    headerDiv.className = 'results-header';
-    headerDiv.innerHTML = `<h3>RESULTADOS</h3><p>Se encontraron ${profiles.length} perfiles</p>`;
-    resultsContainer.appendChild(headerDiv);
-    
-    // Crear lista con IDs explícitos para mantener compatibilidad
-    const searchResults = document.createElement('ul');
-    searchResults.id = 'search-results';
-    searchResults.className = 'results-list numbered';
-    
-    // Añadir cada perfil a la lista con número incluido
-    profiles.forEach((profile, index) => {
-      // Verificar que el perfil tenga los datos necesarios
-      if (!profile || !profile.url) {
-        console.warn('Perfil inválido en posición', index, profile);
-        return; // Saltar este perfil
-      }
-      
-      const resultItem = document.createElement('li');
-      resultItem.className = 'result-item';
-      
-      // Determinar el nombre a mostrar
-      let displayName = profile.name;
-      if (!displayName || displayName === 'Nombre no disponible') {
-        // Intentar extraer un nombre de la URL como último recurso
-        const urlParts = profile.url.split('/');
-        const lastPart = urlParts[urlParts.length - 1];
-        if (lastPart) {
-          displayName = lastPart.replace(/\./g, ' ').replace(/-/g, ' ');
-          displayName = displayName.split(' ').map(word => 
-            word.charAt(0).toUpperCase() + word.slice(1)
-          ).join(' ');
-        } else {
-          displayName = 'Nombre no disponible';
-        }
-      }
-      
-      // Incluir el número como parte del nombre del perfil
-      resultItem.innerHTML = `
-        <div class="result-header">
-          <span class="result-name"><span class="result-number">${index + 1}.</span> ${displayName}</span>
-          <a href="#" class="result-link" data-profile-url="${profile.url}">Ver</a>
-        </div>
-      `;
-      
-      searchResults.appendChild(resultItem);
-    });
-    
-    resultsContainer.appendChild(searchResults);
-    
-    // Añadir evento click a los enlaces "Ver"
-    const viewLinks = document.querySelectorAll('.result-link');
-    viewLinks.forEach(link => {
-      // Remover eventos anteriores para evitar duplicación
-      const newLink = link.cloneNode(true);
-      link.parentNode.replaceChild(newLink, link);
-      
-      newLink.addEventListener('click', function(e) {
-        e.preventDefault();
-        const profileUrl = this.getAttribute('data-profile-url');
-        if (profileUrl) {
-          console.log('Solicitando abrir perfil:', profileUrl);
-          // Enviar mensaje al content script para abrir el perfil
-          chrome.runtime.sendMessage({
-            action: 'open_profile',
-            profileUrl: profileUrl
-          });
-        }
-      });
-    });
-    
-    // Actualizar el resumen de búsqueda una sola vez
-    if (!window.summaryUpdated) {
-      updateSearchSummary();
-      window.summaryUpdated = true;
-    }
-    
-    // Marcar la búsqueda como completada
-    localStorage.setItem('snap_lead_manager_search_pending', 'false');
-    localStorage.setItem('snap_lead_manager_search_completed', 'true');
-    
-    console.log('Perfiles mostrados correctamente');
-  } catch (error) {
-    console.error('Error al mostrar perfiles:', error);
-  } finally {
-    // Siempre desmarcar el proceso al finalizar
-    window.isDisplayingProfiles = false;
+// Función para detener la verificación periódica
+function stopStatusChecking() {
+  if (state.statusUpdateInterval) {
+    clearInterval(state.statusUpdateInterval);
+    state.statusUpdateInterval = null;
+    console.log('Detenida verificación periódica de estado');
   }
 }
 
-// Escuchar el mensaje para mostrar perfiles - ÚNICO EVENT LISTENER
-window.removeEventListener('message', handleDisplayProfileLinks); // Eliminar cualquier listener previo
-function handleDisplayProfileLinks(event) {
-  if (event.data && event.data.action === 'display_profile_links') {
-    displayProfileLinks(event.data.profiles);
-    
-    // Esperar a que se rendericen los resultados
-    setTimeout(numerateSearchResults, 300);
-  }
-}
-window.addEventListener('message', handleDisplayProfileLinks);
-
-// Función para numerar resultados de búsqueda
-function numerateSearchResults() {
-  console.log('Numerando resultados de búsqueda');
-  
-  // Verificar si ya estamos en proceso de numeración para evitar bucles
-  if (window.isNumeratingResults) {
-    console.log('Ya hay un proceso de numeración en curso, evitando bucle');
-    return;
-  }
-  
-  // Marcar que estamos en proceso de numeración
-  window.isNumeratingResults = true;
-  
-  try {
-    // Obtener todos los elementos de resultado
-    const resultItems = document.querySelectorAll('#search-results .result-item');
-    
-    if (resultItems.length === 0) {
-      console.log('No se encontraron elementos para numerar');
-      window.isNumeratingResults = false;
-      return;
-    }
-    
-    console.log(`Numerando ${resultItems.length} elementos`);
-    
-    // Agregar número a cada elemento (solo si no tiene ya uno)
-    resultItems.forEach((item, index) => {
-      const nameElement = item.querySelector('.result-name');
-      
-      // Verificar si ya tiene numeración para evitar duplicados
-      if (nameElement && !nameElement.querySelector('.result-number')) {
-        // Crear número
-        const numberElement = document.createElement('span');
-        numberElement.className = 'result-number';
-        numberElement.textContent = `${index + 1}. `;
-        numberElement.style.fontWeight = 'bold';
-        numberElement.style.color = '#4267B2';
-        numberElement.style.marginRight = '5px';
-        
-        // Insertar número al inicio del nombre
-        nameElement.insertBefore(numberElement, nameElement.firstChild);
-      }
-    });
-    
-    // Actualizar el resumen de búsqueda (solo una vez)
-    if (!window.summaryUpdated) {
-      updateSearchSummary();
-      window.summaryUpdated = true;
-    }
-    
-    // Marcar la búsqueda como completada si hay resultados
-    if (resultItems.length > 0) {
-      // Verificar si la búsqueda ya está marcada como completada
-      const isCompleted = localStorage.getItem('snap_lead_manager_search_completed') === 'true';
-      
-      if (!isCompleted) {
-        console.log('Marcando búsqueda como completada después de numerar resultados');
-        
-        // Notificar al content script que la búsqueda ha sido completada
-        chrome.runtime.sendMessage({
-          action: 'search_completed',
-          results: resultItems.length,
-          message: `Búsqueda completada. Se encontraron ${resultItems.length} perfiles.`
-        });
-        
-        // Actualizar el estado en localStorage
-        localStorage.setItem('snap_lead_manager_search_pending', 'false');
-        localStorage.setItem('snap_lead_manager_search_completed', 'true');
-        
-        // Actualizar el estado visual
-        const statusElement = document.getElementById('status-message');
-        if (statusElement) {
-          statusElement.textContent = `Búsqueda completada. Se encontraron ${resultItems.length} perfiles.`;
-          statusElement.style.color = '#4CAF50'; // Verde para indicar éxito
-        }
-        
-        // Actualizar la barra de progreso
-        const progressBar = document.getElementById('progress-bar');
-        if (progressBar) {
-          progressBar.style.width = '100%';
-          progressBar.style.backgroundColor = '#4CAF50'; // Verde para indicar éxito
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error al numerar resultados:', error);
-  } finally {
-    // Siempre desmarcar el proceso de numeración al finalizar
-    window.isNumeratingResults = false;
+// Actualizar cuando cambia el estado de búsqueda
+function updateSearchStatus(isRunning) {
+  if (isRunning && !state.statusUpdateInterval) {
+    startStatusChecking();
+  } else if (!isRunning && state.statusUpdateInterval) {
+    stopStatusChecking();
   }
 }
 
-// Agregar un observador del DOM optimizado
-function setupResultsObserver() {
-  // Remover el observer anterior si existe
-  if (window.resultsObserver) {
-    window.resultsObserver.disconnect();
-  }
-  
-  // Bandera para evitar múltiples ejecuciones durante cambios rápidos
-  let isProcessing = false;
-  
-  // Crear un observador para detectar cuando se añaden los resultados
-  const observer = new MutationObserver((mutations) => {
-    if (isProcessing) return;
-    
-    isProcessing = true;
-    for (const mutation of mutations) {
-      if (mutation.type === 'childList' && 
-          document.getElementById('search-results')) {
-        setTimeout(() => {
-          numerateSearchResults();
-          isProcessing = false;
-        }, 200);
-        return;
-      }
-    }
-    isProcessing = false;
-  });
-  
-  // Iniciar observación del contenedor principal
-  const targetNode = document.querySelector('.sidebar-content') || document.body;
-  observer.observe(targetNode, { childList: true, subtree: true });
-  
-  // Guardar referencia para poder desconectarlo más tarde
-  window.resultsObserver = observer;
-  
-  // También ejecutar numeración al cargar la página
-  setTimeout(numerateSearchResults, 500);
-  
-  // Verificar que el resumen de búsqueda esté en localStorage
-  console.log('Verificando datos de búsqueda:');
-  console.log('search_summary:', localStorage.getItem('snap_lead_manager_search_summary'));
-  console.log('search_term:', localStorage.getItem('snap_lead_manager_search_term'));
-  console.log('search_data:', localStorage.getItem('snap_lead_manager_search_data'));
-}
-
-// Limpiar listeners existentes antes de agregar nuevos
-function cleanupEventListeners() {
-  // Remover el listener de DOMContentLoaded (aunque solo se dispara una vez)
-  document.removeEventListener('DOMContentLoaded', setupResultsObserver);
-  
-  // Crear una función vacía para los listeners de mensajes que queremos eliminar
-  const emptyHandler = function() {};
-  
-  // Remover cualquier listener existente para mensajes
-  window.removeEventListener('message', emptyHandler);
-}
-
-// Limpiar y configurar todo
-cleanupEventListeners();
-
-// Ejecutar configuración cuando el DOM esté listo
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', setupResultsObserver, { once: true });
-} else {
-  // Si el DOM ya está listo, ejecutar directamente
-  setupResultsObserver();
-}
-
-// Asegurarse de que solo hay un listener para mensajes
-window.addEventListener('message', function(event) {
-  if (event.data && event.data.action === 'display_profile_links') {
-    displayProfileLinks(event.data.profiles);
-    
-    // Esperar a que se rendericen los resultados
-    setTimeout(numerateSearchResults, 300);
-  }
-});
-
-// Ejecutar la numeración ahora para elementos ya existentes
-numerateSearchResults();
-
-// Eliminar cualquier listener previo si existe
-if (window.messageHandler) {
-  window.removeEventListener('message', window.messageHandler);
-}
-
-// Crear un único manejador de mensajes centralizado
-window.messageHandler = function(event) {
-  // Verificar que el mensaje viene de una fuente confiable
-  if (!event.data || typeof event.data !== 'object') return;
-  
-  // Manejar diferentes tipos de mensajes
-  switch (event.data.action) {
-    case 'display_profile_links':
-      // Mostrar los enlaces de perfiles
-      displayProfileLinks(event.data.profiles);
-      
-      // Esperar a que se rendericen los resultados y numerarlos
-      setTimeout(numerateSearchResults, 300);
-      break;
-      
-    case 'update_status':
-      // Actualizar el estado en la UI
-      updateStatusUI(event.data.message, event.data.progress);
-      break;
-      
-    case 'update_search_info':
-      // Actualizar información de búsqueda
-      updateSearchInfo(event.data);
-      break;
-      
-    case 'search_completed':
-      // Marcar la búsqueda como completada
-      markSearchAsCompleted(event.data.profiles);
-      break;
-      
-    // Otros casos según sea necesario
-  }
-};
-
-// Registrar el único manejador de mensajes
-window.addEventListener('message', window.messageHandler);
-
-// Función para marcar la búsqueda como completada
-function markSearchAsCompleted(profiles) {
-  console.log('Marcando búsqueda como completada');
-  
-  // Actualizar el estado en localStorage
-  localStorage.setItem('snap_lead_manager_search_pending', 'false');
-  localStorage.setItem('snap_lead_manager_search_completed', 'true');
-  
-  // Actualizar el estado visual
-  const statusElement = document.getElementById('status-message');
-  if (statusElement) {
-    statusElement.textContent = `Búsqueda completada. Se encontraron ${profiles ? profiles.length : 0} perfiles.`;
-    statusElement.style.color = '#4CAF50'; // Verde para indicar éxito
-  }
-  
-  // Actualizar la barra de progreso
-  const progressBar = document.getElementById('progress-bar');
-  if (progressBar) {
-    progressBar.style.width = '100%';
-    progressBar.style.backgroundColor = '#4CAF50'; // Verde para indicar éxito
-  }
-}
-
-// Función para mostrar el resumen de búsqueda basado en la información visible
-function updateSearchSummary() {
-  console.log('Actualizando resumen de búsqueda desde la interfaz');
-  
-  // Verificar si ya estamos en proceso de actualización para evitar bucles
-  if (window.isUpdatingSummary) {
-    console.log('Ya hay un proceso de actualización en curso, evitando bucle');
-    return;
-  }
-  
-  // Marcar que estamos en proceso de actualización
-  window.isUpdatingSummary = true;
-  
-  try {
-    // Obtener la información de búsqueda actual
-    const currentSearchTerm = document.getElementById('search-term')?.value || '';
-    const currentSearchCity = document.getElementById('search-city')?.value || '';
-    
-    // Contar resultados actuales
-    const resultItems = document.querySelectorAll('#search-results .result-item');
-    const totalResults = resultItems.length;
-    
-    // Obtener el elemento para el resumen (o crearlo si no existe)
-    let summaryElement = document.getElementById('results-summary');
-    if (!summaryElement) {
-      console.log('Creando elemento de resumen de búsqueda');
-      const resultsSection = document.querySelector('.results-section');
-      
-      if (resultsSection) {
-        summaryElement = document.createElement('div');
-        summaryElement.id = 'results-summary';
-        summaryElement.className = 'results-summary';
-        
-        // Insertarlo después del título de la sección
-        const titleElement = resultsSection.querySelector('h2');
-        if (titleElement) {
-          titleElement.insertAdjacentElement('afterend', summaryElement);
-        } else {
-          resultsSection.insertBefore(summaryElement, resultsSection.firstChild);
-        }
-      } else {
-        console.log('No se encontró la sección de resultados');
-        return;
-      }
-    }
-    
-    // Actualizar el contenido del resumen
-    summaryElement.innerHTML = `
-      <p>
-        <strong>Búsqueda:</strong> ${currentSearchTerm || 'No especificado'}<br>
-        <strong>Ubicación:</strong> ${currentSearchCity || 'No especificada'}<br>
-        <strong>Resultados encontrados:</strong> ${totalResults} perfiles
-      </p>
-    `;
-    
-    console.log('Resumen de búsqueda actualizado con éxito');
-  } catch (error) {
-    console.error('Error al actualizar resumen de búsqueda:', error);
-  } finally {
-    // Siempre desmarcar el proceso de actualización al finalizar
-    window.isUpdatingSummary = false;
-  }
-}
-
-// Función para actualizar el estado en la UI
-function updateStatusUI(message, progress) {
-  const statusElement = document.getElementById('status-message');
-  const progressBar = document.getElementById('progress-bar');
-  
-  if (statusElement) {
-    statusElement.textContent = message;
-  }
-  
-  if (progressBar) {
-    progressBar.style.width = `${progress}%`;
-  }
-}
+// Configurar listener para mensajes
+window.addEventListener('message', handleReceivedMessage);

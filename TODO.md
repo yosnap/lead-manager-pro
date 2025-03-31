@@ -18,6 +18,12 @@ Desarrollar "Snap Lead Manager", una extensión de Chrome que permita buscar per
 - [x] Inyectar término de búsqueda en el campo correspondiente
 - [x] Ejecutar búsqueda
 
+### Funcionalidad 1.1: Búsqueda de Grupos en Facebook
+- [ ] Implementar selector de tipo de búsqueda (Personas/Grupos)
+- [ ] Desarrollar script para navegar a https://www.facebook.com/search/groups
+- [ ] Mantener y utilizar el filtro de ciudad para la búsqueda de grupos
+- [ ] Implementar identificación de contenedores de resultados para grupos
+
 ### Funcionalidad 2: Identificación y selección de perfiles
 - [x] Desarrollar algoritmo para identificar contenedores de resultados
 - [x] Filtrar solo perfiles personales (excluir páginas y grupos)

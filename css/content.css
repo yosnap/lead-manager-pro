@@ -1,53 +1,58 @@
-/* Estilos para el overlay del sidebar */
-#snap-lead-manager-overlay {
+/* Estilos para el contenedor del sidebar */
+#snap-lead-manager-container {
   position: fixed;
   top: 0;
   right: 0;
-  bottom: 0;
-  width: 300px;
-  background-color: white;
-  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+  width: 320px;
+  height: 100vh;
   z-index: 9999;
-  transition: transform 0.3s ease-in-out;
-  display: flex;
-  flex-direction: column;
+  background: white;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+  border-left: 1px solid #ddd;
+  overflow: hidden;
+  transition: transform 0.3s ease;
 }
 
-#snap-lead-manager-overlay.collapsed {
-  transform: translateX(290px);
-}
-
-/* Manija para mostrar/ocultar cuando está colapsado */
-#snap-lead-manager-handle {
+/* Estilos para el botón de toggle */
+#snap-lead-manager-toggle {
   position: absolute;
   left: -30px;
   top: 50%;
   transform: translateY(-50%);
-  width: 30px;
-  height: 60px;
-  background-color: black;
+  background: #4267B2;
   color: white;
+  width: 30px;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   border-radius: 5px 0 0 5px;
-  font-size: 12px;
-  user-select: none;
+  font-size: 18px;
+  font-weight: bold;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+  z-index: 9999;
 }
 
+/* Estilos para el iframe */
 #snap-lead-manager-iframe {
   width: 100%;
   height: 100%;
   border: none;
+  overflow: hidden;
 }
 
-/* Ajuste al cuerpo principal para hacer espacio para el sidebar */
-body.snap-lead-manager-active {
-  margin-right: 300px !important;
-  transition: margin 0.3s ease-in-out;
+/* Ocultar el sidebar mientras se carga la página para evitar interferencias */
+#snap-lead-manager-container.loading {
+  opacity: 0;
 }
 
-body.snap-lead-manager-collapsed {
-  margin-right: 0 !important;
+/* Estado oculto */
+#snap-lead-manager-container.hidden {
+  transform: translateX(100%);
+}
+
+/* Estado visible */
+#snap-lead-manager-container.visible {
+  transform: translateX(0);
 }

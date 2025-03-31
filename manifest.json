@@ -1,14 +1,12 @@
 {
+  "name": "Lead Manager Pro",
+  "version": "1.0",
+  "description": "Herramienta para buscar y gestionar leads en Facebook",
   "manifest_version": 3,
-  "name": "Snap Lead Manager",
-  "version": "1.0.0",
-  "description": "Extensión para automatización de Facebook con integración N8N híbrida",
   "permissions": [
-    "tabs",
+    "activeTab",
     "storage",
-    "scripting",
-    "webNavigation",
-    "windows"
+    "scripting"
   ],
   "host_permissions": [
     "https://*.facebook.com/*"
@@ -25,16 +23,26 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.facebook.com/*"],
-      "js": ["js/content.js", "debug/debug.js"],
-      "css": ["css/content.css"],
-      "run_at": "document_end"
+      "matches": ["https://*.facebook.com/*"],
+      "js": [
+        "content/utils/common.js",
+        "content/state.js",
+        "content/modules/citySuggestions.js",
+        "content/modules/cityFilter.js",
+        "content/modules/searchNavigation.js",
+        "content/modules/profileExtractor.js",
+        "content/modules/profileFinder.js",
+        "content/modules/sidebar.js",
+        "content/modules/errorHandler.js",
+        "content/index.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["sidebar.html", "css/*", "js/*", "images/*"],
-      "matches": ["*://*.facebook.com/*"]
+      "resources": ["sidebar.html", "js/*", "css/*", "icons/*"],
+      "matches": ["https://*.facebook.com/*"]
     }
   ],
   "icons": {

@@ -1,0 +1,294 @@
+/**
+ * Módulo para manejar el sidebar de la extensión
+ * Usando solo comunicación basada en mensajes para evitar problemas de CORS
+ */
+
+// Namespace para la organización del código
+window.LeadManagerPro = window.LeadManagerPro || {};
+window.LeadManagerPro.modules = window.LeadManagerPro.modules || {};
+
+/**
+ * Inserta el sidebar en la página
+ * @returns {HTMLElement} - El contenedor del sidebar
+ */
+window.LeadManagerPro.modules.insertSidebar = function() {
+  console.log('Lead Manager Pro: Insertando sidebar');
+  
+  // Verificar si ya existe el sidebar
+  if (document.getElementById('snap-lead-manager-container')) {
+    console.log('Lead Manager Pro: Sidebar ya existe');
+    return document.getElementById('snap-lead-manager-container');
+  }
+  
+  // Crear contenedor para el sidebar
+  const sidebarContainer = document.createElement('div');
+  sidebarContainer.id = 'snap-lead-manager-container';
+  sidebarContainer.style.cssText = `
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 320px;
+    height: 100vh;
+    z-index: 9999;
+    background: white;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+    border-left: 1px solid #ddd;
+    overflow: hidden;
+    transition: transform 0.3s ease;
+  `;
+  
+  // Crear iframe para el sidebar
+  const iframe = document.createElement('iframe');
+  iframe.id = 'snap-lead-manager-iframe';
+  iframe.src = chrome.runtime.getURL('sidebar.html');
+  iframe.style.cssText = `
+    width: 100%;
+    height: 100%;
+    border: none;
+    overflow: hidden;
+  `;
+  
+  // Añadir iframe al contenedor
+  sidebarContainer.appendChild(iframe);
+  
+  // Agregar botón para mostrar/ocultar
+  const toggleButton = document.createElement('div');
+  toggleButton.id = 'snap-lead-manager-toggle';
+  toggleButton.innerHTML = '◀';
+  toggleButton.style.cssText = `
+    position: absolute;
+    left: -30px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #4267B2;
+    color: white;
+    width: 30px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 5px 0 0 5px;
+    font-size: 18px;
+    font-weight: bold;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+    z-index: 9999;
+  `;
+  
+  // Por defecto, ocultar el sidebar inicialmente
+  sidebarContainer.style.transform = 'translateX(100%)';
+  
+  // Manejar clic en el botón de toggle
+  toggleButton.addEventListener('click', function() {
+    const isVisible = sidebarContainer.style.transform !== 'translateX(100%)';
+    if (isVisible) {
+      // Ocultar el sidebar
+      sidebarContainer.style.transform = 'translateX(100%)';
+      toggleButton.innerHTML = '▶';
+      toggleButton.setAttribute('title', 'Mostrar Lead Manager');
+      
+      // Guardar preferencia del usuario
+      localStorage.setItem('snap_lead_manager_sidebar_hidden', 'true');
+    } else {
+      // Mostrar el sidebar
+      sidebarContainer.style.transform = 'translateX(0)';
+      toggleButton.innerHTML = '◀';
+      toggleButton.setAttribute('title', 'Ocultar Lead Manager');
+      
+      // Guardar preferencia del usuario
+      localStorage.setItem('snap_lead_manager_sidebar_hidden', 'false');
+    }
+  });
+  
+  // Verificar si el sidebar estaba oculto anteriormente
+  const wasHidden = localStorage.getItem('snap_lead_manager_sidebar_hidden') === 'true';
+  if (!wasHidden) {
+    // Mostrar sidebar si no estaba oculto previamente
+    sidebarContainer.style.transform = 'translateX(0)';
+    toggleButton.innerHTML = '◀';
+    toggleButton.setAttribute('title', 'Ocultar Lead Manager');
+  } else {
+    // Mantener oculto
+    toggleButton.innerHTML = '▶';
+    toggleButton.setAttribute('title', 'Mostrar Lead Manager');
+  }
+  
+  sidebarContainer.appendChild(toggleButton);
+  
+  // Añadir al DOM
+  document.body.appendChild(sidebarContainer);
+  
+  console.log('Lead Manager Pro: Sidebar insertado');
+  
+  // Enviar un mensaje de "sidebar_ready" para notificar al iframe
+  setTimeout(() => {
+    const iframe = document.getElementById('snap-lead-manager-iframe');
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage({
+        action: 'sidebar_ready',
+        from: 'content_script'
+      }, '*');
+    }
+  }, 1000);
+  
+  return sidebarContainer;
+};
+
+/**
+ * Configura los listeners globales para los mensajes del sidebar
+ */
+window.LeadManagerPro.modules.setupSidebarListeners = function() {
+  // Escuchar mensajes del iframe del sidebar
+  window.addEventListener('message', (event) => {
+    // Verificar que el mensaje tiene datos
+    if (!event.data) return;
+    
+    const message = event.data;
+    
+    // Logging reducido para evitar spam en consola
+    if (message.action !== 'status_update') {
+      console.log('Lead Manager Pro: Mensaje recibido:', message.action);
+    }
+    
+    // Manejadores para diferentes acciones
+    if (message.action === 'sidebar_ready') {
+      console.log('Lead Manager Pro: Sidebar listo para recibir mensajes');
+    }
+    
+    else if (message.action === 'find_profiles') {
+      // Guardar datos de búsqueda en localStorage
+      if (message.searchData) {
+        try {
+          // Guardar datos en localStorage
+          const searchDataStr = JSON.stringify(message.searchData);
+          localStorage.setItem('snap_lead_manager_search_data', searchDataStr);
+          
+          // Reiniciar flag de filtro de ciudad aplicado
+          localStorage.setItem('snap_lead_manager_city_filter_applied', 'false');
+          
+          // Iniciar navegación
+          if (window.LeadManagerPro.state && window.LeadManagerPro.state.searchState && 
+              window.LeadManagerPro.modules.navigateToSearchPage) {
+            
+            // Preparar el estado de búsqueda
+            window.LeadManagerPro.state.searchState.searchType = message.searchData.type || 'people';
+            window.LeadManagerPro.state.searchState.searchTerm = message.searchData.term || '';
+            window.LeadManagerPro.state.searchState.city = message.searchData.city || '';
+            
+            // Iniciar navegación
+            window.LeadManagerPro.modules.navigateToSearchPage(window.LeadManagerPro.state.searchState)
+              .catch(error => {
+                console.error('Error al navegar a página de búsqueda:', error);
+                sendMessageToSidebar('search_error', { error: error.message });
+              });
+          } else {
+            console.error('Estado de búsqueda o función de navegación no disponible');
+          }
+        } catch (error) {
+          console.error('Error al procesar datos de búsqueda:', error);
+          sendMessageToSidebar('search_error', { error: error.message });
+        }
+      }
+    }
+    
+    else if (message.action === 'apply_city_filter') {
+      if (window.LeadManagerPro.modules.applyCityFilter) {
+        window.LeadManagerPro.modules.applyCityFilter()
+          .catch(error => {
+            console.error('Error al aplicar filtro de ciudad:', error);
+            sendMessageToSidebar('filter_error', { error: error.message });
+          });
+      }
+    }
+    
+    else if (message.action === 'pause_search') {
+      if (window.LeadManagerPro.modules.pauseSearch) {
+        const result = window.LeadManagerPro.modules.pauseSearch();
+        sendMessageToSidebar('pause_result', { result });
+      }
+    }
+    
+    else if (message.action === 'resume_search') {
+      if (window.LeadManagerPro.modules.findProfiles) {
+        window.LeadManagerPro.modules.findProfiles()
+          .then(result => sendMessageToSidebar('resume_result', { result }))
+          .catch(error => {
+            console.error('Error al reanudar búsqueda:', error);
+            sendMessageToSidebar('search_error', { error: error.message });
+          });
+      }
+    }
+    
+    else if (message.action === 'stop_search') {
+      if (window.LeadManagerPro.modules.stopSearch) {
+        const result = window.LeadManagerPro.modules.stopSearch();
+        sendMessageToSidebar('stop_result', { result });
+      }
+    }
+    
+    else if (message.action === 'get_search_status') {
+      if (window.LeadManagerPro.state && window.LeadManagerPro.state.searchState) {
+        const searchState = window.LeadManagerPro.state.searchState;
+        sendMessageToSidebar('search_status', {
+          status: {
+            isSearching: searchState.isSearching,
+            pauseSearch: searchState.pauseSearch,
+            currentPage: searchState.currentPage,
+            totalPages: searchState.totalPages,
+            foundProfiles: searchState.foundProfiles ? searchState.foundProfiles.length : 0,
+            searchType: searchState.searchType,
+            searchTerm: searchState.searchTerm,
+            city: searchState.city
+          }
+        });
+      }
+    }
+    
+    else if (message.action === 'open_profile') {
+      if (window.LeadManagerPro.modules.openAndExtractProfileDetails) {
+        window.LeadManagerPro.modules.openAndExtractProfileDetails(message.profileUrl)
+          .then(result => sendMessageToSidebar('open_profile_result', { result }))
+          .catch(error => {
+            console.error('Error al abrir perfil:', error);
+            sendMessageToSidebar('profile_error', { error: error.message });
+          });
+      }
+    }
+    
+    else if (message.action === 'save_to_crm') {
+      if (window.LeadManagerPro.modules.saveProfileToCRM) {
+        window.LeadManagerPro.modules.saveProfileToCRM(message.profileData)
+          .then(result => sendMessageToSidebar('save_to_crm_result', { result }))
+          .catch(error => {
+            console.error('Error al guardar perfil en CRM:', error);
+            sendMessageToSidebar('crm_error', { error: error.message });
+          });
+      }
+    }
+  });
+  
+  // También escuchar los mensajes de actualización de estado para reenviarlos al sidebar
+  window.addEventListener('LEAD_MANAGER_STATUS_UPDATE', (event) => {
+    if (event.detail) {
+      sendMessageToSidebar('status_update', {
+        status: event.detail.message,
+        progress: event.detail.progress
+      });
+    }
+  });
+};
+
+/**
+ * Función auxiliar para enviar mensajes al sidebar de manera consistente
+ * @param {string} action - Acción a realizar
+ * @param {Object} data - Datos adicionales
+ */
+function sendMessageToSidebar(action, data = {}) {
+  const iframe = document.getElementById('snap-lead-manager-iframe');
+  if (iframe && iframe.contentWindow) {
+    iframe.contentWindow.postMessage({
+      action: action,
+      ...data
+    }, '*');
+  }
+}
