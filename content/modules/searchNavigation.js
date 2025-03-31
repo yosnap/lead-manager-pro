@@ -170,7 +170,12 @@ window.LeadManagerPro.modules.autoScroll = async function(searchState) {
   const updateStatus = window.LeadManagerPro.utils.updateStatus;
   const sleep = window.LeadManagerPro.utils.sleep;
   
-  updateStatus('Realizando scroll para cargar todos los resultados...', 35);
+  // Obtener opciones de configuración
+  const options = window.LeadManagerPro.state.options || {};
+  const MAX_SCROLLS = options.maxScrolls || 50;
+  const SCROLL_DELAY = (options.scrollDelay || 2) * 1000; // Convertir a milisegundos
+  
+  updateStatus(`Realizando scroll para cargar todos los resultados (máx. ${MAX_SCROLLS} scrolls)...`, 35);
   
   return new Promise(resolve => {
     let totalHeight = 0;
@@ -207,7 +212,7 @@ window.LeadManagerPro.modules.autoScroll = async function(searchState) {
       
       // Actualizar estado cada 5 scrolls
       if (scrollCount % 5 === 0) {
-        updateStatus(`Realizando scroll para cargar resultados (${scrollCount} scrolls)...`, 35);
+        updateStatus(`Realizando scroll para cargar resultados (${scrollCount}/${MAX_SCROLLS} scrolls)...`, 35);
       }
       
       // Verificar si hemos llegado al final o si ya hemos hecho suficiente scroll
@@ -216,10 +221,10 @@ window.LeadManagerPro.modules.autoScroll = async function(searchState) {
       const scrollTop = document.documentElement.scrollTop;
       
       // Condiciones para detenerse:
-      // 1. Si hemos hecho 50 scrolls (para evitar bucles infinitos)
+      // 1. Si hemos hecho el máximo de scrolls configurado
       // 2. Si estamos cerca del final de la página
       // 3. Si no ha cambiado la altura de la página en los últimos 5 scrolls
-      if (scrollCount > 50 || 
+      if (scrollCount > MAX_SCROLLS || 
           (scrollTop + innerHeight >= scrollHeight - 100) || 
           (scrollCount > 10 && totalHeight > 15000)) {
         clearInterval(timer);
@@ -227,6 +232,6 @@ window.LeadManagerPro.modules.autoScroll = async function(searchState) {
         window.scrollTo(0, 0);
         resolve();
       }
-    }, 800);
+    }, SCROLL_DELAY);
   });
 };

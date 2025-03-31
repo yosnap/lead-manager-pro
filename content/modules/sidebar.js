@@ -265,6 +265,42 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
           });
       }
     }
+    
+    else if (message.action === 'openSidebar') {
+      // Mostrar el sidebar cuando se solicita desde el popup
+      const sidebarContainer = document.getElementById('snap-lead-manager-container');
+      if (sidebarContainer) {
+        sidebarContainer.style.transform = 'translateX(0)';
+        const toggleButton = document.getElementById('snap-lead-manager-toggle');
+        if (toggleButton) {
+          toggleButton.innerHTML = '◀';
+          toggleButton.setAttribute('title', 'Ocultar Lead Manager');
+        }
+        localStorage.setItem('snap_lead_manager_sidebar_hidden', 'false');
+      } else {
+        // Si no existe el sidebar, crearlo
+        window.LeadManagerPro.modules.insertSidebar();
+      }
+    }
+    
+    else if (message.action === 'updateOptions') {
+      // Recibir opciones actualizadas del popup
+      console.log('Opciones actualizadas recibidas:', message.options);
+      
+      // Actualizar opciones en el estado global si existe
+      if (window.LeadManagerPro.state) {
+        window.LeadManagerPro.state.options = {
+          ...window.LeadManagerPro.state.options,
+          ...message.options
+        };
+        
+        // Notificar a los otros módulos que las opciones han cambiado
+        const event = new CustomEvent('LEAD_MANAGER_OPTIONS_UPDATED', {
+          detail: { options: message.options }
+        });
+        window.dispatchEvent(event);
+      }
+    }
   });
   
   // También escuchar los mensajes de actualización de estado para reenviarlos al sidebar

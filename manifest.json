@@ -16,7 +16,9 @@
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
-    }
+    },
+    "default_popup": "popup/popup.html",
+    "default_title": "Lead Manager Pro"
   },
   "background": {
     "service_worker": "js/background.js"

@@ -6,6 +6,43 @@
 window.LeadManagerPro = window.LeadManagerPro || {};
 window.LeadManagerPro.state = window.LeadManagerPro.state || {};
 
+// Estado de opciones globales
+window.LeadManagerPro.state.options = {
+  // Opciones generales
+  maxScrolls: 50,
+  scrollDelay: 2,
+  
+  // Opciones de búsqueda de grupos
+  groupPublic: true,
+  groupPrivate: true,
+  minUsers: 100,
+  minPostsYear: 10,
+  minPostsMonth: 5,
+  minPostsDay: 1,
+  
+  // Otras opciones que se puedan agregar en el futuro
+};
+
+// Cargar opciones guardadas
+chrome.storage.local.get([
+  'maxScrolls',
+  'scrollDelay',
+  'groupPublic',
+  'groupPrivate',
+  'minUsers',
+  'minPostsYear',
+  'minPostsMonth',
+  'minPostsDay'
+], function(result) {
+  Object.keys(result).forEach(key => {
+    if (result[key] !== undefined) {
+      window.LeadManagerPro.state.options[key] = result[key];
+    }
+  });
+  
+  console.log('Opciones cargadas:', window.LeadManagerPro.state.options);
+});
+
 // Estado de búsqueda
 window.LeadManagerPro.state.searchState = {
   isSearching: false,

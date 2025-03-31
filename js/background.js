@@ -16,6 +16,32 @@ chrome.storage.local.set({
   'extension_paused': false
 });
 
+// Establecer opciones por defecto si no existen
+chrome.storage.local.get([
+  'maxScrolls',
+  'scrollDelay',
+  'groupPublic',
+  'groupPrivate',
+  'minUsers',
+  'minPostsYear',
+  'minPostsMonth',
+  'minPostsDay'
+], function(result) {
+  const defaultOptions = {
+    // Si no existe la opción, se establece el valor por defecto
+    maxScrolls: result.maxScrolls || 50,
+    scrollDelay: result.scrollDelay || 2,
+    groupPublic: result.groupPublic !== undefined ? result.groupPublic : true,
+    groupPrivate: result.groupPrivate !== undefined ? result.groupPrivate : true,
+    minUsers: result.minUsers || 100,
+    minPostsYear: result.minPostsYear || 10,
+    minPostsMonth: result.minPostsMonth || 5,
+    minPostsDay: result.minPostsDay || 1
+  };
+  
+  chrome.storage.local.set(defaultOptions);
+});
+
 // Manejador de mensajes
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'status_update') {
@@ -236,6 +262,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     
     sendResponse({ success: true });
+    return false;
+  } else if (message.action === 'updateOptions') {
+    // Guardar las opciones actualizadas
+    chrome.storage.local.set(message.options, function() {
+      console.log('Opciones actualizadas:', message.options);
+    });
+    
+    sendResponse({ success: true, message: 'Opciones actualizadas correctamente' });
     return false;
   } else {
     // Respuesta por defecto para acciones desconocidas

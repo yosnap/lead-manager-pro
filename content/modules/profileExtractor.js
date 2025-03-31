@@ -78,15 +78,38 @@ window.LeadManagerPro.modules.extractProfilesFromPage = async function(searchSta
         }
       });
     } else {
-      // Selectores para resultados de grupos - Actualizado basado en el HTML proporcionado
+      // Obtener las opciones para filtrar grupos
+      const options = window.LeadManagerPro.state.options || {};
+      const filterGroupPublic = options.groupPublic !== undefined ? options.groupPublic : true;
+      const filterGroupPrivate = options.groupPrivate !== undefined ? options.groupPrivate : true;
+      const minUsers = options.minUsers || 100;
+      const minPostsYear = options.minPostsYear || 10;
+      const minPostsMonth = options.minPostsMonth || 5;
+      const minPostsDay = options.minPostsDay || 1;
+      
+      console.log(`Lead Manager Pro: Aplicando filtros de grupos - Público: ${filterGroupPublic}, Privado: ${filterGroupPrivate}, Mín. usuarios: ${minUsers}`);
+      console.log(`Lead Manager Pro: Mín. publicaciones - Año: ${minPostsYear}, Mes: ${minPostsMonth}, Día: ${minPostsDay}`);
+      
+      // Selectores para resultados de grupos
       const groupElements = document.querySelectorAll('[role="article"]');
       
       console.log(`Lead Manager Pro: Encontrados ${groupElements.length} elementos de grupo en la página`);
       
-      // Variable para contar grupos realmente procesados
+      // Variables para contar grupos en diferentes etapas del procesamiento
+      let groupsFound = groupElements.length;
       let groupsProcessed = 0;
+      let groupsFiltered = {
+        total: 0,
+        byType: 0,
+        byUsers: 0,
+        byFrequency: 0
+      };
       
-      groupElements.forEach(element => {
+      console.log(`Lead Manager Pro: Comenzando a procesar ${groupsFound} grupos encontrados en la página`);
+      console.log(`Lead Manager Pro: Filtros aplicados - Público: ${filterGroupPublic}, Privado: ${filterGroupPrivate}, Mín. usuarios: ${minUsers}`);
+      console.log(`Lead Manager Pro: Mín. publicaciones - Año: ${minPostsYear}, Mes: ${minPostsMonth}, Día: ${minPostsDay}`);
+      
+      groupElements.forEach((element, index) => {
         try {
           // Extraer nombre del grupo - Mejores selectores basados en el HTML
           const nameElement = element.querySelector('a[role="link"] + div span a, span.x193iq5w a, div.xu06os2 span a, h3, [role="heading"]');
@@ -102,50 +125,203 @@ window.LeadManagerPro.modules.extractProfilesFromPage = async function(searchSta
           const linkElement = element.querySelector('a[href*="/groups/"]');
           const groupUrl = linkElement ? linkElement.href : '';
           
-          // Buscar específicamente el elemento que contiene la información del grupo
+          // Buscar más exhaustivamente los elementos que contienen la información del grupo
           // Esto busca el elemento que contiene "Público · X miembros · Y publicaciones"
-          const groupInfoElement = element.querySelector('span.x1lliihq span.x1lliihq, div.xu06os2 span.x1lliihq');
+          const allSpans = element.querySelectorAll('span');
           let members = '';
           let groupType = '';
           let frequency = '';
+          let groupInfoText = '';
           
-          if (groupInfoElement) {
-            const infoText = groupInfoElement.textContent.trim();
-            console.log(`Lead Manager Pro: Información del grupo: "${infoText}"`);
-            
-            // Dividir por · para extraer las partes
-            const parts = infoText.split('·').map(part => part.trim());
-            
-            // El primer elemento debería ser el tipo (Público/Privado)
-            if (parts.length > 0) {
-              groupType = parts[0];
+          // Primero intentamos encontrar el span con toda la información
+          for (const span of allSpans) {
+            const text = span.textContent.trim();
+            // Buscamos un texto que incluya "·" y tenga información de tipo y miembros
+            if (text.includes('·') && 
+               (text.includes('Público') || text.includes('Privado') || 
+                text.includes('Public') || text.includes('Private')) && 
+               (text.includes('miembro') || text.includes('member'))) {
+              
+              groupInfoText = text;
+              console.log(`Lead Manager Pro: Información completa del grupo encontrada: "${text}"`);
+              
+              // Dividir por · para extraer las partes
+              const parts = text.split('·').map(part => part.trim());
+              
+              // El primer elemento debería ser el tipo (Público/Privado)
+              if (parts.length > 0) {
+                groupType = parts[0];
+              }
+              
+              // El segundo elemento debería ser los miembros
+              if (parts.length > 1) {
+                members = parts[1];
+              }
+              
+              // El tercer elemento debería ser la frecuencia de publicaciones
+              if (parts.length > 2) {
+                frequency = parts[2];
+              }
+              
+              break; // Si encontramos la información completa, no necesitamos seguir buscando
             }
+          }
+          
+          // Método alternativo: buscar spans individuales si no encontramos un span con toda la info
+          if (!groupInfoText) {
+            console.log(`Lead Manager Pro: Buscando información del grupo en spans individuales`);
             
-            // El segundo elemento debería ser los miembros
-            if (parts.length > 1) {
-              members = parts[1];
-            }
-            
-            // El tercer elemento debería ser la frecuencia de publicaciones
-            if (parts.length > 2) {
-              frequency = parts[2];
-            }
-          } else {
-            // Método alternativo: buscar spans individuales
-            const infoElements = element.querySelectorAll('span');
-            infoElements.forEach(span => {
+            allSpans.forEach(span => {
               const text = span.textContent.trim();
-              if (text.includes('miembro') || text.includes('member')) {
+              
+              // Detectar cantidad de miembros
+              if ((text.includes('miembro') || text.includes('member')) && !members) {
                 members = text;
-              } else if (text.includes('Público') || text.includes('Privado') || text.includes('Public') || text.includes('Private')) {
+                console.log(`Lead Manager Pro: Información de miembros encontrada: "${text}"`);
+              } 
+              // Detectar tipo de grupo
+              else if ((text.includes('Público') || text.includes('Privado') || 
+                       text.includes('Public') || text.includes('Private')) && !groupType) {
                 groupType = text;
-              } else if (text.includes('publicacion') || text.includes('post') || text.includes('al mes') || text.includes('al día') || text.includes('al año')) {
+                console.log(`Lead Manager Pro: Información de tipo de grupo encontrada: "${text}"`);
+              } 
+              // Detectar frecuencia de publicaciones
+              else if ((text.includes('publicacion') || text.includes('post') || 
+                       text.includes('al mes') || text.includes('mensual') || 
+                       text.includes('al día') || text.includes('diaria') || 
+                       text.includes('al año') || text.includes('anual') ||
+                       text.includes('per month') || text.includes('per day') || 
+                       text.includes('per year')) && !frequency) {
                 frequency = text;
+                console.log(`Lead Manager Pro: Información de frecuencia encontrada: "${text}"`);
               }
             });
           }
           
-          // Incrementar contador de grupos procesados
+          // Aplicar filtros de tipo de grupo
+          let passesTypeFilter = true;
+          const groupTypeLower = groupType.toLowerCase();
+          let detectedType = 'desconocido';
+          
+          if (groupTypeLower.includes('público') || groupTypeLower.includes('public')) {
+            passesTypeFilter = filterGroupPublic;
+            detectedType = 'público';
+          } else if (groupTypeLower.includes('privado') || groupTypeLower.includes('private')) {
+            passesTypeFilter = filterGroupPrivate;
+            detectedType = 'privado';
+          }
+          
+          if (!passesTypeFilter) {
+            console.log(`Lead Manager Pro: Grupo ${name} (${index+1}/${groupsFound}) filtrado por tipo: ${groupType}`);
+            groupsFiltered.byType++;
+            groupsFiltered.total++;
+            return;
+          }
+          
+          console.log(`Lead Manager Pro: Grupo ${name} (${index+1}/${groupsFound}) pasa filtro de tipo: ${detectedType}`);
+          
+          // Aplicar filtro de cantidad mínima de usuarios
+          let userCount = 0;
+          console.log(`Lead Manager Pro: Procesando texto de miembros: "${members}"`);
+          
+          if (members) {
+            // Primero intentamos el formato con números y multiplicadores (K, M)
+            const userMatch = members.match(/(\d+[\.,]?\d*)\s*[kKmM]?/);
+            if (userMatch) {
+              // Normalizar el string numérico
+              let userStr = userMatch[0].trim();
+              console.log(`Lead Manager Pro: Match de usuarios encontrado: "${userStr}"`);
+              
+              // Detectar si son miles (k) o millones (M) y aplicar multiplicador
+              let multiplier = 1;
+              if (userStr.toLowerCase().includes('k')) {
+                multiplier = 1000;
+                userStr = userStr.toLowerCase().replace('k', '');
+              } else if (userStr.toLowerCase().includes('m')) {
+                multiplier = 1000000;
+                userStr = userStr.toLowerCase().replace('m', '');
+              }
+              
+              // Normalizar separadores decimales/miles
+              userStr = userStr.replace(',', '.').trim();
+              
+              // Convertir a número y aplicar multiplicador
+              userCount = parseFloat(userStr) * multiplier;
+              console.log(`Lead Manager Pro: Cantidad de usuarios calculada: ${userCount} (original: ${userStr}, multiplicador: ${multiplier})`);
+            }
+            
+            // Si no pudimos extraer el número, intentamos con texto completo
+            if (userCount === 0) {
+              console.log(`Lead Manager Pro: Intentando extraer número de usuarios con método alternativo`);
+              
+              // Extraer cualquier secuencia numérica
+              const allNumbers = members.match(/\d+/g);
+              if (allNumbers && allNumbers.length > 0) {
+                // Tomamos el número más grande como cantidad de usuarios
+                userCount = Math.max(...allNumbers.map(num => parseInt(num, 10)));
+                console.log(`Lead Manager Pro: Cantidad de usuarios extraída con método alternativo: ${userCount}`);
+                
+                // Aplicar multiplicador si hay indicadores de K o M
+                if (members.toLowerCase().includes('k') || members.toLowerCase().includes('mil')) {
+                  userCount *= 1000;
+                } else if (members.toLowerCase().includes('m') || members.toLowerCase().includes('mill')) {
+                  userCount *= 1000000;
+                }
+              }
+            }
+          }
+          
+          console.log(`Lead Manager Pro: Cantidad final de usuarios: ${userCount}, mínimo requerido: ${minUsers}`);
+          if (userCount < minUsers) {
+            console.log(`Lead Manager Pro: Grupo ${name} (${index+1}/${groupsFound}) filtrado por usuarios: ${userCount} < ${minUsers}`);
+            groupsFiltered.byUsers++;
+            groupsFiltered.total++;
+            return;
+          }
+          
+          console.log(`Lead Manager Pro: Grupo ${name} (${index+1}/${groupsFound}) pasa filtro de usuarios: ${userCount} >= ${minUsers}`);
+          
+          // Aplicar filtro de frecuencia de publicaciones
+          let passesFrequencyFilter = false;
+          if (frequency) {
+            const frequencyLower = frequency.toLowerCase();
+            const postsMatch = frequency.match(/(\d+[\.,]?\d*)/);
+            let postsCount = 0;
+            
+            if (postsMatch) {
+              postsCount = parseFloat(postsMatch[0].replace(',', '.'));
+              
+              // Verificar si cumple con CUALQUIERA de los mínimos según periodo
+              // Si tiene suficientes publicaciones en cualquier categoría, pasa el filtro
+              if ((frequencyLower.includes('día') || frequencyLower.includes('day')) && postsCount >= minPostsDay) {
+                passesFrequencyFilter = true;
+                console.log(`Lead Manager Pro: Grupo ${name} pasa el filtro de publicaciones diarias: ${postsCount} >= ${minPostsDay}`);
+              } 
+              else if ((frequencyLower.includes('mes') || frequencyLower.includes('month')) && postsCount >= minPostsMonth) {
+                passesFrequencyFilter = true;
+                console.log(`Lead Manager Pro: Grupo ${name} pasa el filtro de publicaciones mensuales: ${postsCount} >= ${minPostsMonth}`);
+              } 
+              else if ((frequencyLower.includes('año') || frequencyLower.includes('year')) && postsCount >= minPostsYear) {
+                passesFrequencyFilter = true;
+                console.log(`Lead Manager Pro: Grupo ${name} pasa el filtro de publicaciones anuales: ${postsCount} >= ${minPostsYear}`);
+              }
+            }
+          } else {
+            // Si no hay información de frecuencia, permitimos que pase (podemos cambiar este comportamiento)
+            passesFrequencyFilter = true;
+            console.log(`Lead Manager Pro: Grupo ${name} no tiene información de frecuencia, permitiendo pasar`);
+          }
+          
+          if (!passesFrequencyFilter) {
+            console.log(`Lead Manager Pro: Grupo ${name} (${index+1}/${groupsFound}) filtrado por frecuencia: ${frequency}`);
+            groupsFiltered.byFrequency++;
+            groupsFiltered.total++;
+            return;
+          }
+          
+          console.log(`Lead Manager Pro: Grupo ${name} (${index+1}/${groupsFound}) pasa todos los filtros`);
+          
+          // Si pasa todos los filtros, incrementar contador
           groupsProcessed++;
           
           // Extraer imagen del grupo
@@ -157,6 +333,7 @@ window.LeadManagerPro.modules.extractProfilesFromPage = async function(searchSta
             name,
             groupUrl,
             members,
+            membersCount: userCount,
             groupType,
             frequency,
             imageUrl,
@@ -175,11 +352,23 @@ window.LeadManagerPro.modules.extractProfilesFromPage = async function(searchSta
         }
       });
       
-      // Registrar cuántos grupos se procesaron realmente
-      console.log(`Lead Manager Pro: Se procesaron ${groupsProcessed} grupos de los ${groupElements.length} encontrados`);
+      // Registrar cuántos grupos se procesaron realmente y el resumen de filtrado
+      console.log(`Lead Manager Pro: Resumen de procesamiento de grupos:`);
+      console.log(`- Grupos encontrados inicialmente: ${groupsFound}`);
+      console.log(`- Grupos que pasaron todos los filtros: ${groupsProcessed}`);
+      console.log(`- Grupos filtrados en total: ${groupsFiltered.total}`);
+      console.log(`  - Por tipo (público/privado): ${groupsFiltered.byType}`);
+      console.log(`  - Por cantidad mínima de usuarios: ${groupsFiltered.byUsers}`);
+      console.log(`  - Por frecuencia de publicaciones: ${groupsFiltered.byFrequency}`);
       
       // Actualizar el estado global con la cuenta de grupos
       searchState.foundCount = extractedResults.length;
+      
+      // Log detallado de los grupos que pasaron los filtros
+      console.log(`Lead Manager Pro: Grupos que pasaron todos los filtros:`);
+      extractedResults.forEach((group, index) => {
+        console.log(`${index + 1}. ${group.name} - ${group.membersCount} miembros - Tipo: ${group.groupType} - Frecuencia: ${group.frequency}`);
+      });
     }
     
     // Mensaje ajustado según el tipo de búsqueda

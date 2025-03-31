@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lead Manager Pro - Opciones</title>
+  <link rel="stylesheet" href="../css/popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <header>
+      <h1>Lead Manager Pro</h1>
+      <div class="version">v1.0.0</div>
+    </header>
+    
+    <main>
+      <nav class="tabs">
+        <ul>
+          <li data-tab="tab-general" class="active">Opciones Generales</li>
+          <li data-tab="tab-groups">Búsqueda de Grupos</li>
+          <li data-tab="tab-profiles">Búsqueda de Perfiles</li>
+          <li data-tab="tab-pages">Búsqueda de Páginas</li>
+        </ul>
+      </nav>
+      
+      <div id="tab-general" class="tab-content active">
+        <h2>Opciones Generales</h2>
+        <div class="form-group">
+          <label for="max-scrolls">Scrolls máximos:</label>
+          <input type="number" id="max-scrolls" min="1" value="50">
+        </div>
+        <div class="form-group">
+          <label for="scroll-delay">Tiempo entre scrolls (segundos):</label>
+          <input type="number" id="scroll-delay" min="1" step="0.5" value="2">
+        </div>
+      </div>
+      
+      <div id="tab-groups" class="tab-content">
+        <h2>Opciones para Búsqueda de Grupos</h2>
+        <div class="form-group">
+          <label>Tipos de grupo:</label>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <input type="checkbox" id="group-public" checked>
+              <label for="group-public">Público</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="group-private" checked>
+              <label for="group-private">Privado</label>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="min-users">Cantidad mínima de usuarios:</label>
+          <input type="number" id="min-users" min="0" value="100">
+        </div>
+        <div class="form-group">
+          <label>Cantidad mínima de publicaciones:</label>
+          <div class="multi-input">
+            <div class="input-item">
+              <input type="number" id="min-posts-year" min="0" value="10">
+              <label for="min-posts-year">por año</label>
+            </div>
+            <div class="input-item">
+              <input type="number" id="min-posts-month" min="0" value="5">
+              <label for="min-posts-month">por mes</label>
+            </div>
+            <div class="input-item">
+              <input type="number" id="min-posts-day" min="0" value="1">
+              <label for="min-posts-day">por día</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div id="tab-profiles" class="tab-content">
+        <h2>Opciones para Búsqueda de Perfiles</h2>
+        <p>Configuración para la búsqueda de perfiles.</p>
+        <!-- Aquí se pueden agregar más opciones específicas para perfiles en el futuro -->
+      </div>
+      
+      <div id="tab-pages" class="tab-content">
+        <h2>Opciones para Búsqueda de Páginas</h2>
+        <p>Configuración para la búsqueda de páginas.</p>
+        <!-- Aquí se pueden agregar más opciones específicas para páginas en el futuro -->
+      </div>
+    </main>
+    
+    <footer>
+      <button id="save-options-btn" class="btn">Guardar opciones</button>
+      <button id="open-sidebar-btn" class="btn btn-secondary">Abrir búsqueda</button>
+    </footer>
+  </div>
+  
+  <script src="../js/popup.js"></script>
+</body>
+</html>

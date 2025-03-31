@@ -150,9 +150,14 @@ window.LeadManagerPro.modules.findProfiles = async function() {
     const resultType = searchState.searchType === 'people' ? 'perfiles' : 'grupos';
     updateStatus(`Encontrados ${searchState.foundProfiles.length} ${resultType} en la página ${searchState.currentPage}.`, 50);
     
-    // Continuar con las siguientes páginas hasta MAX_PAGES (predeterminado 10)
+    // Obtener opciones para controlar la búsqueda
+    const options = window.LeadManagerPro.state.options || {};
+    const MAX_SCROLLS = options.maxScrolls || 50;
+    const SCROLL_DELAY = (options.scrollDelay || 2) * 1000; // Convertir a milisegundos
+    
+    // Continuar con las siguientes páginas hasta que se alcance el máximo de scrolls
     let hasNextPage = true;
-    const MAX_PAGES = 5;
+    const MAX_PAGES = Math.ceil(MAX_SCROLLS / 10); // Estimando 10 scrolls por página
     
     while (hasNextPage && searchState.currentPage < MAX_PAGES && !searchState.stopSearch) {
       // Verificar si se debe pausar la búsqueda
