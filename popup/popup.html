@@ -26,17 +26,21 @@
       <div id="tab-general" class="tab-content active">
         <h2>Opciones Generales</h2>
         <div class="form-group">
-          <label for="max-scrolls">Scrolls máximos:</label>
+          <label for="max-scrolls">Scrolls máximos para mostrar resultados:</label>
           <input type="number" id="max-scrolls" min="1" value="50">
+          <small>Número máximo de scrolls antes de mostrar resultados (por defecto 50)</small>
         </div>
         <div class="form-group">
-          <label for="scroll-delay">Tiempo entre scrolls (segundos):</label>
+          <label for="scroll-delay">Tiempo de espera entre scroll (segundos):</label>
           <input type="number" id="scroll-delay" min="1" step="0.5" value="2">
+          <small>Tiempo de espera entre cada scroll (por defecto 2 segundos)</small>
         </div>
       </div>
       
       <div id="tab-groups" class="tab-content">
         <h2>Opciones para Búsqueda de Grupos</h2>
+        
+        <!-- Tipos de grupo -->
         <div class="form-group">
           <label>Tipos de grupo:</label>
           <div class="checkbox-group">
@@ -50,25 +54,49 @@
             </div>
           </div>
         </div>
+        
+        <!-- Cantidad mínima de usuarios -->
         <div class="form-group">
           <label for="min-users">Cantidad mínima de usuarios:</label>
           <input type="number" id="min-users" min="0" value="100">
+          <small>Número mínimo de miembros que debe tener el grupo</small>
         </div>
+        
+        <!-- Cantidad mínima de publicaciones -->
         <div class="form-group">
           <label>Cantidad mínima de publicaciones:</label>
           <div class="multi-input">
             <div class="input-item">
-              <input type="number" id="min-posts-year" min="0" value="10">
+              <input type="number" id="min-posts-year" min="0" placeholder="Por ej: 10">
               <label for="min-posts-year">por año</label>
             </div>
             <div class="input-item">
-              <input type="number" id="min-posts-month" min="0" value="5">
+              <input type="number" id="min-posts-month" min="0" placeholder="Por ej: 5">
               <label for="min-posts-month">por mes</label>
             </div>
             <div class="input-item">
-              <input type="number" id="min-posts-day" min="0" value="1">
+              <input type="number" id="min-posts-day" min="0" placeholder="Por ej: 1">
               <label for="min-posts-day">por día</label>
             </div>
+          </div>
+          <small style="display: block; margin-top: 8px; color: #666; font-size: 11px;">Nota: El grupo debe cumplir con el mínimo de usuarios Y cualquiera de los mínimos de publicaciones (año, mes o día).</small>
+        </div>
+        
+        <!-- Botones para gestionar criterios de búsqueda -->
+        <div class="form-group">
+          <label>Gestión de criterios:</label>
+          <div class="button-group">
+            <button id="clear-criteria-btn" class="btn btn-secondary">Limpiar criterios</button>
+            <button id="save-criteria-btn" class="btn btn-secondary">Guardar criterios</button>
+          </div>
+        </div>
+        
+        <!-- Sección para administrar búsquedas guardadas -->
+        <div class="form-group">
+          <label>Búsquedas guardadas:</label>
+          <div id="saved-searches-container" class="saved-searches-container">
+            <!-- Las búsquedas guardadas se agregarán dinámicamente aquí -->
+            <p class="empty-state">No hay búsquedas guardadas</p>
           </div>
         </div>
       </div>

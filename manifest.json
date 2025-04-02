@@ -34,6 +34,9 @@
         "content/modules/searchNavigation.js",
         "content/modules/profileExtractor.js",
         "content/modules/profileFinder.js",
+        "content/modules/groupFinder.js",
+        "content/modules/groupSearchUI.js",
+        "content/modules/simpleGroupUI.js",
         "content/modules/sidebar.js",
         "content/modules/errorHandler.js",
         "content/index.js"

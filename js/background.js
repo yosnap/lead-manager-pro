@@ -34,9 +34,10 @@ chrome.storage.local.get([
     groupPublic: result.groupPublic !== undefined ? result.groupPublic : true,
     groupPrivate: result.groupPrivate !== undefined ? result.groupPrivate : true,
     minUsers: result.minUsers || 100,
-    minPostsYear: result.minPostsYear || 10,
-    minPostsMonth: result.minPostsMonth || 5,
-    minPostsDay: result.minPostsDay || 1
+    // Para las publicaciones mínimas, permitir valores vacíos
+    minPostsYear: result.minPostsYear !== undefined ? result.minPostsYear : 10,
+    minPostsMonth: result.minPostsMonth !== undefined ? result.minPostsMonth : 5,
+    minPostsDay: result.minPostsDay !== undefined ? result.minPostsDay : 1
   };
   
   chrome.storage.local.set(defaultOptions);
@@ -118,6 +119,67 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             
             // Actualizar estado global
             updateStatus(`Búsqueda de ${message.searchData.type === 'people' ? 'personas' : 'grupos'} iniciada en Facebook`, 10);
+          });
+        } catch (error) {
+          console.error('Background: Error al enviar mensaje:', error);
+          sendResponse({ success: false, error: 'Error al enviar mensaje: ' + error.message });
+        }
+      } else {
+        console.error('Background: No hay pestañas activas');
+        sendResponse({ success: false, error: 'No hay pestañas activas' });
+      }
+    });
+    
+    return true; // Mantener el puerto abierto para respuesta asíncrona
+  } else if (message.action === 'startGroupSearch') {
+    // Iniciar la búsqueda de grupos
+    console.log('Background: Iniciando búsqueda de grupos con opciones:', message.options);
+    
+    // Verificar que al menos un tipo de grupo esté seleccionado
+    if (!message.options.publicGroups && !message.options.privateGroups) {
+      sendResponse({ 
+        success: false, 
+        error: 'Debe seleccionar al menos un tipo de grupo (público o privado).' 
+      });
+      return true;
+    }
+    
+    // Verificar que se haya ingresado la cantidad mínima de usuarios
+    if (!message.options.minUsers) {
+      sendResponse({ 
+        success: false, 
+        error: 'Debe ingresar una cantidad mínima de usuarios.' 
+      });
+      return true;
+    }
+    
+    // Enviar la solicitud de búsqueda a la pestaña activa
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length > 0) {
+        try {
+          console.log(`Background: Enviando mensaje de búsqueda de grupos a pestaña ${tabs[0].id}`);
+          
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'startGroupSearch',
+            options: message.options
+          }, function(response) {
+            // Comprobar si hay un error de runtime
+            if (chrome.runtime.lastError) {
+              console.error('Background: Error al comunicarse con content script:', chrome.runtime.lastError);
+              sendResponse({ 
+                success: false, 
+                error: 'Error de comunicación: ' + chrome.runtime.lastError.message 
+              });
+              return;
+            }
+            
+            console.log('Background: Respuesta de content script:', response);
+            
+            // Enviar respuesta inmediata
+            sendResponse({ success: true, message: 'Búsqueda de grupos iniciada' });
+            
+            // Actualizar estado global
+            updateStatus('Búsqueda de grupos iniciada en Facebook', 10);
           });
         } catch (error) {
           console.error('Background: Error al enviar mensaje:', error);

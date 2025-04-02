@@ -118,6 +118,13 @@ select {
   font-size: 14px;
 }
 
+small {
+  display: block;
+  margin-top: 4px;
+  color: var(--light-text);
+  font-size: 12px;
+}
+
 input[type="number"]:focus,
 input[type="text"]:focus,
 select:focus {

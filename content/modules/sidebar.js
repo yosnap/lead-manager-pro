@@ -283,6 +283,76 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
       }
     }
     
+    else if (message.action === 'configure_search') {
+      console.log('Configurando sidebar para búsqueda:', message.config);
+      
+      // Enviar mensaje al iframe para configurar la interfaz de búsqueda
+      const iframe = document.getElementById('snap-lead-manager-iframe');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({
+          action: 'configure_search',
+          config: message.config
+        }, '*');
+      }
+    }
+    
+    else if (message.action === 'startSearchDirectly') {
+      console.log('Iniciando búsqueda directamente con opciones:', message.options);
+      
+      // Primero, asegurarse de que el sidebar esté visible
+      const sidebarContainer = document.getElementById('snap-lead-manager-container');
+      if (sidebarContainer) {
+        sidebarContainer.style.transform = 'translateX(0)';
+        const toggleButton = document.getElementById('snap-lead-manager-toggle');
+        if (toggleButton) {
+          toggleButton.innerHTML = '◀';
+          toggleButton.setAttribute('title', 'Ocultar Lead Manager');
+        }
+        localStorage.setItem('snap_lead_manager_sidebar_hidden', 'false');
+      } else {
+        // Si no existe el sidebar, crearlo
+        window.LeadManagerPro.modules.insertSidebar();
+      }
+      
+      // Esperar a que el iframe se cargue
+      setTimeout(() => {
+        // Recopilar datos de búsqueda desde localStorage si existen
+        let searchTerm = '';
+        let searchCity = '';
+        
+        try {
+          // Intentar obtener datos del último sidebar usado
+          searchTerm = localStorage.getItem('snap_lead_manager_search_term') || 'mecánicos';
+          searchCity = localStorage.getItem('snap_lead_manager_search_city') || 'Madrid';
+        } catch (e) {
+          console.error('Error al recuperar datos de búsqueda:', e);
+        }
+        
+        // Enviar mensaje al iframe con los datos de búsqueda y tipo
+        const iframe = document.getElementById('snap-lead-manager-iframe');
+        if (iframe && iframe.contentWindow) {
+          // Configurar búsqueda
+          iframe.contentWindow.postMessage({
+            action: 'configure_search',
+            config: {
+              type: message.searchType || 'groups',
+              term: searchTerm,
+              city: searchCity,
+              autoStart: true
+            }
+          }, '*');
+          
+          // También enviar opciones de filtrado adicionales 
+          if (message.options) {
+            iframe.contentWindow.postMessage({
+              action: 'set_filter_options',
+              options: message.options
+            }, '*');
+          }
+        }
+      }, 1000);
+    }
+    
     else if (message.action === 'updateOptions') {
       // Recibir opciones actualizadas del popup
       console.log('Opciones actualizadas recibidas:', message.options);

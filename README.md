@@ -52,11 +52,29 @@ La implementación involucró:
 
 ## Actualizaciones recientes
 
+### Mejoras en las opciones de configuración
+- Se han añadido nuevas opciones generales:
+  - **Scrolls máximos**: Configurable para controlar cuánto baja la página antes de mostrar resultados (por defecto 50)
+  - **Tiempo de espera entre scroll**: Configurable en segundos para ajustar la velocidad del scraping (por defecto 2 segundos)
+
+### Nuevas características para búsqueda de grupos
+- Se han ampliado las opciones de filtrado para grupos de Facebook:
+  - **Tipos de grupo**: Selección mediante checkbox para buscar grupos públicos y/o privados
+  - **Cantidad mínima de usuarios**: Filtro numérico para encontrar sólo grupos con un mínimo de miembros
+  - **Cantidad mínima de publicaciones**: Múltiples filtros configurables:
+    - Por año: Número mínimo de publicaciones anuales
+    - Por mes: Número mínimo de publicaciones mensuales
+    - Por día: Número mínimo de publicaciones diarias
+  - **Lógica de filtro mejorada**: Los grupos deben cumplir siempre con el mínimo de usuarios Y al menos uno de los criterios de publicaciones mínimas (año, mes o día)
+
 ### Mejora en la experiencia de usuario
 - Se ha simplificado la interfaz eliminando completamente el popup
 - Al hacer clic en el icono de la extensión, se muestra directamente el sidebar en la página de Facebook
 - Si no se está en Facebook, se abre una nueva pestaña con Facebook y se muestra el sidebar
-- Los botones de control (iniciar, pausar, detener) ahora funcionan independientemente del estado
+- Corrección de los botones de control durante búsquedas activas:
+  - Los botones de Pausar y Detener ahora se activan correctamente durante una búsqueda en curso
+  - Mejor feedback visual para indicar el estado de la búsqueda (activa, pausada, detenida)
+  - Estilos mejorados para botones habilitados/deshabilitados
 - Se ha mejorado la experiencia general al hacer que la interfaz sea más intuitiva y directa
 
 ### Mejoras en la interfaz del sidebar
@@ -85,11 +103,51 @@ La implementación involucró:
 - Se ha corregido el problema con la tecla Enter que no iniciaba la búsqueda
 - Se ha corregido el problema de timeout en búsquedas extensas
 
+### Mejoras en la persistencia de datos
+- Se ha implementado un sistema para guardar y cargar las configuraciones de búsqueda
+- Las opciones de búsqueda ahora se guardan en localStorage para recordar las preferencias del usuario
+- Se ha preparado la estructura para la futura sincronización con base de datos externa
+- Se ha mejorado el manejo del estado de búsqueda activa para mantener la coherencia incluso tras recargar la página
+
 ### Próximos pasos
 - Implementar el análisis detallado de perfiles
 - Desarrollar la extracción de datos adicionales
+- Implementar la integración con base de datos externa
 - Implementar la integración con N8N
-- Añadir más opciones de filtrado en la búsqueda
+- Mejorar el sistema de informes y análisis de los resultados
+
+## Guía de configuración de la búsqueda de grupos
+
+### Configuración general
+Para acceder a las opciones generales:
+1. Haz clic en el icono de la extensión mientras estás en Facebook
+2. En el sidebar, haz clic en "Configuración Avanzada" para expandir las opciones
+
+### Opciones de scroll
+- **Scrolls máximos**: Define cuántos scrolls realizará la extensión antes de detener la búsqueda (valor predeterminado: 50)
+  - Un valor mayor obtendrá más resultados pero tardará más tiempo
+  - Un valor menor será más rápido pero podría obtener menos resultados
+- **Tiempo entre scrolls**: Define cuántos segundos esperar entre cada scroll (valor predeterminado: 2 segundos)
+  - Un tiempo mayor es más seguro para evitar bloqueos de Facebook
+  - Un tiempo menor acelera la búsqueda pero podría ser detectado como comportamiento automatizado
+
+### Filtros para grupos
+- **Tipos de grupo**: Selecciona qué tipos de grupos quieres incluir
+  - **Públicos**: Grupos visibles y accesibles para todos
+  - **Privados**: Grupos que requieren aprobación para unirse
+- **Cantidad mínima de usuarios**: Define el número mínimo de miembros que debe tener un grupo
+  - Este filtro SIEMPRE debe cumplirse para que un grupo aparezca en los resultados
+- **Cantidad mínima de publicaciones**:
+  - **Por año**: Número mínimo de publicaciones anuales
+  - **Por mes**: Número mínimo de publicaciones mensuales
+  - **Por día**: Número mínimo de publicaciones diarias
+  - El grupo debe cumplir con AL MENOS UNO de estos criterios (año, mes o día)
+
+### Uso efectivo de filtros
+- Para grupos más activos, aumenta los valores de publicaciones mínimas
+- Para grupos más grandes, aumenta el valor mínimo de usuarios
+- Si buscas nichos específicos, mantén valores bajos para obtener más resultados
+- Los filtros se aplican mientras se recolectan los grupos, no es necesario esperar al final de la búsqueda
 
 ## Instalación y pruebas
 

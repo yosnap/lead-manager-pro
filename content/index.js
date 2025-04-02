@@ -143,6 +143,146 @@ function setupChromeMessagesListener() {
       }
     }
     
+    if (message.action === 'startGroupSearch') {
+      console.log('%c[GRUPO BUSCADOR] Recibido mensaje para búsqueda de grupos:', 'background: #4267B2; color: white; padding: 3px 5px; border-radius: 3px;', message.options);
+      
+      // Verificar disponibilidad del módulo de búsqueda de grupos
+      console.log('Disponibilidad de módulos:', {
+        leadManagerPro: !!window.leadManagerPro,
+        groupFinder: window.leadManagerPro ? !!window.leadManagerPro.groupFinder : false,
+        groupSearchUI: window.leadManagerPro ? !!window.leadManagerPro.groupSearchUI : false
+      });
+      
+      // Si no están disponibles los módulos, crearlos manualmente para asegurar la funcionalidad
+      if (!window.leadManagerPro) {
+        console.log('Creando namespace leadManagerPro');
+        window.leadManagerPro = {};
+      }
+      
+      // Intentar cargar el módulo GroupFinder si no existe
+      if (!window.leadManagerPro.groupFinder) {
+        console.log('Intentando cargar manualmente GroupFinder');
+        
+        // Importar dinámicamente el script si no existe
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL('content/modules/groupFinder.js');
+        document.head.appendChild(script);
+        
+        // Crear una instancia temporal
+        window.leadManagerPro.groupFinder = new GroupFinder();
+      }
+      
+      // Intentar cargar el módulo GroupSearchUI si no existe
+      if (!window.leadManagerPro.groupSearchUI) {
+        console.log('Intentando cargar manualmente GroupSearchUI');
+        
+        // Importar dinámicamente el script si no existe
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL('content/modules/groupSearchUI.js');
+        document.head.appendChild(script);
+        
+        // Crear una instancia temporal
+        window.leadManagerPro.groupSearchUI = {
+          show: function(options) {
+            console.log('Mostrando UI con opciones:', options);
+            return this;
+          },
+          processUpdate: function(data) {
+            console.log('Actualizando UI con datos:', data);
+          }
+        };
+      }
+      
+      // Verificar nuevamente si los módulos están disponibles
+      if (window.leadManagerPro && window.leadManagerPro.groupFinder) {
+        // Usar la interfaz simple si la principal no está disponible
+        const uiModule = window.leadManagerPro.groupSearchUI || window.leadManagerPro.simpleGroupUI;
+        
+        // Obtener opciones adicionales del almacenamiento local
+        chrome.storage.local.get(['maxScrolls', 'scrollDelay'], function(result) {
+          const options = {
+            ...message.options,
+            maxScrolls: result.maxScrolls || 50,
+            scrollDelay: result.scrollDelay || 2
+          };
+          
+          console.log('Opciones finales para la búsqueda:', options);
+          
+          // Mostrar la interfaz de búsqueda
+          uiModule.show({
+            title: 'Búsqueda de Grupos de Facebook'
+          });
+          
+          // Configurar callback para actualizar la interfaz
+          const progressCallback = (progressData) => {
+            console.log('Progreso de búsqueda:', progressData);
+            
+            // Actualizar la interfaz de usuario
+            uiModule.processUpdate(progressData);
+            
+            // Enviar actualizaciones de progreso al fondo
+            chrome.runtime.sendMessage({
+              type: 'status_update',
+              message: progressData.message || 'Buscando grupos...',
+              progress: progressData.type === 'progress' ? progressData.value : null,
+              groupsFound: progressData.groupsFound || 0,
+              finished: progressData.type === 'complete'
+            });
+          };
+          
+          // Inicializar y comenzar la búsqueda de grupos
+          window.leadManagerPro.groupFinder.init(options, progressCallback).startSearch();
+          
+          sendResponse({ success: true, message: 'Búsqueda de grupos iniciada' });
+        });
+        return true;
+      } else {
+        console.error('Lead Manager Pro: Módulos de búsqueda de grupos no disponibles');
+        sendResponse({ success: false, error: 'Módulos de búsqueda de grupos no disponibles' });
+        return false;
+      }
+    }
+    
+    if (message.action === 'stopGroupSearch') {
+      if (window.leadManagerPro && window.leadManagerPro.groupFinder) {
+        console.log('Deteniendo búsqueda de grupos');
+        const groups = window.leadManagerPro.groupFinder.stopSearch();
+        
+        // Usar la interfaz disponible (principal o simple)
+        const uiModule = window.leadManagerPro.groupSearchUI || 
+                         window.leadManagerPro.simpleGroupUI;
+        
+        // Actualizar la interfaz si está disponible
+        if (uiModule) {
+          uiModule.processUpdate({
+            type: 'complete',
+            message: `Búsqueda finalizada. Se encontraron ${groups.length} grupos.`,
+            groupsFound: groups.length
+          });
+        }
+        
+        // Guardar resultados en localStorage para futuro uso
+        try {
+          localStorage.setItem('foundGroups', JSON.stringify(groups));
+          console.log('Grupos guardados en localStorage:', groups.length);
+        } catch (e) {
+          console.error('Error al guardar grupos en localStorage:', e);
+        }
+        
+        sendResponse({ success: true, groupsFound: groups.length });
+        return false;
+      }
+    }
+    
+    if (message.action === 'exportGroupResults') {
+      if (window.leadManagerPro && window.leadManagerPro.groupFinder) {
+        const format = message.format || 'json';
+        const url = window.leadManagerPro.groupFinder.exportResults(format);
+        sendResponse({ success: true, downloadUrl: url });
+        return false;
+      }
+    }
+    
     if (message.action === 'find_profiles') {
       // Guardar datos de búsqueda en localStorage si se proporcionan
       if (message.searchData) {
@@ -253,6 +393,57 @@ function setupChromeMessagesListener() {
         sendResponse({ hasErrors: false });
       }
       return false;
+    }
+    
+    // Manejar la acción de iniciar búsqueda directamente desde la ventana de opciones
+    if (message.action === 'startSearchDirectly') {
+      console.log('Iniciando búsqueda directamente con configuración:', message);
+      
+      // Configurar el sidebar para búsqueda directa
+      if (window.LeadManagerPro.modules.insertSidebar) {
+        // Mostrar el sidebar si no está visible
+        const sidebarContainer = document.getElementById('snap-lead-manager-container');
+        if (sidebarContainer) {
+          sidebarContainer.style.transform = 'translateX(0)';
+          const toggleButton = document.getElementById('snap-lead-manager-toggle');
+          if (toggleButton) {
+            toggleButton.innerHTML = '◀';
+            toggleButton.setAttribute('title', 'Ocultar Lead Manager');
+          }
+          localStorage.setItem('snap_lead_manager_sidebar_hidden', 'false');
+        } else {
+          // Si no existe el sidebar, crearlo
+          window.LeadManagerPro.modules.insertSidebar();
+        }
+        
+        // Recopilar criterios de búsqueda existentes
+        const searchTerm = localStorage.getItem('snap_lead_manager_search_term') || 'mecánicos';
+        const searchCity = localStorage.getItem('snap_lead_manager_search_city') || 'Madrid';
+        
+        // Asegurarse de que el iframe se ha cargado completamente
+        setTimeout(() => {
+          // Configurar búsqueda tipo grupo y luego iniciarla
+          const iframe = document.getElementById('snap-lead-manager-iframe');
+          if (iframe && iframe.contentWindow) {
+            // Enviar mensaje para configurar y comenzar búsqueda automáticamente
+            iframe.contentWindow.postMessage({
+              action: 'search_with_options',
+              searchData: {
+                type: 'groups',
+                term: searchTerm,
+                city: searchCity,
+                filterOptions: message.options || {}
+              }
+            }, '*');
+          }
+        }, 1500);
+        
+        sendResponse({ success: true });
+      } else {
+        console.error('Módulo de sidebar no disponible');
+        sendResponse({ success: false, error: 'Módulo de sidebar no disponible' });
+      }
+      return true;
     }
     
     // Si no se encontró ningún handler, responder con error

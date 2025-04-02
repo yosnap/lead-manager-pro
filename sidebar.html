@@ -17,6 +17,8 @@
     <main>
       <section class="search-section">
         <h2>Búsqueda en Facebook</h2>
+        
+        <!-- Opciones generales -->
         <div class="form-group">
           <label for="search-type">Tipo de búsqueda</label>
           <select id="search-type" class="search-select">
@@ -32,10 +34,82 @@
           <label for="search-city">Ciudad (opcional)</label>
           <input type="text" id="search-city" placeholder="Ej: Madrid, Barcelona">
         </div>
+        
+        <!-- Opciones avanzadas (colapsables) -->
+        <div class="collapsible-section">
+          <button class="collapsible-trigger">Configuración Avanzada</button>
+          <div class="collapsible-content">
+            <!-- Configuración general -->
+            <div class="settings-section">
+              <h3>Opciones Generales</h3>
+              <div class="form-group">
+                <label for="max-scrolls">Scrolls máximos</label>
+                <input type="number" id="max-scrolls" min="1" value="50">
+              </div>
+              <div class="form-group">
+                <label for="scroll-delay">Tiempo entre scrolls (segundos)</label>
+                <input type="number" id="scroll-delay" min="1" step="0.5" value="2">
+              </div>
+            </div>
+            
+            <!-- Opciones específicas para grupos -->
+            <div id="group-options" class="settings-section" style="display: none;">
+              <h3>Opciones para Grupos</h3>
+              <div class="form-group">
+                <label>Tipos de grupo</label>
+                <div class="checkbox-group">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="public-groups" checked>
+                    Públicos
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="private-groups" checked>
+                    Privados
+                  </label>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="min-users">Cantidad mínima de usuarios</label>
+                <input type="number" id="min-users" min="0" value="0">
+              </div>
+              
+              <div class="form-group">
+                <label>Cantidad mínima de publicaciones</label>
+                <div class="posts-filters">
+                  <div class="posts-filter-item">
+                    <label for="min-posts-year">Por año</label>
+                    <input type="number" id="min-posts-year" min="0" value="">
+                  </div>
+                  <div class="posts-filter-item">
+                    <label for="min-posts-month">Por mes</label>
+                    <input type="number" id="min-posts-month" min="0" value="">
+                  </div>
+                  <div class="posts-filter-item">
+                    <label for="min-posts-day">Por día</label>
+                    <input type="number" id="min-posts-day" min="0" value="">
+                  </div>
+                </div>
+                <div class="filter-info">
+                  <p>Se requiere el mínimo de usuarios <strong>Y</strong> al menos uno de los mínimos de publicaciones</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Botones de acción para búsqueda -->
         <div class="button-group">
           <button id="search-button" class="btn">Buscar</button>
           <button id="pause-button" class="btn btn-secondary">Pausar</button>
           <button id="stop-button" class="btn btn-secondary">Detener</button>
+        </div>
+        
+        <!-- Botones para gestión de criterios -->
+        <div class="criteria-management">
+          <button id="clear-criteria" class="btn-link">Limpiar criterios</button>
+          <button id="save-criteria" class="btn-link">Guardar criterios</button>
+          <button id="cancel-edit" class="btn-link cancel-edit-button" style="display: none;">Cancelar edición</button>
+          <button id="manage-criteria" class="btn-link">Administrar guardados</button>
         </div>
         
         <!-- Contenedor para mostrar información de búsqueda actual -->
@@ -77,6 +151,46 @@
         <ul id="search-results" class="results-list"></ul>
       </section>
     </main>
+    
+    <!-- Modal para guardar criterios de búsqueda -->
+    <div id="save-criteria-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Guardar Criterios de Búsqueda</h3>
+          <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="criteria-name">Nombre para esta búsqueda</label>
+            <input type="text" id="criteria-name" placeholder="Ej: Búsqueda de grupos de marketing">
+          </div>
+          <div class="form-error" id="criteria-name-error"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="cancel-save" class="btn btn-secondary">Cancelar</button>
+          <button id="confirm-save" class="btn">Guardar</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Modal para administrar criterios guardados -->
+    <div id="manage-criteria-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Administrar Criterios Guardados</h3>
+          <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div id="saved-criteria-list" class="saved-criteria-list">
+            <!-- Los criterios guardados se insertarán aquí dinámicamente -->
+            <div class="empty-state">No hay criterios guardados</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" id="close-manage-criteria">Cerrar</button>
+        </div>
+      </div>
+    </div>
     
     <footer>
       <p>Snap Lead Manager v1.0.0</p>

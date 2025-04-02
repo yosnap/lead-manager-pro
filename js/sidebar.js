@@ -10,7 +10,27 @@ let state = {
   currentSearchType: 'people', // Tipo de búsqueda por defecto: personas
   searchStartTime: null,
   logEntries: [], // Almacenar entradas de log para el scroll y los perfiles
-  restored: false  // Indicador de si el estado fue restaurado
+  restored: false,  // Indicador de si el estado fue restaurado
+  
+  // Opciones generales con valores por defecto
+  maxScrolls: 50,
+  scrollDelay: 2,
+  
+  // Opciones para grupos con valores por defecto
+  groupOptions: {
+    publicGroups: true,
+    privateGroups: true,
+    minUsers: 0,
+    minPostsYear: 0,
+    minPostsMonth: 0,
+    minPostsDay: 0
+  },
+  
+  // Criterios guardados
+  savedCriteria: [],
+  
+  // Criterio actual que se está editando (si existe)
+  editingCriteriaId: null
 };
 
 // Referencias a elementos del DOM
@@ -25,7 +45,7 @@ let statusMessage;
 let progressBar;
 let searchResultsList;
 let currentSearchInfo;
-let openWindowButton; // Mantenemos solo esta referencia
+let openWindowButton;
 
 // Referencias a elementos de UI detallada
 let searchStatusContainer;
@@ -36,6 +56,33 @@ let currentOperation;
 let elapsedTime;
 let scrollLogContainer;
 let resultsSummary;
+
+// Referencias a elementos de configuración avanzada
+let collapsibleTrigger;
+let collapsibleContent;
+let maxScrollsInput;
+let scrollDelayInput;
+let groupOptionsContainer;
+let publicGroupsCheckbox;
+let privateGroupsCheckbox;
+let minUsersInput;
+let minPostsYearInput;
+let minPostsMonthInput;
+let minPostsDayInput;
+
+// Referencias a gestión de criterios
+let clearCriteriaButton;
+let saveCriteriaButton;
+let cancelEditButton;
+let manageCriteriaButton;
+let saveCriteriaModal;
+let criteriaNameInput;
+let criteriaNameError;
+let confirmSaveButton;
+let cancelSaveButton;
+let manageCriteriaModal;
+let savedCriteriaList;
+let closeManageCriteriaButton;
 
 // Funciones de utilidad
 function formatTime(milliseconds) {
@@ -190,11 +237,20 @@ function updateStatus(message, progress = state.progress, isError = false) {
 function updateUI() {
   // Verificar que los botones existen antes de modificar sus propiedades
   if (pauseButton) {
+    // Activar botón de pausa durante la búsqueda
     pauseButton.disabled = !state.isRunning;
     pauseButton.textContent = state.isPaused ? 'Reanudar' : 'Pausar';
+    
+    // Cambiar estilo visual según el estado
+    if (state.isPaused) {
+      pauseButton.classList.add('paused');
+    } else {
+      pauseButton.classList.remove('paused');
+    }
   }
   
   if (stopButton) {
+    // Activar botón de detener durante la búsqueda
     stopButton.disabled = !state.isRunning;
   }
   
@@ -208,6 +264,29 @@ function updateUI() {
   // Actualizar barra de progreso
   if (progressBar) {
     progressBar.style.width = `${state.progress}%`;
+  }
+  
+  // Deshabilitar botones de búsqueda mientras se ejecuta una búsqueda
+  if (searchButton) {
+    searchButton.disabled = state.isRunning;
+  }
+  
+  // Deshabilitar campos de entrada durante la búsqueda
+  if (searchTermInput) {
+    searchTermInput.disabled = state.isRunning;
+  }
+  
+  if (searchCityInput) {
+    searchCityInput.disabled = state.isRunning;
+  }
+  
+  if (searchTypeSelect) {
+    searchTypeSelect.disabled = state.isRunning;
+  }
+  
+  // Deshabilitar opciones avanzadas durante la búsqueda
+  if (collapsibleTrigger) {
+    collapsibleTrigger.disabled = state.isRunning;
   }
   
   // Actualizar información de búsqueda actual
@@ -259,6 +338,9 @@ function performSearch() {
     // Actualizar información de búsqueda
     updateSearchInfo();
     
+    // Añadir clase para indicar que la búsqueda está activa
+    document.body.classList.add('search-active');
+    
     // Crear mensaje para enviar a la página con formato unificado
     const searchData = {
       type: searchType,
@@ -268,12 +350,49 @@ function performSearch() {
       userInitiated: true // Marcar explícitamente como iniciado por el usuario
     };
     
+    // Agregar opciones generales
+    searchData.maxScrolls = parseInt(maxScrollsInput.value, 10) || 50;
+    searchData.scrollDelay = parseFloat(scrollDelayInput.value) || 2;
+    
+    // Guardar en el estado
+    state.maxScrolls = searchData.maxScrolls;
+    state.scrollDelay = searchData.scrollDelay;
+    
+    // Si es búsqueda de grupos, agregar opciones específicas
+    if (searchType === 'groups') {
+      // Obtener valores de los campos y permitir valores vacíos
+      const minUsersValue = minUsersInput.value.trim() === '' ? '' : (parseInt(minUsersInput.value, 10) || 0);
+      const minPostsYearValue = minPostsYearInput.value.trim() === '' ? '' : (parseInt(minPostsYearInput.value, 10) || 0);
+      const minPostsMonthValue = minPostsMonthInput.value.trim() === '' ? '' : (parseInt(minPostsMonthInput.value, 10) || 0);
+      const minPostsDayValue = minPostsDayInput.value.trim() === '' ? '' : (parseInt(minPostsDayInput.value, 10) || 0);
+      
+      const groupOptions = {
+        publicGroups: publicGroupsCheckbox.checked,
+        privateGroups: privateGroupsCheckbox.checked,
+        minUsers: minUsersValue,
+        minPostsYear: minPostsYearValue,
+        minPostsMonth: minPostsMonthValue,
+        minPostsDay: minPostsDayValue
+      };
+      
+      searchData.groupOptions = groupOptions;
+      state.groupOptions = groupOptions;
+    }
+    
     // Limpiar cualquier estado de búsqueda previo
     localStorage.removeItem('snap_lead_manager_force_reload');
     localStorage.removeItem('snap_lead_manager_search_url');
     
     // Guardar en localStorage para que el content script pueda acceder
     localStorage.setItem('snap_lead_manager_search_data', JSON.stringify(searchData));
+    localStorage.setItem('snap_lead_manager_general_options', JSON.stringify({
+      maxScrolls: searchData.maxScrolls,
+      scrollDelay: searchData.scrollDelay
+    }));
+    
+    if (searchType === 'groups') {
+      localStorage.setItem('snap_lead_manager_group_options', JSON.stringify(searchData.groupOptions));
+    }
     
     // Reiniciar indicador de filtro aplicado
     localStorage.setItem('snap_lead_manager_city_filter_applied', 'false');
@@ -292,6 +411,9 @@ function performSearch() {
     state.isPaused = false;
     state.searchStartTime = Date.now();
     state.profiles = []; // Limpiar resultados anteriores
+    
+    // Guardar indicador de búsqueda activa
+    localStorage.setItem('snap_lead_manager_search_active', 'true');
     
     // Limpiar los resultados previos
     if (searchResultsList) {
@@ -343,9 +465,17 @@ function togglePauseSearch() {
       if (state.isPaused) {
         pauseButton.classList.add('paused');
         if (currentOperation) currentOperation.textContent = 'Pausado';
+        
+        // Cambiar apariencia del botón de pausa
+        pauseButton.style.backgroundColor = '#f0ad4e';
+        pauseButton.style.color = 'white';
       } else {
         pauseButton.classList.remove('paused');
         if (currentOperation) currentOperation.textContent = 'En ejecución';
+        
+        // Restaurar apariencia del botón de pausa
+        pauseButton.style.backgroundColor = '';
+        pauseButton.style.color = '';
       }
       
       console.log(`Búsqueda ${state.isPaused ? 'pausada' : 'reanudada'} correctamente`);
@@ -383,6 +513,9 @@ function stopSearch() {
     state.isRunning = false;
     state.isPaused = false;
     
+    // Guardar indicador de búsqueda inactiva
+    localStorage.setItem('snap_lead_manager_search_active', 'false');
+    
     // Detener verificación de estado
     stopStatusChecking();
     
@@ -392,6 +525,9 @@ function stopSearch() {
     pauseButton.textContent = 'Pausar';
     pauseButton.classList.remove('paused');
     stopButton.disabled = true;
+    
+    // Remover clase search-active
+    document.body.classList.remove('search-active');
     
     // Actualización completa de la interfaz
     updateUI();
@@ -479,6 +615,418 @@ function openInWindow() {
   }, '*');
 }
 
+// Funciones para la gestión de criterios de búsqueda
+
+// Limpiar los criterios de búsqueda actuales
+function clearSearchCriteria() {
+  // Limpiar campos de entrada
+  searchTermInput.value = '';
+  searchCityInput.value = '';
+  
+  // Restablecer opciones generales a valores por defecto
+  maxScrollsInput.value = '50';
+  scrollDelayInput.value = '2';
+  
+  // Restablecer opciones de grupo a valores por defecto
+  publicGroupsCheckbox.checked = true;
+  privateGroupsCheckbox.checked = true;
+  minUsersInput.value = '0';
+  minPostsYearInput.value = '0';
+  minPostsMonthInput.value = '0';
+  minPostsDayInput.value = '0';
+  
+  // Limpiar estado
+  state.currentSearchTerm = '';
+  state.currentSearchCity = '';
+  
+  // Actualizar estado visual
+  updateSearchInfo();
+  
+  // Mostrar mensaje de confirmación
+  showTemporaryMessage('Criterios de búsqueda limpiados');
+}
+
+// Mostrar modal para guardar criterios
+function showSaveCriteriaModal() {
+  if (!searchTermInput.value.trim()) {
+    showError('Debes ingresar al menos un término de búsqueda para guardar');
+    return;
+  }
+  
+  // Si estamos editando, no mostrar el modal y actualizar directamente
+  if (state.editingCriteriaId) {
+    updateExistingCriteria();
+    return;
+  }
+  
+  // De lo contrario, mostrar el modal para ingresar un nombre
+  criteriaNameInput.value = '';
+  criteriaNameError.textContent = '';
+  saveCriteriaModal.style.display = 'block';
+}
+
+// Actualizar un criterio existente que está siendo editado
+function updateExistingCriteria() {
+  console.log('Actualizando criterio existente, ID:', state.editingCriteriaId);
+  // Buscar el criterio que estamos editando
+  const criteriaIndex = state.savedCriteria.findIndex(c => c.id === state.editingCriteriaId);
+  
+  if (criteriaIndex === -1) {
+    showError('No se encontró el criterio que estás editando');
+    console.error('No se encontró el criterio ID:', state.editingCriteriaId);
+    return;
+  }
+  
+  const originalCriteria = state.savedCriteria[criteriaIndex];
+  console.log('Criterio original:', originalCriteria);
+  
+  // Obtener valores de los campos y permitir valores vacíos
+  const minUsersValue = minUsersInput.value.trim() === '' ? '' : (parseInt(minUsersInput.value, 10) || 0);
+  const minPostsYearValue = minPostsYearInput.value.trim() === '' ? '' : (parseInt(minPostsYearInput.value, 10) || 0);
+  const minPostsMonthValue = minPostsMonthInput.value.trim() === '' ? '' : (parseInt(minPostsMonthInput.value, 10) || 0);
+  const minPostsDayValue = minPostsDayInput.value.trim() === '' ? '' : (parseInt(minPostsDayInput.value, 10) || 0);
+  
+  // Actualizar el criterio con los nuevos valores
+  const updatedCriteria = {
+    ...originalCriteria,
+    type: searchTypeSelect.value,
+    term: searchTermInput.value.trim(),
+    city: searchCityInput.value.trim(),
+    maxScrolls: parseInt(maxScrollsInput.value, 10) || 50,
+    scrollDelay: parseFloat(scrollDelayInput.value) || 2,
+    groupOptions: {
+      publicGroups: publicGroupsCheckbox.checked,
+      privateGroups: privateGroupsCheckbox.checked,
+      minUsers: minUsersValue,
+      minPostsYear: minPostsYearValue,
+      minPostsMonth: minPostsMonthValue,
+      minPostsDay: minPostsDayValue
+    }
+  };
+  
+  console.log('Criterio actualizado:', updatedCriteria);
+  
+  // Reemplazar el criterio en el array
+  state.savedCriteria[criteriaIndex] = updatedCriteria;
+  
+  // Guardar en localStorage
+  localStorage.setItem('snap_lead_manager_saved_criteria', JSON.stringify(state.savedCriteria));
+  
+  // Restaurar estado de edición
+  state.editingCriteriaId = null;
+  if (saveCriteriaButton) {
+    saveCriteriaButton.textContent = 'Guardar criterios';
+    saveCriteriaButton.classList.remove('editing');
+    console.log('Texto del botón restaurado:', saveCriteriaButton.textContent);
+  }
+  
+  // Ocultar botón de cancelar edición
+  if (cancelEditButton) {
+    cancelEditButton.style.display = 'none';
+    console.log('Botón de cancelar ocultado');
+  }
+  
+  // Mostrar mensaje de confirmación
+  showTemporaryMessage(`Criterios "${updatedCriteria.name}" actualizados correctamente`);
+}
+
+// Guardar criterios actuales
+function saveSearchCriteria() {
+  const criteriaName = criteriaNameInput.value.trim();
+  
+  if (!criteriaName) {
+    criteriaNameError.textContent = 'Por favor ingresa un nombre para esta búsqueda';
+    return;
+  }
+  
+  // Comprobar si ya existe un criterio con ese nombre
+  const criteriaExists = state.savedCriteria.some(criteria => criteria.name === criteriaName);
+  if (criteriaExists) {
+    // Preguntar si desea sobrescribir
+    if (!confirm(`Ya existe una búsqueda con el nombre "${criteriaName}". ¿Deseas sobrescribirla?`)) {
+      return;
+    } else {
+      // Eliminar el criterio existente
+      state.savedCriteria = state.savedCriteria.filter(c => c.name !== criteriaName);
+    }
+  }
+  
+  // Obtener valores de los campos y permitir valores vacíos
+  const minUsersValue = minUsersInput.value.trim() === '' ? '' : (parseInt(minUsersInput.value, 10) || 0);
+  const minPostsYearValue = minPostsYearInput.value.trim() === '' ? '' : (parseInt(minPostsYearInput.value, 10) || 0);
+  const minPostsMonthValue = minPostsMonthInput.value.trim() === '' ? '' : (parseInt(minPostsMonthInput.value, 10) || 0);
+  const minPostsDayValue = minPostsDayInput.value.trim() === '' ? '' : (parseInt(minPostsDayInput.value, 10) || 0);
+  
+  // Crear objeto de criterios
+  const criteria = {
+    id: Date.now().toString(),
+    name: criteriaName,
+    type: searchTypeSelect.value,
+    term: searchTermInput.value.trim(),
+    city: searchCityInput.value.trim(),
+    maxScrolls: parseInt(maxScrollsInput.value, 10) || 50,
+    scrollDelay: parseFloat(scrollDelayInput.value) || 2,
+    groupOptions: {
+      publicGroups: publicGroupsCheckbox.checked,
+      privateGroups: privateGroupsCheckbox.checked,
+      minUsers: minUsersValue,
+      minPostsYear: minPostsYearValue,
+      minPostsMonth: minPostsMonthValue,
+      minPostsDay: minPostsDayValue
+    }
+  };
+  
+  // Agregar a la lista
+  state.savedCriteria.push(criteria);
+  
+  // Guardar en localStorage
+  localStorage.setItem('snap_lead_manager_saved_criteria', JSON.stringify(state.savedCriteria));
+  
+  // Cerrar modal
+  saveCriteriaModal.style.display = 'none';
+  
+  // Mostrar mensaje de confirmación
+  showTemporaryMessage(`Criterios guardados como "${criteriaName}"`);
+}
+
+// Mostrar modal para administrar criterios guardados
+function showManageCriteriaModal() {
+  // Actualizar lista de criterios guardados
+  updateSavedCriteriaList();
+  
+  // Mostrar modal
+  manageCriteriaModal.style.display = 'block';
+}
+
+// Actualizar la lista de criterios guardados en el modal
+function updateSavedCriteriaList() {
+  if (!savedCriteriaList) return;
+  
+  // Limpiar lista
+  savedCriteriaList.innerHTML = '';
+  
+  // Si no hay criterios guardados, mostrar mensaje
+  if (!state.savedCriteria || state.savedCriteria.length === 0) {
+    const emptyState = document.createElement('div');
+    emptyState.className = 'empty-state';
+    emptyState.textContent = 'No hay criterios guardados';
+    savedCriteriaList.appendChild(emptyState);
+    return;
+  }
+  
+  // Agregar cada criterio a la lista
+  state.savedCriteria.forEach(criteria => {
+    const criteriaItem = document.createElement('div');
+    criteriaItem.className = 'saved-criteria-item';
+    criteriaItem.dataset.id = criteria.id;
+    
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'saved-criteria-name';
+    nameSpan.textContent = criteria.name;
+    
+    // Crear un elemento para mostrar detalles del criterio
+    const detailsSpan = document.createElement('span');
+    detailsSpan.className = 'saved-criteria-details';
+    
+    // Mostrar tipo de búsqueda y término
+    const typeLabel = criteria.type === 'people' ? 'Personas' : 'Grupos';
+    detailsSpan.textContent = `${typeLabel}: ${criteria.term}`;
+    if (criteria.city) {
+      detailsSpan.textContent += ` en ${criteria.city}`;
+    }
+    
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'saved-criteria-actions';
+    
+    const loadButton = document.createElement('button');
+    loadButton.className = 'criteria-action';
+    loadButton.innerHTML = '&#x1F4E5;'; // Ícono de cargar
+    loadButton.title = 'Cargar criterios';
+    loadButton.addEventListener('click', () => loadSavedCriteria(criteria.id));
+    
+    const editButton = document.createElement('button');
+    editButton.className = 'criteria-action';
+    editButton.innerHTML = '&#x1F4DD;'; // Ícono de documento con lápiz
+    editButton.title = 'Editar criterios';
+    editButton.addEventListener('click', () => {
+      // Cargar para editar y luego cerrar el modal
+      loadSavedCriteria(criteria.id, true);
+      manageCriteriaModal.style.display = 'none';
+    });
+    
+    const renameButton = document.createElement('button');
+    renameButton.className = 'criteria-action';
+    renameButton.innerHTML = '&#x270F;'; // Ícono de editar
+    renameButton.title = 'Renombrar';
+    renameButton.addEventListener('click', () => renameSavedCriteria(criteria.id));
+    
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'criteria-action';
+    deleteButton.innerHTML = '&#x1F5D1;'; // Ícono de eliminar
+    deleteButton.title = 'Eliminar';
+    deleteButton.addEventListener('click', () => deleteSavedCriteria(criteria.id));
+    
+    actionsDiv.appendChild(loadButton);
+    actionsDiv.appendChild(editButton);
+    actionsDiv.appendChild(renameButton);
+    actionsDiv.appendChild(deleteButton);
+    
+    // Crear contenedor para nombre y detalles
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'saved-criteria-info';
+    infoDiv.appendChild(nameSpan);
+    infoDiv.appendChild(detailsSpan);
+    
+    criteriaItem.appendChild(infoDiv);
+    criteriaItem.appendChild(actionsDiv);
+    
+    savedCriteriaList.appendChild(criteriaItem);
+  });
+}
+
+// Cargar criterios guardados
+function loadSavedCriteria(criteriaId, forEditing = false) {
+  const criteria = state.savedCriteria.find(c => c.id === criteriaId);
+  if (!criteria) {
+    showError('No se encontraron los criterios guardados');
+    return;
+  }
+  
+  console.log(`Cargando criterio ${criteriaId} para edición: ${forEditing}`);
+  
+  // Establecer valores en los campos
+  searchTypeSelect.value = criteria.type;
+  searchTermInput.value = criteria.term;
+  searchCityInput.value = criteria.city || '';
+  
+  // Opciones generales
+  maxScrollsInput.value = criteria.maxScrolls || 50;
+  scrollDelayInput.value = criteria.scrollDelay || 2;
+  
+  // Manejar cambio de tipo de búsqueda para mostrar/ocultar opciones de grupo
+  handleSearchTypeChange();
+  
+  // Opciones de grupo si están disponibles
+  if (criteria.groupOptions) {
+    publicGroupsCheckbox.checked = criteria.groupOptions.publicGroups !== false;
+    privateGroupsCheckbox.checked = criteria.groupOptions.privateGroups !== false;
+    
+    // Manejar valores vacíos
+    minUsersInput.value = criteria.groupOptions.minUsers === '' ? '' : (criteria.groupOptions.minUsers || 0);
+    minPostsYearInput.value = criteria.groupOptions.minPostsYear === '' ? '' : (criteria.groupOptions.minPostsYear || 0);
+    minPostsMonthInput.value = criteria.groupOptions.minPostsMonth === '' ? '' : (criteria.groupOptions.minPostsMonth || 0);
+    minPostsDayInput.value = criteria.groupOptions.minPostsDay === '' ? '' : (criteria.groupOptions.minPostsDay || 0);
+  }
+  
+  // Actualizar estado
+  state.currentSearchTerm = criteria.term;
+  state.currentSearchCity = criteria.city || '';
+  state.currentSearchType = criteria.type;
+  
+  // Si es para edición, recordar el ID y actualizar la interfaz
+  if (forEditing) {
+    state.editingCriteriaId = criteriaId;
+    
+    // Cambiar el texto del botón para indicar que está editando
+    if (saveCriteriaButton) {
+      // Truncar el nombre si es muy largo
+      const displayName = criteria.name.length > 15 ? 
+        criteria.name.substring(0, 12) + '...' : 
+        criteria.name;
+        
+      saveCriteriaButton.textContent = `Actualizar "${displayName}"`;
+      saveCriteriaButton.classList.add('editing');
+      console.log('Botón de guardar actualizado:', saveCriteriaButton.textContent);
+    }
+    
+    // Mostrar botón de cancelar edición
+    if (cancelEditButton) {
+      cancelEditButton.style.display = 'block';
+      console.log('Botón de cancelar mostrado');
+    }
+  } else {
+    state.editingCriteriaId = null;
+    
+    // Restaurar texto del botón
+    if (saveCriteriaButton) {
+      saveCriteriaButton.textContent = 'Guardar criterios';
+      saveCriteriaButton.classList.remove('editing');
+    }
+    
+    // Ocultar botón de cancelar edición
+    if (cancelEditButton) {
+      cancelEditButton.style.display = 'none';
+    }
+  }
+  
+  // Actualizar información de búsqueda
+  updateSearchInfo();
+  
+  // Cerrar modal
+  manageCriteriaModal.style.display = 'none';
+  
+  // Mostrar mensaje de confirmación
+  const action = forEditing ? 'editando' : 'cargados';
+  showTemporaryMessage(`Criterios "${criteria.name}" ${action}`);
+}
+
+// Renombrar criterios guardados
+function renameSavedCriteria(criteriaId) {
+  const criteriaIndex = state.savedCriteria.findIndex(c => c.id === criteriaId);
+  if (criteriaIndex === -1) return;
+  
+  const criteria = state.savedCriteria[criteriaIndex];
+  const newName = prompt('Ingresa un nuevo nombre para estos criterios:', criteria.name);
+  
+  if (newName && newName.trim()) {
+    // Comprobar si ya existe otro criterio con ese nombre
+    const nameExists = state.savedCriteria.some(c => c.id !== criteriaId && c.name === newName.trim());
+    
+    if (nameExists) {
+      alert('Ya existe una búsqueda con ese nombre');
+      return;
+    }
+    
+    // Actualizar nombre
+    state.savedCriteria[criteriaIndex].name = newName.trim();
+    
+    // Guardar en localStorage
+    localStorage.setItem('snap_lead_manager_saved_criteria', JSON.stringify(state.savedCriteria));
+    
+    // Actualizar lista
+    updateSavedCriteriaList();
+  }
+}
+
+// Eliminar criterios guardados
+function deleteSavedCriteria(criteriaId) {
+  if (confirm('¿Estás seguro de que deseas eliminar estos criterios guardados?')) {
+    // Filtrar para eliminar el criterio
+    state.savedCriteria = state.savedCriteria.filter(c => c.id !== criteriaId);
+    
+    // Guardar en localStorage
+    localStorage.setItem('snap_lead_manager_saved_criteria', JSON.stringify(state.savedCriteria));
+    
+    // Actualizar lista
+    updateSavedCriteriaList();
+  }
+}
+
+// Mostrar mensaje temporal
+function showTemporaryMessage(message, isError = false) {
+  const originalMessage = statusMessage.textContent;
+  const originalClass = statusMessage.className;
+  
+  statusMessage.textContent = message;
+  statusMessage.className = isError ? 'status error' : 'status success';
+  
+  // Restaurar mensaje original después de 3 segundos
+  setTimeout(() => {
+    statusMessage.textContent = originalMessage;
+    statusMessage.className = originalClass;
+  }, 3000);
+}
+
 // Inicializar referencias a elementos DOM
 function initDOMReferences() {
   searchTypeSelect = document.getElementById('search-type');
@@ -503,6 +1051,36 @@ function initDOMReferences() {
   elapsedTime = document.getElementById('elapsed-time');
   scrollLogContainer = document.getElementById('scroll-log-container');
   resultsSummary = document.getElementById('results-summary');
+  
+  // Configuración avanzada
+  collapsibleTrigger = document.querySelector('.collapsible-trigger');
+  collapsibleContent = document.querySelector('.collapsible-content');
+  maxScrollsInput = document.getElementById('max-scrolls');
+  scrollDelayInput = document.getElementById('scroll-delay');
+  groupOptionsContainer = document.getElementById('group-options');
+  publicGroupsCheckbox = document.getElementById('public-groups');
+  privateGroupsCheckbox = document.getElementById('private-groups');
+  minUsersInput = document.getElementById('min-users');
+  minPostsYearInput = document.getElementById('min-posts-year');
+  minPostsMonthInput = document.getElementById('min-posts-month');
+  minPostsDayInput = document.getElementById('min-posts-day');
+  
+  // Gestión de criterios
+  clearCriteriaButton = document.getElementById('clear-criteria');
+  saveCriteriaButton = document.getElementById('save-criteria');
+  cancelEditButton = document.getElementById('cancel-edit');
+  manageCriteriaButton = document.getElementById('manage-criteria');
+  
+  // Modales
+  saveCriteriaModal = document.getElementById('save-criteria-modal');
+  criteriaNameInput = document.getElementById('criteria-name');
+  criteriaNameError = document.getElementById('criteria-name-error');
+  confirmSaveButton = document.getElementById('confirm-save');
+  cancelSaveButton = document.getElementById('cancel-save');
+  
+  manageCriteriaModal = document.getElementById('manage-criteria-modal');
+  savedCriteriaList = document.getElementById('saved-criteria-list');
+  closeManageCriteriaButton = document.getElementById('close-manage-criteria');
 }
 
 // Función para manejar el cambio de tipo de búsqueda
@@ -523,6 +1101,31 @@ function handleSearchTypeChange() {
       ? 'Ej: Madrid, Barcelona'
       : 'Filtrar grupos por ciudad';
   }
+  
+  // Mostrar u ocultar opciones específicas para grupos
+  if (groupOptionsContainer) {
+    groupOptionsContainer.style.display = searchType === 'groups' ? 'block' : 'none';
+  }
+}
+
+// Función para manejar el comportamiento de secciones colapsables
+function toggleCollapsible() {
+  this.classList.toggle('active');
+  const content = this.nextElementSibling;
+  
+  if (content.style.maxHeight) {
+    content.style.maxHeight = null;
+  } else {
+    content.style.maxHeight = content.scrollHeight + 'px';
+  }
+}
+
+// Función para cerrar modales
+function closeModals() {
+  const modals = document.querySelectorAll('.modal');
+  modals.forEach(modal => {
+    modal.style.display = 'none';
+  });
 }
 
 // Manejador de mensajes recibidos de la página
@@ -562,6 +1165,8 @@ function handleReceivedMessage(event) {
           state.isRunning = false;
           state.isPaused = false;
           updateStatus('Búsqueda completada', 100);
+          localStorage.setItem('snap_lead_manager_search_active', 'false');
+          document.body.classList.remove('search-active');
           updateUI();
         }
       }
@@ -574,8 +1179,14 @@ function handleReceivedMessage(event) {
       state.progress = 100;
       updateStatus('Búsqueda completada', 100);
       
+      // Guardar indicador de búsqueda inactiva
+      localStorage.setItem('snap_lead_manager_search_active', 'false');
+      
       // Detener cualquier actualización de estado
       clearInterval(state.statusUpdateInterval);
+      
+      // Remover clase search-active
+      document.body.classList.remove('search-active');
       
       // Actualizar la UI
       updateUI();
@@ -648,6 +1259,101 @@ function handleReceivedMessage(event) {
       // El content script nos informa que está listo para recibir mensajes
       console.log('Conexión con content script establecida');
       break;
+      
+    case 'configure_search':
+      // Configurar la interfaz para búsqueda
+      if (message.config) {
+        console.log('Configurando búsqueda:', message.config);
+        
+        // Establecer tipo de búsqueda
+        if (message.config.type && searchTypeSelect) {
+          searchTypeSelect.value = message.config.type;
+          state.currentSearchType = message.config.type;
+          handleSearchTypeChange();
+        }
+        
+        // Establecer término de búsqueda
+        if (message.config.term && searchTermInput) {
+          searchTermInput.value = message.config.term;
+          state.currentSearchTerm = message.config.term;
+          
+          // Guardar para referencias futuras
+          localStorage.setItem('snap_lead_manager_search_term', message.config.term);
+        }
+        
+        // Establecer ciudad
+        if (message.config.city && searchCityInput) {
+          searchCityInput.value = message.config.city;
+          state.currentSearchCity = message.config.city;
+          
+          // Guardar para referencias futuras
+          localStorage.setItem('snap_lead_manager_search_city', message.config.city);
+        }
+        
+        // Actualizar información de búsqueda
+        updateSearchInfo();
+        
+        // Si todo está configurado, iniciar la búsqueda automáticamente
+        if (message.config.autoStart && searchButton) {
+          // Pequeño retraso para asegurar que la UI esté actualizada
+          setTimeout(() => {
+            // Hacer clic en el botón de búsqueda
+            console.log('Iniciando búsqueda automáticamente');
+            searchButton.click();
+          }, 500);
+        }
+      }
+      break;
+      
+    case 'set_filter_options':
+      // Guardar opciones de filtrado adicionales para usarlas durante la búsqueda
+      if (message.options) {
+        console.log('Recibidas opciones de filtrado adicionales:', message.options);
+        state.filterOptions = message.options;
+        
+        // Guardar para uso persistente
+        localStorage.setItem('snap_lead_manager_filter_options', JSON.stringify(message.options));
+      }
+      break;
+      
+    case 'search_with_options':
+      // Iniciar búsqueda directa con opciones
+      if (message.searchData) {
+        console.log('Iniciando búsqueda con datos y opciones:', message.searchData);
+        
+        // Configurar la interfaz primero
+        if (message.searchData.type && searchTypeSelect) {
+          searchTypeSelect.value = message.searchData.type;
+          state.currentSearchType = message.searchData.type;
+          handleSearchTypeChange();
+        }
+        
+        if (message.searchData.term && searchTermInput) {
+          searchTermInput.value = message.searchData.term;
+          state.currentSearchTerm = message.searchData.term;
+        }
+        
+        if (message.searchData.city && searchCityInput) {
+          searchCityInput.value = message.searchData.city;
+          state.currentSearchCity = message.searchData.city;
+        }
+        
+        // Guardar opciones de filtrado si están presentes
+        if (message.searchData.filterOptions) {
+          state.filterOptions = message.searchData.filterOptions;
+          localStorage.setItem('snap_lead_manager_filter_options', JSON.stringify(message.searchData.filterOptions));
+        }
+        
+        // Actualizar información de búsqueda
+        updateSearchInfo();
+        
+        // Iniciar la búsqueda automáticamente
+        setTimeout(() => {
+          console.log('Ejecutando búsqueda automática');
+          performSearch();
+        }, 500);
+      }
+      break;
   }
 }
 
@@ -670,7 +1376,7 @@ document.addEventListener('DOMContentLoaded', () => {
   `;
   document.head.appendChild(style);
   
-  // Configurar manejadores de eventos
+  // Configurar manejadores de eventos para elementos básicos
   if (searchTypeSelect) {
     searchTypeSelect.addEventListener('change', handleSearchTypeChange);
     handleSearchTypeChange(); // Aplicar configuración inicial
@@ -694,6 +1400,92 @@ document.addEventListener('DOMContentLoaded', () => {
     openWindowButton.addEventListener('click', openInWindow);
   }
   
+  // Configurar sección colapsable
+  if (collapsibleTrigger) {
+    collapsibleTrigger.addEventListener('click', toggleCollapsible);
+  }
+  
+  // Configurar gestión de criterios
+  if (clearCriteriaButton) {
+    clearCriteriaButton.addEventListener('click', () => {
+      // Si estamos editando, preguntar antes de limpiar
+      if (state.editingCriteriaId) {
+        if (confirm('¿Estás seguro de que deseas limpiar los criterios que estás editando?')) {
+          // Restaurar estado de edición
+          state.editingCriteriaId = null;
+          if (saveCriteriaButton) {
+            saveCriteriaButton.textContent = 'Guardar criterios';
+            saveCriteriaButton.classList.remove('editing');
+          }
+          clearSearchCriteria();
+        }
+      } else {
+        clearSearchCriteria();
+      }
+    });
+  }
+  
+  if (saveCriteriaButton) {
+    saveCriteriaButton.addEventListener('click', showSaveCriteriaModal);
+  }
+  
+  if (cancelEditButton) {
+    cancelEditButton.addEventListener('click', () => {
+      if (confirm('¿Estás seguro de que deseas cancelar la edición?')) {
+        // Restaurar estado de edición
+        state.editingCriteriaId = null;
+        if (saveCriteriaButton) {
+          saveCriteriaButton.textContent = 'Guardar criterios';
+          saveCriteriaButton.classList.remove('editing');
+        }
+        
+        // Ocultar botón de cancelar edición
+        cancelEditButton.style.display = 'none';
+        
+        // Limpiar formulario o recargar valores originales
+        clearSearchCriteria();
+        
+        // Mostrar mensaje
+        showTemporaryMessage('Edición cancelada');
+      }
+    });
+  }
+  
+  if (manageCriteriaButton) {
+    manageCriteriaButton.addEventListener('click', showManageCriteriaModal);
+  }
+  
+  // Configurar modales
+  if (confirmSaveButton) {
+    confirmSaveButton.addEventListener('click', saveSearchCriteria);
+  }
+  
+  if (cancelSaveButton) {
+    cancelSaveButton.addEventListener('click', () => {
+      saveCriteriaModal.style.display = 'none';
+    });
+  }
+  
+  if (closeManageCriteriaButton) {
+    closeManageCriteriaButton.addEventListener('click', () => {
+      manageCriteriaModal.style.display = 'none';
+    });
+  }
+  
+  // Configurar cierre de modales con X
+  document.querySelectorAll('.close-modal').forEach(closeBtn => {
+    closeBtn.addEventListener('click', () => {
+      closeModals();
+    });
+  });
+  
+  // Cerrar modales al hacer clic fuera de ellos
+  window.addEventListener('click', (event) => {
+    if (event.target.classList.contains('modal')) {
+      event.target.style.display = 'none';
+    }
+  });
+  
   // Configurar manejo de tecla Enter en inputs
   if (searchTermInput) {
     searchTermInput.addEventListener('keydown', (e) => {
@@ -711,6 +1503,59 @@ document.addEventListener('DOMContentLoaded', () => {
         performSearch();
       }
     });
+  }
+  
+  if (criteriaNameInput) {
+    criteriaNameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveSearchCriteria();
+      }
+    });
+  }
+  
+  // Cargar criterios guardados desde localStorage
+  try {
+    const savedCriteria = localStorage.getItem('snap_lead_manager_saved_criteria');
+    if (savedCriteria) {
+      state.savedCriteria = JSON.parse(savedCriteria);
+    }
+  } catch (error) {
+    console.error('Error al cargar criterios guardados:', error);
+    state.savedCriteria = [];
+  }
+  
+  // Cargar opciones generales desde localStorage
+  try {
+    const generalOptions = localStorage.getItem('snap_lead_manager_general_options');
+    if (generalOptions) {
+      const options = JSON.parse(generalOptions);
+      if (maxScrollsInput) maxScrollsInput.value = options.maxScrolls || 50;
+      if (scrollDelayInput) scrollDelayInput.value = options.scrollDelay || 2;
+      
+      state.maxScrolls = options.maxScrolls || 50;
+      state.scrollDelay = options.scrollDelay || 2;
+    }
+  } catch (error) {
+    console.error('Error al cargar opciones generales:', error);
+  }
+  
+  // Cargar opciones de grupo desde localStorage
+  try {
+    const groupOptions = localStorage.getItem('snap_lead_manager_group_options');
+    if (groupOptions) {
+      const options = JSON.parse(groupOptions);
+      if (publicGroupsCheckbox) publicGroupsCheckbox.checked = options.publicGroups !== false;
+      if (privateGroupsCheckbox) privateGroupsCheckbox.checked = options.privateGroups !== false;
+      if (minUsersInput) minUsersInput.value = options.minUsers || 0;
+      if (minPostsYearInput) minPostsYearInput.value = options.minPostsYear || 0;
+      if (minPostsMonthInput) minPostsMonthInput.value = options.minPostsMonth || 0;
+      if (minPostsDayInput) minPostsDayInput.value = options.minPostsDay || 0;
+      
+      state.groupOptions = options;
+    }
+  } catch (error) {
+    console.error('Error al cargar opciones de grupo:', error);
   }
   
   // Restaurar datos de búsqueda guardados si existen
@@ -750,6 +1595,19 @@ document.addEventListener('DOMContentLoaded', () => {
   window.parent.postMessage({
     action: 'sidebar_ready'
   }, '*');
+  
+  // Verificar si hay una búsqueda en curso para activar correctamente los botones
+  if (localStorage.getItem('snap_lead_manager_search_active') === 'true') {
+    state.isRunning = true;
+    document.body.classList.add('search-active');
+  } else {
+    state.isRunning = false;
+    document.body.classList.remove('search-active');
+    
+    // Asegurar que los botones de control estén deshabilitados
+    if (pauseButton) pauseButton.disabled = true;
+    if (stopButton) stopButton.disabled = true;
+  }
   
   updateUI();
 });
