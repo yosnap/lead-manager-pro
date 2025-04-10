@@ -341,6 +341,17 @@ footer {
   text-decoration: underline;
 }
 
+/* Botón cerrar sidebar */
+#snap-lead-manager-close {
+  opacity: 0.8;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+#snap-lead-manager-close:hover {
+  opacity: 1;
+  background-color: #dc3545;
+}
+
 /* Sección colapsable */
 .collapsible-section {
   margin-bottom: 15px;

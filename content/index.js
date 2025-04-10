@@ -132,6 +132,61 @@ async function initContentScript() {
  */
 function setupChromeMessagesListener() {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // Agregamos un manejador específico para restablecer el sidebar
+    if (message.action === 'resetSidebar') {
+      console.log('Lead Manager Pro: Recibida solicitud para restablecer el sidebar');
+      
+      // Eliminar el sidebar anterior si existe
+      const oldSidebar = document.getElementById('snap-lead-manager-container');
+      if (oldSidebar) {
+        try {
+          document.body.removeChild(oldSidebar);
+          console.log('Sidebar anterior eliminado');
+        } catch (e) {
+          console.error('Error al eliminar sidebar:', e);
+        }
+      }
+      
+      // Eliminar el botón de toggle anterior si existe
+      const oldToggle = document.getElementById('snap-lead-manager-toggle');
+      if (oldToggle) {
+        try {
+          document.body.removeChild(oldToggle);
+          console.log('Botón toggle anterior eliminado');
+        } catch (e) {
+          console.error('Error al eliminar botón toggle:', e);
+        }
+      }
+      
+      // Eliminar preferencia guardada de sidebar oculto
+      localStorage.removeItem('snap_lead_manager_sidebar_hidden');
+      
+      // Recrear el sidebar desde cero
+      setTimeout(() => {
+        console.log('Recreando sidebar...');
+        
+        if (window.LeadManagerPro && window.LeadManagerPro.modules && window.LeadManagerPro.modules.insertSidebar) {
+          const newSidebar = window.LeadManagerPro.modules.insertSidebar();
+          console.log('Nuevo sidebar creado:', newSidebar ? 'Sí' : 'No');
+          
+          // Asegurarse de que sea visible
+          if (newSidebar) {
+            newSidebar.style.transform = 'translateX(0)';
+          }
+          
+          // Reconfigurar listeners
+          if (window.LeadManagerPro.modules.setupSidebarListeners) {
+            window.LeadManagerPro.modules.setupSidebarListeners();
+            console.log('Listeners del sidebar reconfigiurados');
+          }
+        } else {
+          console.error('No se pudo recrear el sidebar: módulos no disponibles');
+        }
+      }, 500);
+      
+      sendResponse({ success: true, message: 'Acción de restablecimiento iniciada' });
+      return true;
+    }
     console.log('Lead Manager Pro: Mensaje recibido desde background', message);
     
     if (message.action === 'apply_city_filter') {
@@ -198,44 +253,103 @@ function setupChromeMessagesListener() {
         // Usar la interfaz simple si la principal no está disponible
         const uiModule = window.leadManagerPro.groupSearchUI || window.leadManagerPro.simpleGroupUI;
         
-        // Obtener opciones adicionales del almacenamiento local
-        chrome.storage.local.get(['maxScrolls', 'scrollDelay'], function(result) {
-          const options = {
-            ...message.options,
-            maxScrolls: result.maxScrolls || 50,
-            scrollDelay: result.scrollDelay || 2
-          };
+        // Obtener opciones desde localStorage primero, luego del message y finalmente del storage local
+        try {
+          // 1. Primero intentar leer desde localStorage (sidebar)
+          let generalOptions = {};
+          try {
+            const generalOptionsStr = localStorage.getItem('snap_lead_manager_general_options');
+            if (generalOptionsStr) {
+              generalOptions = JSON.parse(generalOptionsStr);
+            }
+          } catch (e) {
+            console.error('Error al leer opciones de localStorage:', e);
+          }
           
-          console.log('Opciones finales para la búsqueda:', options);
+          console.log('DIRECT localStorageOptions:', generalOptions);
           
-          // Mostrar la interfaz de búsqueda
-          uiModule.show({
-            title: 'Búsqueda de Grupos de Facebook'
-          });
+          // 2. Leer opciones del mensaje
+          const messageOptions = message.options || {};
           
-          // Configurar callback para actualizar la interfaz
-          const progressCallback = (progressData) => {
-            console.log('Progreso de búsqueda:', progressData);
+          // 3. Luego obtener del chrome.storage para complementar
+          chrome.storage.local.get(['maxScrolls', 'scrollDelay'], function(result) {
+            // Prioridad: localStorage > message > chrome.storage > defaults
+            const options = {
+              ...message.options,
+              maxScrolls: Number(generalOptions.maxScrolls) || Number(messageOptions.maxScrolls) || Number(result.maxScrolls) || 50,
+              scrollDelay: Number(generalOptions.scrollDelay) || Number(messageOptions.scrollDelay) || Number(result.scrollDelay) || 2
+            };
             
-            // Actualizar la interfaz de usuario
-            uiModule.processUpdate(progressData);
+            // Asegurarse de que sean números válidos
+            options.maxScrolls = isNaN(options.maxScrolls) ? 50 : Number(options.maxScrolls);
+            options.scrollDelay = isNaN(options.scrollDelay) ? 2 : Number(options.scrollDelay);
             
-            // Enviar actualizaciones de progreso al fondo
-            chrome.runtime.sendMessage({
-              type: 'status_update',
-              message: progressData.message || 'Buscando grupos...',
-              progress: progressData.type === 'progress' ? progressData.value : null,
-              groupsFound: progressData.groupsFound || 0,
-              finished: progressData.type === 'complete'
+            console.log('CRITICAL: Opciones finales para la búsqueda:', options);
+            
+            // Guardar también en localStorage para que GroupFinder las lea correctamente
+            try {
+              localStorage.setItem('snap_lead_manager_general_options', JSON.stringify({
+                maxScrolls: options.maxScrolls,
+                scrollDelay: options.scrollDelay
+              }));
+              
+              console.log('Opciones guardadas en localStorage:', options.maxScrolls, options.scrollDelay);
+            } catch (e) {
+              console.error('Error al guardar opciones en localStorage:', e);
+            }
+            
+            // Mostrar la interfaz de búsqueda
+            uiModule.show({
+              title: 'Búsqueda de Grupos de Facebook'
             });
-          };
-          
-          // Inicializar y comenzar la búsqueda de grupos
-          window.leadManagerPro.groupFinder.init(options, progressCallback).startSearch();
-          
-          sendResponse({ success: true, message: 'Búsqueda de grupos iniciada' });
-        });
-        return true;
+            
+            // Configurar callback para actualizar la interfaz
+            const progressCallback = (progressData) => {
+              console.log('Progreso de búsqueda:', progressData);
+              
+              // Actualizar la interfaz de usuario
+              uiModule.processUpdate(progressData);
+              
+              // Enviar actualizaciones de progreso al fondo
+              chrome.runtime.sendMessage({
+                type: 'status_update',
+                message: progressData.message || 'Buscando grupos...',
+                progress: progressData.type === 'progress' ? progressData.value : null,
+                groupsFound: progressData.groupsFound || 0,
+                finished: progressData.type === 'complete'
+              });
+            };
+            
+            // Guardar los valores directamente en el objeto GroupFinder para mayor seguridad
+            try {
+              if (window.leadManagerPro && window.leadManagerPro.groupFinder) {
+                // Establecer explícitamente estos valores antes de inicializar
+                window.leadManagerPro.groupFinder.maxScrolls = options.maxScrolls;
+                window.leadManagerPro.groupFinder.scrollTimeout = options.scrollDelay * 1000;
+                
+                console.log('DIRECT MAX SCROLLS SET TO:', options.maxScrolls);
+                console.log('DIRECT SCROLL TIMEOUT SET TO:', options.scrollDelay * 1000);
+              }
+            } catch (e) {
+              console.error('Error al establecer valores directamente:', e);
+            }
+            
+            try {
+              // Inicializar y comenzar la búsqueda de grupos
+              window.leadManagerPro.groupFinder.init(options, progressCallback).startSearch();
+            } catch (error) {
+              console.error("Error al iniciar la búsqueda de grupos:", error);
+              sendResponse({ success: false, error: error.message || "Error desconocido al iniciar búsqueda" });
+            }
+            
+            sendResponse({ success: true, message: 'Búsqueda de grupos iniciada' });
+          });
+          return true;
+        } catch (error) {
+          console.error('Error en el procesamiento inicial:', error);
+          sendResponse({ success: false, error: error.message || "Error desconocido" });
+          return false;
+        }
       } else {
         console.error('Lead Manager Pro: Módulos de búsqueda de grupos no disponibles');
         sendResponse({ success: false, error: 'Módulos de búsqueda de grupos no disponibles' });
@@ -500,6 +614,15 @@ if (document.readyState === 'loading') {
       console.error('Lead Manager Pro: Módulo de detección de errores no disponible');
       initContentScript();
     }
+    
+    // Asegurar que el botón de toggle sea visible, incluso si hay errores
+    setTimeout(() => {
+      if (window.LeadManagerPro && window.LeadManagerPro.modules && 
+          window.LeadManagerPro.modules.ensureToggleButtonVisible) {
+        window.LeadManagerPro.modules.ensureToggleButtonVisible();
+        console.log('Botón de toggle asegurado después de cargar el DOM');
+      }
+    }, 1500);
   });
 } else {
   // Verificar si los módulos necesarios están disponibles
@@ -512,6 +635,15 @@ if (document.readyState === 'loading') {
     console.error('Lead Manager Pro: Módulo de detección de errores no disponible');
     initContentScript();
   }
+  
+  // Asegurar que el botón de toggle sea visible, incluso si hay errores
+  setTimeout(() => {
+    if (window.LeadManagerPro && window.LeadManagerPro.modules && 
+        window.LeadManagerPro.modules.ensureToggleButtonVisible) {
+      window.LeadManagerPro.modules.ensureToggleButtonVisible();
+      console.log('Botón de toggle asegurado (DOM ya cargado)');
+    }
+  }, 1000);
 }
 
 // Exportar funciones para depuración

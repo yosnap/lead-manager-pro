@@ -57,38 +57,42 @@ main {
   overflow-y: auto;
 }
 
-/* Tabs */
-.tabs ul {
-  display: flex;
-  list-style: none;
-  border-bottom: 1px solid var(--border-color);
-  margin-bottom: 15px;
+.message-container {
+  background-color: #f7f9fb;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border-left: 4px solid var(--primary-color);
 }
 
-.tabs li {
-  padding: 8px 12px;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s ease;
+.message-container p {
+  margin-bottom: 10px;
+  font-size: 15px;
 }
 
-.tabs li.active {
-  border-bottom-color: var(--accent-color);
-  color: var(--accent-color);
-  font-weight: 600;
+.message-container p.note {
+  font-style: italic;
+  color: var(--light-text);
+  font-size: 13px;
 }
 
-.tabs li:hover:not(.active) {
-  background-color: var(--secondary-color);
+.info-container {
+  margin-top: 20px;
 }
 
-/* Tab Content */
-.tab-content {
-  display: none;
+.info-container h3 {
+  font-size: 16px;
+  margin-bottom: 10px;
+  color: var(--primary-color);
 }
 
-.tab-content.active {
-  display: block;
+.info-container ul {
+  padding-left: 20px;
+}
+
+.info-container li {
+  margin-bottom: 8px;
+  line-height: 1.5;
 }
 
 h2 {

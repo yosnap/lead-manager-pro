@@ -39,6 +39,7 @@
         "content/modules/simpleGroupUI.js",
         "content/modules/sidebar.js",
         "content/modules/errorHandler.js",
+        "content/modules/emergency.js",
         "content/index.js"
       ],
       "run_at": "document_idle"

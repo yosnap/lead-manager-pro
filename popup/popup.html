@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lead Manager Pro - Opciones</title>
+  <title>Lead Manager Pro</title>
   <link rel="stylesheet" href="../css/popup.css">
 </head>
 <body>
@@ -14,109 +14,24 @@
     </header>
     
     <main>
-      <nav class="tabs">
+      <div class="message-container">
+        <p>Para configurar y ejecutar búsquedas, utilice el panel lateral en Facebook.</p>
+        <p class="note">Todas las configuraciones y opciones están disponibles en el panel lateral de la extensión.</p>
+      </div>
+      
+      <div class="info-container">
+        <h3>Información</h3>
         <ul>
-          <li data-tab="tab-general" class="active">Opciones Generales</li>
-          <li data-tab="tab-groups">Búsqueda de Grupos</li>
-          <li data-tab="tab-profiles">Búsqueda de Perfiles</li>
-          <li data-tab="tab-pages">Búsqueda de Páginas</li>
+          <li>Puede configurar opciones específicas para cada tipo de búsqueda directamente en el panel lateral.</li>
+          <li>Los resultados se mostrarán en tiempo real en el panel.</li>
+          <li>Se pueden guardar y administrar sus criterios de búsqueda favoritos.</li>
         </ul>
-      </nav>
-      
-      <div id="tab-general" class="tab-content active">
-        <h2>Opciones Generales</h2>
-        <div class="form-group">
-          <label for="max-scrolls">Scrolls máximos para mostrar resultados:</label>
-          <input type="number" id="max-scrolls" min="1" value="50">
-          <small>Número máximo de scrolls antes de mostrar resultados (por defecto 50)</small>
-        </div>
-        <div class="form-group">
-          <label for="scroll-delay">Tiempo de espera entre scroll (segundos):</label>
-          <input type="number" id="scroll-delay" min="1" step="0.5" value="2">
-          <small>Tiempo de espera entre cada scroll (por defecto 2 segundos)</small>
-        </div>
-      </div>
-      
-      <div id="tab-groups" class="tab-content">
-        <h2>Opciones para Búsqueda de Grupos</h2>
-        
-        <!-- Tipos de grupo -->
-        <div class="form-group">
-          <label>Tipos de grupo:</label>
-          <div class="checkbox-group">
-            <div class="checkbox-item">
-              <input type="checkbox" id="group-public" checked>
-              <label for="group-public">Público</label>
-            </div>
-            <div class="checkbox-item">
-              <input type="checkbox" id="group-private" checked>
-              <label for="group-private">Privado</label>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Cantidad mínima de usuarios -->
-        <div class="form-group">
-          <label for="min-users">Cantidad mínima de usuarios:</label>
-          <input type="number" id="min-users" min="0" value="100">
-          <small>Número mínimo de miembros que debe tener el grupo</small>
-        </div>
-        
-        <!-- Cantidad mínima de publicaciones -->
-        <div class="form-group">
-          <label>Cantidad mínima de publicaciones:</label>
-          <div class="multi-input">
-            <div class="input-item">
-              <input type="number" id="min-posts-year" min="0" placeholder="Por ej: 10">
-              <label for="min-posts-year">por año</label>
-            </div>
-            <div class="input-item">
-              <input type="number" id="min-posts-month" min="0" placeholder="Por ej: 5">
-              <label for="min-posts-month">por mes</label>
-            </div>
-            <div class="input-item">
-              <input type="number" id="min-posts-day" min="0" placeholder="Por ej: 1">
-              <label for="min-posts-day">por día</label>
-            </div>
-          </div>
-          <small style="display: block; margin-top: 8px; color: #666; font-size: 11px;">Nota: El grupo debe cumplir con el mínimo de usuarios Y cualquiera de los mínimos de publicaciones (año, mes o día).</small>
-        </div>
-        
-        <!-- Botones para gestionar criterios de búsqueda -->
-        <div class="form-group">
-          <label>Gestión de criterios:</label>
-          <div class="button-group">
-            <button id="clear-criteria-btn" class="btn btn-secondary">Limpiar criterios</button>
-            <button id="save-criteria-btn" class="btn btn-secondary">Guardar criterios</button>
-          </div>
-        </div>
-        
-        <!-- Sección para administrar búsquedas guardadas -->
-        <div class="form-group">
-          <label>Búsquedas guardadas:</label>
-          <div id="saved-searches-container" class="saved-searches-container">
-            <!-- Las búsquedas guardadas se agregarán dinámicamente aquí -->
-            <p class="empty-state">No hay búsquedas guardadas</p>
-          </div>
-        </div>
-      </div>
-      
-      <div id="tab-profiles" class="tab-content">
-        <h2>Opciones para Búsqueda de Perfiles</h2>
-        <p>Configuración para la búsqueda de perfiles.</p>
-        <!-- Aquí se pueden agregar más opciones específicas para perfiles en el futuro -->
-      </div>
-      
-      <div id="tab-pages" class="tab-content">
-        <h2>Opciones para Búsqueda de Páginas</h2>
-        <p>Configuración para la búsqueda de páginas.</p>
-        <!-- Aquí se pueden agregar más opciones específicas para páginas en el futuro -->
       </div>
     </main>
     
     <footer>
-      <button id="save-options-btn" class="btn">Guardar opciones</button>
-      <button id="open-sidebar-btn" class="btn btn-secondary">Abrir búsqueda</button>
+      <button id="open-sidebar-btn" class="btn">Abrir panel de búsqueda</button>
+      <button id="reset-sidebar-btn" class="btn btn-secondary">Restablecer panel</button>
     </footer>
   </div>
   

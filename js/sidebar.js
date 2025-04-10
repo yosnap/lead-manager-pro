@@ -155,7 +155,7 @@ function clearError() {
   }
 }
 
-function updateStatus(message, progress = state.progress, isError = false) {
+function updateStatus(message, progress = state.progress, isError = false, configInfo = null) {
   // Actualizar barra de progreso principal
   if (progressBar) {
     progressBar.style.width = `${progress}%`;
@@ -185,6 +185,38 @@ function updateStatus(message, progress = state.progress, isError = false) {
   // Actualizar UI detallada
   if (detailedStatusMessage) {
     detailedStatusMessage.textContent = message;
+    
+    // Si no tenemos información de configuración, intentar obtenerla del estado y localStorage
+    if (!configInfo) {
+      try {
+        const generalOptions = JSON.parse(localStorage.getItem('snap_lead_manager_general_options') || '{}');
+        configInfo = {
+          maxScrolls: generalOptions.maxScrolls || state.maxScrolls || 50,
+          scrollDelay: generalOptions.scrollDelay || state.scrollDelay || 2
+        };
+      } catch(e) {
+        console.warn('No se pudo obtener información de configuración:', e);
+      }
+    }
+    
+    // Si tenemos información de configuración, mostrarla en el mensaje detallado
+    if (configInfo && detailedStatusMessage) {
+      const configText = `Configuración: ${configInfo.maxScrolls} scrolls máx., ${configInfo.scrollDelay}s entre scrolls`;
+      
+      // Agregar información de configuración si no existe
+      if (!detailedStatusMessage.querySelector('.config-info')) {
+        const configSpan = document.createElement('span');
+        configSpan.className = 'config-info';
+        configSpan.style.display = 'block';
+        configSpan.style.fontSize = '12px';
+        configSpan.style.color = '#666';
+        configSpan.style.marginTop = '4px';
+        configSpan.textContent = configText;
+        detailedStatusMessage.appendChild(configSpan);
+      } else {
+        detailedStatusMessage.querySelector('.config-info').textContent = configText;
+      }
+    }
   }
   
   if (detailedProgressBar) {
@@ -229,7 +261,8 @@ function updateStatus(message, progress = state.progress, isError = false) {
   window.parent.postMessage({
     action: 'status_update',
     status: message,
-    progress: progress
+    progress: progress,
+    config: configInfo
   }, '*');
 }
 
@@ -350,9 +383,14 @@ function performSearch() {
       userInitiated: true // Marcar explícitamente como iniciado por el usuario
     };
     
-    // Agregar opciones generales
-    searchData.maxScrolls = parseInt(maxScrollsInput.value, 10) || 50;
-    searchData.scrollDelay = parseFloat(scrollDelayInput.value) || 2;
+    // Agregar opciones generales - convertir explícitamente a números
+    const maxScrollsValue = parseInt(maxScrollsInput.value, 10);
+    const scrollDelayValue = parseFloat(scrollDelayInput.value);
+    
+    searchData.maxScrolls = isNaN(maxScrollsValue) ? 50 : maxScrollsValue;
+    searchData.scrollDelay = isNaN(scrollDelayValue) ? 2 : scrollDelayValue;
+    
+    console.log('Opciones configuradas - maxScrolls:', searchData.maxScrolls, 'scrollDelay:', searchData.scrollDelay);
     
     // Guardar en el estado
     state.maxScrolls = searchData.maxScrolls;
@@ -377,6 +415,28 @@ function performSearch() {
       
       searchData.groupOptions = groupOptions;
       state.groupOptions = groupOptions;
+      
+      // Agregar información del filtro
+      console.log('Criterios de filtrado para grupos:', {
+        'Mínimo de usuarios': minUsersValue,
+        'Mínimo publicaciones por año': minPostsYearValue,
+        'Mínimo publicaciones por mes': minPostsMonthValue,
+        'Mínimo publicaciones por día': minPostsDayValue
+      });
+      
+      // Guardar estas opciones también en chrome.storage.local para acceso desde el background script
+      try {
+        chrome.storage.local.set({
+          groupPublic: publicGroupsCheckbox.checked,
+          groupPrivate: privateGroupsCheckbox.checked,
+          minUsers: minUsersValue,
+          minPostsYear: minPostsYearValue,
+          minPostsMonth: minPostsMonthValue,
+          minPostsDay: minPostsDayValue
+        });
+      } catch (e) {
+        console.warn('No se pudieron guardar las opciones en chrome.storage:', e);
+      }
     }
     
     // Limpiar cualquier estado de búsqueda previo
@@ -384,14 +444,40 @@ function performSearch() {
     localStorage.removeItem('snap_lead_manager_search_url');
     
     // Guardar en localStorage para que el content script pueda acceder
+    // Asegurarse de que los valores numéricos sean tratados correctamente
     localStorage.setItem('snap_lead_manager_search_data', JSON.stringify(searchData));
-    localStorage.setItem('snap_lead_manager_general_options', JSON.stringify({
-      maxScrolls: searchData.maxScrolls,
-      scrollDelay: searchData.scrollDelay
-    }));
+    
+    // Guardar opciones generales como números explícitamente
+    const generalOptions = {
+      maxScrolls: Number(searchData.maxScrolls),
+      scrollDelay: Number(searchData.scrollDelay)
+    };
+    
+    console.log('Guardando opciones generales en localStorage:', generalOptions);
+    localStorage.setItem('snap_lead_manager_general_options', JSON.stringify(generalOptions));
     
     if (searchType === 'groups') {
       localStorage.setItem('snap_lead_manager_group_options', JSON.stringify(searchData.groupOptions));
+      
+      // Guardar las opciones de grupo en una tabla específica para sincronización posterior
+      try {
+        const groupOptionsForSync = {
+          ...searchData.groupOptions,
+          timestamp: Date.now(),
+          searchTerm: searchTerm,
+          searchType: searchType,
+          maxScrolls: Number(searchData.maxScrolls),
+          scrollDelay: Number(searchData.scrollDelay)
+        };
+        
+        // Guardar para sincronización futura con base de datos
+        localStorage.setItem('snap_lead_manager_group_options_for_sync', JSON.stringify(groupOptionsForSync));
+        
+        // Loggear las opciones guardadas para debugging
+        console.log('Opciones de grupo guardadas para sincronización:', groupOptionsForSync);
+      } catch (error) {
+        console.error('Error al guardar opciones para sincronización:', error);
+      }
     }
     
     // Reiniciar indicador de filtro aplicado
@@ -1203,7 +1289,17 @@ function handleReceivedMessage(event) {
       break;
     
     case 'status_update':
-      updateStatus(message.status || 'Actualizando...', message.progress || state.progress);
+      // Si el mensaje incluye información de configuración, usarla
+      if (message.config) {
+        updateStatus(
+          message.status || 'Actualizando...', 
+          message.progress || state.progress, 
+          false, 
+          message.config
+        );
+      } else {
+        updateStatus(message.status || 'Actualizando...', message.progress || state.progress);
+      }
       break;
     
     case 'filter_status_update':
