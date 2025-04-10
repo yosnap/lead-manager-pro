@@ -150,10 +150,43 @@ window.LeadManagerPro.modules.findProfiles = async function() {
     const resultType = searchState.searchType === 'people' ? 'perfiles' : 'grupos';
     updateStatus(`Encontrados ${searchState.foundProfiles.length} ${resultType} en la página ${searchState.currentPage}.`, 50);
     
-    // Obtener opciones para controlar la búsqueda
-    const options = window.LeadManagerPro.state.options || {};
-    const MAX_SCROLLS = options.maxScrolls || 50;
-    const SCROLL_DELAY = (options.scrollDelay || 2) * 1000; // Convertir a milisegundos
+    // Obtener opciones para controlar la búsqueda DIRECTAMENTE desde localStorage
+    let MAX_SCROLLS = 50; // valor por defecto
+    let SCROLL_DELAY = 2000; // valor por defecto en milisegundos
+    
+    try {
+      // Leer directamente desde localStorage donde el sidebar guarda la configuración
+      const generalOptionsStr = localStorage.getItem('snap_lead_manager_general_options');
+      if (generalOptionsStr) {
+        const generalOptions = JSON.parse(generalOptionsStr);
+        
+        // Usar configuración del sidebar si está disponible
+        if (generalOptions && !isNaN(Number(generalOptions.maxScrolls))) {
+          MAX_SCROLLS = Number(generalOptions.maxScrolls);
+        }
+        
+        if (generalOptions && !isNaN(Number(generalOptions.scrollDelay))) {
+          SCROLL_DELAY = Number(generalOptions.scrollDelay) * 1000; // Convertir a milisegundos
+        }
+        
+        console.log('findProfiles: Usando configuración de localStorage:', {
+          maxScrolls: MAX_SCROLLS, 
+          scrollDelay: SCROLL_DELAY/1000
+        });
+      } else {
+        // Usar opciones del estado global solo como respaldo
+        const options = window.LeadManagerPro.state.options || {};
+        MAX_SCROLLS = !isNaN(Number(options.maxScrolls)) ? Number(options.maxScrolls) : 50;
+        SCROLL_DELAY = (!isNaN(Number(options.scrollDelay)) ? Number(options.scrollDelay) : 2) * 1000;
+        
+        console.log('findProfiles: No se encontró configuración en localStorage, usando respaldo:', {
+          maxScrolls: MAX_SCROLLS, 
+          scrollDelay: SCROLL_DELAY/1000
+        });
+      }
+    } catch (error) {
+      console.error('Error al leer configuración para findProfiles:', error);
+    }
     
     // Continuar con las siguientes páginas hasta que se alcance el máximo de scrolls
     let hasNextPage = true;

@@ -170,10 +170,43 @@ window.LeadManagerPro.modules.autoScroll = async function(searchState) {
   const updateStatus = window.LeadManagerPro.utils.updateStatus;
   const sleep = window.LeadManagerPro.utils.sleep;
   
-  // Obtener opciones de configuración
-  const options = window.LeadManagerPro.state.options || {};
-  const MAX_SCROLLS = options.maxScrolls || 50;
-  const SCROLL_DELAY = (options.scrollDelay || 2) * 1000; // Convertir a milisegundos
+  // Obtener opciones de configuración DIRECTAMENTE desde localStorage
+  let MAX_SCROLLS = 50; // valor por defecto
+  let SCROLL_DELAY = 2000; // valor por defecto en milisegundos
+  
+  try {
+    // Leer directamente desde localStorage donde el sidebar guarda la configuración
+    const generalOptionsStr = localStorage.getItem('snap_lead_manager_general_options');
+    if (generalOptionsStr) {
+      const generalOptions = JSON.parse(generalOptionsStr);
+      
+      // Usar configuración del sidebar si está disponible
+      if (generalOptions && !isNaN(Number(generalOptions.maxScrolls))) {
+        MAX_SCROLLS = Number(generalOptions.maxScrolls);
+      }
+      
+      if (generalOptions && !isNaN(Number(generalOptions.scrollDelay))) {
+        SCROLL_DELAY = Number(generalOptions.scrollDelay) * 1000; // Convertir a milisegundos
+      }
+      
+      console.log('autoScroll: Usando configuración de localStorage:', {
+        maxScrolls: MAX_SCROLLS, 
+        scrollDelay: SCROLL_DELAY/1000
+      });
+    } else {
+      // Usar opciones del estado global solo como respaldo
+      const options = window.LeadManagerPro.state.options || {};
+      MAX_SCROLLS = !isNaN(Number(options.maxScrolls)) ? Number(options.maxScrolls) : 50;
+      SCROLL_DELAY = (!isNaN(Number(options.scrollDelay)) ? Number(options.scrollDelay) : 2) * 1000;
+      
+      console.log('autoScroll: No se encontró configuración en localStorage, usando respaldo:', {
+        maxScrolls: MAX_SCROLLS, 
+        scrollDelay: SCROLL_DELAY/1000
+      });
+    }
+  } catch (error) {
+    console.error('Error al leer configuración para autoScroll:', error);
+  }
   
   updateStatus(`Realizando scroll para cargar todos los resultados (máx. ${MAX_SCROLLS} scrolls)...`, 35);
   

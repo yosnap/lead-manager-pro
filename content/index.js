@@ -261,12 +261,11 @@ function setupChromeMessagesListener() {
             const generalOptionsStr = localStorage.getItem('snap_lead_manager_general_options');
             if (generalOptionsStr) {
               generalOptions = JSON.parse(generalOptionsStr);
+              console.log('Opciones obtenidas del localStorage (sidebar):', generalOptions);
             }
           } catch (e) {
             console.error('Error al leer opciones de localStorage:', e);
           }
-          
-          console.log('DIRECT localStorageOptions:', generalOptions);
           
           // 2. Leer opciones del mensaje
           const messageOptions = message.options || {};
@@ -327,8 +326,17 @@ function setupChromeMessagesListener() {
                 window.leadManagerPro.groupFinder.maxScrolls = options.maxScrolls;
                 window.leadManagerPro.groupFinder.scrollTimeout = options.scrollDelay * 1000;
                 
-                console.log('DIRECT MAX SCROLLS SET TO:', options.maxScrolls);
-                console.log('DIRECT SCROLL TIMEOUT SET TO:', options.scrollDelay * 1000);
+                console.log('CONFIGURACIÓN FORZADA ANTES DE BÚSQUEDA:');
+                console.log('- maxScrolls:', options.maxScrolls);
+                console.log('- scrollDelay:', options.scrollDelay, 'segundos');
+                
+                // Actualizar configuración en localStorage para garantizar coherencia
+                localStorage.setItem('snap_lead_manager_general_options', JSON.stringify({
+                  maxScrolls: options.maxScrolls,
+                  scrollDelay: options.scrollDelay
+                }));
+                
+                console.log('Opciones actualizadas en localStorage para garantizar coherencia');
               }
             } catch (e) {
               console.error('Error al establecer valores directamente:', e);

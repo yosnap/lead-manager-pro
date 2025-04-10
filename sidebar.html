@@ -70,7 +70,7 @@
               </div>
               <div class="form-group">
                 <label for="min-users">Cantidad mínima de usuarios</label>
-                <input type="number" id="min-users" min="0" value="0">
+                <input type="number" id="min-users" min="0" value="1000">
               </div>
               
               <div class="form-group">
@@ -78,19 +78,19 @@
                 <div class="posts-filters">
                   <div class="posts-filter-item">
                     <label for="min-posts-year">Por año</label>
-                    <input type="number" id="min-posts-year" min="0" value="" placeholder="Mín. anual">
+                    <input type="number" id="min-posts-year" min="0" value="1000" placeholder="Mín. anual">
                   </div>
                   <div class="posts-filter-item">
                     <label for="min-posts-month">Por mes</label>
-                    <input type="number" id="min-posts-month" min="0" value="" placeholder="Mín. mensual">
+                    <input type="number" id="min-posts-month" min="0" value="100" placeholder="Mín. mensual">
                   </div>
                   <div class="posts-filter-item">
                     <label for="min-posts-day">Por día</label>
-                    <input type="number" id="min-posts-day" min="0" value="" placeholder="Mín. diaria">
+                    <input type="number" id="min-posts-day" min="0" value="5" placeholder="Mín. diaria">
                   </div>
                 </div>
                 <div class="filter-info">
-                  <p>Se requiere el mínimo de usuarios <strong>Y</strong> al menos uno de los mínimos de publicaciones (año, mes o día)</p>
+                  <p>Se requiere el mínimo de usuarios <strong>Y</strong> al menos uno de los mínimos de publicaciones (año, mes o día). Si no se establece ningún mínimo de publicaciones, sólo se filtrará por la cantidad de usuarios.</p>
                 </div>
               </div>
             </div>

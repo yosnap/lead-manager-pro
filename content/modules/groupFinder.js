@@ -16,53 +16,141 @@ class GroupFinder {
 
   // Inicializar con opciones
   init(options, progressCallback = null) {
+    console.log("INITIALIZING GROUP FINDER SCROLL OPTIONS");
+    console.log("Options received from parameters:", options);
+    
     this.options = options || {};
     
-    // FORZAR LECTURA CORRECTA DE OPCIONES
-    console.log("INITIALIZING GROUP FINDER SCROLL OPTIONS");
-    console.log("Options received:", options);
-    
-    // Dar prioridad a opciones pasadas directamente
-    const directMaxScrolls = options && !isNaN(Number(options.maxScrolls)) ? Number(options.maxScrolls) : null;
-    const directScrollDelay = options && !isNaN(Number(options.scrollDelay)) ? Number(options.scrollDelay) : null;
-    
-    console.log("Direct options:", { directMaxScrolls, directScrollDelay });
-    
-    // Intentar cargar opciones del localStorage
+    // Intentar leer directamente de chrome.storage.local primero, que tiene prioridad
     try {
-      // Cargar opciones generales
-      const generalOptionsStr = localStorage.getItem('snap_lead_manager_general_options');
-      let localStorageMaxScrolls = null;
-      let localStorageScrollDelay = null;
-      
-      if (generalOptionsStr) {
-        try {
-          const generalOptions = JSON.parse(generalOptionsStr);
-          localStorageMaxScrolls = !isNaN(Number(generalOptions.maxScrolls)) ? Number(generalOptions.maxScrolls) : null;
-          localStorageScrollDelay = !isNaN(Number(generalOptions.scrollDelay)) ? Number(generalOptions.scrollDelay) : null;
-          
-          console.log('Storage options found:', { localStorageMaxScrolls, localStorageScrollDelay });
-        } catch (parseError) {
-          console.error('Error parsing localStorage options:', parseError);
+      chrome.storage.local.get([
+        'maxScrolls',
+        'scrollDelay',
+        'groupPublic',
+        'groupPrivate',
+        'minUsers',
+        'minPostsYear',
+        'minPostsMonth',
+        'minPostsDay'
+      ], function(result) {
+        console.log('GroupFinder: Leyendo opciones desde chrome.storage.local:', result);
+        
+        // Actualizar opciones si están definidas en storage
+        if (result.maxScrolls) {
+          this.maxScrolls = Number(result.maxScrolls);
+          console.log('→ Estableciendo maxScrolls desde chrome.storage:', this.maxScrolls);
         }
-      }
+        
+        if (result.scrollDelay) {
+          this.scrollTimeout = Number(result.scrollDelay) * 1000;
+          console.log('→ Estableciendo scrollDelay desde chrome.storage:', result.scrollDelay, 'segundos');
+        }
+        
+        // Opciones específicas para grupos
+        if (result.groupPublic !== undefined) {
+          this.options.publicGroups = result.groupPublic;
+        }
+        
+        if (result.groupPrivate !== undefined) {
+          this.options.privateGroups = result.groupPrivate;
+        }
+        
+        if (result.minUsers !== undefined) {
+          this.options.minUsers = parseInt(result.minUsers);
+        }
+        
+        if (result.minPostsYear !== undefined) {
+          this.options.minPostsYear = result.minPostsYear;
+        }
+        
+        if (result.minPostsMonth !== undefined) {
+          this.options.minPostsMonth = result.minPostsMonth;
+        }
+        
+        if (result.minPostsDay !== undefined) {
+          this.options.minPostsDay = result.minPostsDay;
+        }
+        
+        console.log('GroupFinder: Opciones actualizadas desde chrome.storage.local:', {
+          maxScrolls: this.maxScrolls,
+          scrollDelay: this.scrollTimeout / 1000,
+          publicGroups: this.options.publicGroups,
+          privateGroups: this.options.privateGroups,
+          minUsers: this.options.minUsers,
+          minPostsYear: this.options.minPostsYear,
+          minPostsMonth: this.options.minPostsMonth,
+          minPostsDay: this.options.minPostsDay
+        });
+      }.bind(this));
+    } catch (e) {
+      console.error('GroupFinder: Error al leer opciones desde chrome.storage.local:', e);
+    }
+    
+    // PRIMER PASO: Leer SIEMPRE Y EXCLUSIVAMENTE desde localStorage (sidebar)
+    try {
+      const generalOptionsStr = localStorage.getItem('snap_lead_manager_general_options');
       
-      // PRIORIDAD: 1. Opciones directas, 2. localStorage, 3. Valores por defecto
-      this.maxScrolls = directMaxScrolls || localStorageMaxScrolls || 50;
-      this.scrollTimeout = (directScrollDelay || localStorageScrollDelay || 2) * 1000; // Convertir a milisegundos
-      
-      console.log('FINAL CONFIG VALUES - maxScrolls:', this.maxScrolls, 'scrollTimeout:', this.scrollTimeout);
-      
-      // FORZAR GUARDADO en localStorage para asegurar coherencia
-      try {
+      // CRÍTICO: SIEMPRE debemos leer desde localStorage primero
+      if (generalOptionsStr) {
+        const generalOptions = JSON.parse(generalOptionsStr);
+        console.log('→ Options found in localStorage:', generalOptions);
+        
+        // FORZAR valores desde localStorage, sin opción a fallback
+        if (!isNaN(Number(generalOptions.maxScrolls))) {
+          this.maxScrolls = Number(generalOptions.maxScrolls);
+          console.log('→ FORZANDO maxScrolls desde localStorage:', this.maxScrolls);
+        } else {
+          console.warn('→ maxScrolls no válido en localStorage, usando valor por defecto');
+          this.maxScrolls = 50;
+        }
+        
+        if (!isNaN(Number(generalOptions.scrollDelay))) {
+          // Convertir a milisegundos
+          this.scrollTimeout = Number(generalOptions.scrollDelay) * 1000;
+          console.log('→ FORZANDO scrollDelay desde localStorage:', generalOptions.scrollDelay, 'segundos');
+        } else {
+          console.warn('→ scrollDelay no válido en localStorage, usando valor por defecto');
+          this.scrollTimeout = 2000;
+        }
+      } else {
+        console.warn('⚠️ ALERTA: No hay opciones en localStorage - esto no debería suceder');
+        console.warn('Forzando lectura de opciones desde parámetros o usando defaults');
+        
+        // Solo usamos esto como fallback si localStorage falla completamente
+        this.maxScrolls = (options && !isNaN(Number(options.maxScrolls))) ? Number(options.maxScrolls) : 50;
+        this.scrollTimeout = (options && !isNaN(Number(options.scrollDelay))) ? Number(options.scrollDelay) * 1000 : 2000;
+        
+        // CRÍTICO: Escribir inmediatamente en localStorage para futuros scrolls
         localStorage.setItem('snap_lead_manager_general_options', JSON.stringify({
           maxScrolls: this.maxScrolls,
           scrollDelay: this.scrollTimeout / 1000
         }));
-        console.log('Values saved back to localStorage');
-      } catch (e) {
-        console.error('Error saving config to localStorage:', e);
+        
+        console.log('→ Opciones de fallback guardadas en localStorage:', {
+          maxScrolls: this.maxScrolls,
+          scrollDelay: this.scrollTimeout / 1000
+        });
       }
+    } catch (parseError) {
+      console.error('⚠️ ERROR CRÍTICO al parsear opciones de localStorage:', parseError);
+      console.error('Error parsing localStorage options:', parseError);
+      // En caso de error, usar opciones directas o valores por defecto
+      this.maxScrolls = (options && !isNaN(Number(options.maxScrolls))) ? Number(options.maxScrolls) : 50;
+      this.scrollTimeout = (options && !isNaN(Number(options.scrollDelay))) ? Number(options.scrollDelay) * 1000 : 2000;
+    }
+    
+    console.log('FINAL CONFIG VALUES - maxScrolls:', this.maxScrolls, 'scrollTimeout:', this.scrollTimeout);
+    
+    // FORZAR GUARDADO en localStorage para asegurar coherencia
+    try {
+      localStorage.setItem('snap_lead_manager_general_options', JSON.stringify({
+        maxScrolls: this.maxScrolls,
+        scrollDelay: this.scrollTimeout / 1000
+      }));
+      console.log('Configuration values saved to localStorage');
+    } catch (e) {
+      console.error('Error saving config to localStorage:', e);
+    }
       
       // Cargar opciones específicas de grupo
       const groupOptionsStr = localStorage.getItem('snap_lead_manager_group_options');
@@ -189,6 +277,23 @@ class GroupFinder {
     // Loggear detalles de configuración antes de cada scroll para diagnóstico
     console.log(`GroupFinder: CONFIGURACIÓN ACTUAL - maxScrolls: ${this.maxScrolls}, scrollTimeout: ${this.scrollTimeout}ms`);
     
+    // Forzar verificación de configuración en localStorage en cada scroll
+    try {
+      const generalOptionsStr = localStorage.getItem('snap_lead_manager_general_options');
+      if (generalOptionsStr) {
+        const generalOptions = JSON.parse(generalOptionsStr);
+        if (generalOptions && !isNaN(Number(generalOptions.maxScrolls))) {
+          // Actualizar maxScrolls si es diferente al valor del localStorage
+          if (this.maxScrolls !== Number(generalOptions.maxScrolls)) {
+            console.log(`Actualizando maxScrolls de ${this.maxScrolls} a ${Number(generalOptions.maxScrolls)}`);
+            this.maxScrolls = Number(generalOptions.maxScrolls);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error al verificar configuración en localStorage:', e);
+    }
+    
     // Recolectar grupos visibles
     this.collectVisibleGroups();
     
@@ -203,16 +308,36 @@ class GroupFinder {
     // Informar del progreso con mensaje personalizado para el scrolling actual
     if (this.progressCallback) {
       const progress = Math.round((this.scrollCount / this.maxScrolls) * 100);
+      
       // Importante: Personalizar el mensaje para mostrar los valores reales de configuración
-      // Personalizar el mensaje para mostrar la configuración actual en lugar de valores predeterminados
-      const message = `Realizando scroll para cargar todos los resultados (${this.scrollCount}/${this.maxScrolls})...`;
+      // Verificar si hay valores configurados en localStorage para el mensaje
+      let configuredMaxScrolls = this.maxScrolls;
+      let configuredScrollDelay = this.scrollTimeout/1000;
       
-      console.log('GroupFinder: ' + message + ' - Esperando ' + (this.scrollTimeout/1000) + 's');
+      try {
+        const generalOptionsStr = localStorage.getItem('snap_lead_manager_general_options');
+        if (generalOptionsStr) {
+          const generalOptions = JSON.parse(generalOptionsStr);
+          if (generalOptions && !isNaN(Number(generalOptions.maxScrolls))) {
+            configuredMaxScrolls = Number(generalOptions.maxScrolls);
+          }
+          if (generalOptions && !isNaN(Number(generalOptions.scrollDelay))) {
+            configuredScrollDelay = Number(generalOptions.scrollDelay);
+          }
+        }
+      } catch (e) {
+        console.error('Error al leer configuración para mensaje:', e);
+      }
       
-      // Incluir información de configuración en la actualización de progreso
+      // Personalizar el mensaje para mostrar la configuración actual
+      const message = `Realizando scroll para cargar todos los resultados (${this.scrollCount}/${configuredMaxScrolls})...`;
+      
+      console.log('GroupFinder: ' + message + ' - Esperando ' + configuredScrollDelay + 's');
+      
+      // Incluir información de configuración actualizada en la actualización de progreso
       const configInfo = {
-        maxScrolls: this.maxScrolls,
-        scrollDelay: this.scrollTimeout/1000
+        maxScrolls: configuredMaxScrolls,
+        scrollDelay: configuredScrollDelay
       };
       
       this.progressCallback({
@@ -243,13 +368,34 @@ class GroupFinder {
     // Marcar el tiempo de inicio antes de programar el siguiente scroll
     const beforeTimeout = Date.now();
     
+    // Obtener el valor actualizado de scrollTimeout antes de usarlo
+    let currentScrollTimeout = this.scrollTimeout;
+    
+    // Verificar si hay un valor actualizado en localStorage
+    try {
+      const generalOptionsStr = localStorage.getItem('snap_lead_manager_general_options');
+      if (generalOptionsStr) {
+        const generalOptions = JSON.parse(generalOptionsStr);
+        if (generalOptions && !isNaN(Number(generalOptions.scrollDelay))) {
+          currentScrollTimeout = Number(generalOptions.scrollDelay) * 1000;
+          console.log(`ScrollTimeout actualizado desde localStorage: ${currentScrollTimeout}ms`);
+          
+          // Actualizar el valor de la instancia para futuros scrolls
+          this.scrollTimeout = currentScrollTimeout;
+        }
+      }
+    } catch (e) {
+      console.error('Error al obtener scrollTimeout actualizado:', e);
+    }
+    
     // Usar un enfoque más preciso para medir el tiempo entre scrolls
+    console.log(`GroupFinder: Programando próximo scroll en ${currentScrollTimeout}ms`);
     setTimeout(() => {
       // Calcular cuánto tiempo pasó realmente
       const actualDelay = Date.now() - beforeTimeout;
-      console.log(`GroupFinder: Delay real entre scrolls: ${actualDelay}ms (configurado: ${this.scrollTimeout}ms)`);
+      console.log(`GroupFinder: Delay real entre scrolls: ${actualDelay}ms (configurado: ${currentScrollTimeout}ms)`);
       this.scrollAndCollect();
-    }, this.scrollTimeout);
+    }, currentScrollTimeout);
   }
   
   // Función auxiliar para añadir mensajes de log
@@ -397,21 +543,54 @@ class GroupFinder {
       opciones: this.options
     });
     
+    // Intentar leer opciones de grupos del localStorage
+    let sidebarGroupOptions = null;
+    try {
+      const groupOptionsStr = localStorage.getItem('snap_lead_manager_group_options');
+      if (groupOptionsStr) {
+        sidebarGroupOptions = JSON.parse(groupOptionsStr);
+        console.log('Opciones de grupo del sidebar encontradas:', sidebarGroupOptions);
+      }
+    } catch (e) {
+      console.error('Error al leer opciones de grupo del localStorage:', e);
+    }
+    
     // Verificar tipo de grupo
     const isPublic = groupInfo.type === 'public';
     const isPrivate = groupInfo.type === 'private';
     
-    // Check de tipo de grupo (público o privado)
-    const publicGroups = this.options.publicGroups === true || this.options.groupPublic === true;
-    const privateGroups = this.options.privateGroups === true || this.options.groupPrivate === true;
+    // Check de tipo de grupo (público o privado) - PRIORIDAD: Sidebar > Opciones directas
+    let publicGroups, privateGroups;
+    
+    if (sidebarGroupOptions) {
+      // Usar opciones del sidebar si están disponibles
+      publicGroups = sidebarGroupOptions.publicGroups === true;
+      privateGroups = sidebarGroupOptions.privateGroups === true;
+    } else {
+      // Caer en opciones del objeto
+      publicGroups = this.options.publicGroups === true || this.options.groupPublic === true;
+      privateGroups = this.options.privateGroups === true || this.options.groupPrivate === true; 
+    }
+    
+    console.log('Filtro de tipo de grupo:', { publicGroups, privateGroups });
     
     if ((isPublic && !publicGroups) || (isPrivate && !privateGroups)) {
       console.log('Grupo rechazado por tipo:', isPublic ? 'público' : 'privado');
       return false;
     }
     
-    // 1. Verificar mínimo de usuarios - SIEMPRE DEBE CUMPLIRSE
-    const minUsers = parseInt(this.options.minUsers) || 0;
+    // 1. PRIMERA CONDICIÓN: Verificar mínimo de usuarios - SIEMPRE DEBE CUMPLIRSE
+    let minUsers;
+    
+    if (sidebarGroupOptions && sidebarGroupOptions.minUsers !== undefined) {
+      minUsers = parseInt(sidebarGroupOptions.minUsers) || 0;
+    } else {
+      minUsers = parseInt(this.options.minUsers) || 0;
+    }
+    
+    console.log('Filtro de mínimo de usuarios:', minUsers);
+    
+    // Si no cumple con el mínimo de usuarios, rechazar inmediatamente
     if (groupInfo.members < minUsers) {
       console.log('Grupo rechazado por mínimo de usuarios:', {
         miembros: groupInfo.members,
@@ -420,34 +599,53 @@ class GroupFinder {
       return false;
     }
     
-    // 2. Verificar publicaciones (debe cumplir AL MENOS UNO de los criterios)
-    const minPostsYear = this.options.minPostsYear !== '' ? parseInt(this.options.minPostsYear) || 0 : null;
-    const minPostsMonth = this.options.minPostsMonth !== '' ? parseInt(this.options.minPostsMonth) || 0 : null;
-    const minPostsDay = this.options.minPostsDay !== '' ? parseInt(this.options.minPostsDay) || 0 : null;
+    // 2. SEGUNDA CONDICIÓN: Verificar publicaciones (debe cumplir AL MENOS UNO de los criterios)
+    let minPostsYear, minPostsMonth, minPostsDay;
     
-    console.log('Criterios de publicaciones:', {
+    // Usar valores del sidebar si están disponibles
+    if (sidebarGroupOptions) {
+      minPostsYear = sidebarGroupOptions.minPostsYear !== '' ? parseInt(sidebarGroupOptions.minPostsYear) || 0 : null;
+      minPostsMonth = sidebarGroupOptions.minPostsMonth !== '' ? parseInt(sidebarGroupOptions.minPostsMonth) || 0 : null;
+      minPostsDay = sidebarGroupOptions.minPostsDay !== '' ? parseInt(sidebarGroupOptions.minPostsDay) || 0 : null;
+    } else {
+      minPostsYear = this.options.minPostsYear !== '' ? parseInt(this.options.minPostsYear) || 0 : null;
+      minPostsMonth = this.options.minPostsMonth !== '' ? parseInt(this.options.minPostsMonth) || 0 : null;
+      minPostsDay = this.options.minPostsDay !== '' ? parseInt(this.options.minPostsDay) || 0 : null;
+    }
+    
+    console.log('Criterios de publicaciones desde sidebar:', {
       año: minPostsYear,
       mes: minPostsMonth,
       día: minPostsDay
     });
     
     // Verificar si los criterios están vacíos o no definidos
-    const yearEmpty = minPostsYear === null || minPostsYear === undefined;
-    const monthEmpty = minPostsMonth === null || minPostsMonth === undefined;
-    const dayEmpty = minPostsDay === null || minPostsDay === undefined;
+    const yearEmpty = minPostsYear === null || minPostsYear === undefined || minPostsYear === '';
+    const monthEmpty = minPostsMonth === null || minPostsMonth === undefined || minPostsMonth === '';
+    const dayEmpty = minPostsDay === null || minPostsDay === undefined || minPostsDay === '';
     
-    // Si todos los criterios están vacíos, se cumple automáticamente (no hay mínimos definidos)
+    // Si todos los criterios de publicaciones están vacíos, se cumple automáticamente esta parte
     if (yearEmpty && monthEmpty && dayEmpty) {
-      console.log('Todos los criterios de publicaciones están vacíos, grupo aceptado');
+      console.log('Todos los criterios de publicaciones están vacíos, grupo aceptado por cantidad de usuarios: ' + 
+        groupInfo.members + ' >= ' + minUsers);
       return true;
     }
     
-    // Verificar cada criterio individualmente
-    let yearCriteriaMet = yearEmpty || (groupInfo.postsYear >= minPostsYear);
-    let monthCriteriaMet = monthEmpty || (groupInfo.postsMonth >= minPostsMonth);
-    let dayCriteriaMet = dayEmpty || (groupInfo.postsDay >= minPostsDay);
+    // Incluir información detallada para debugging
+    console.log(`Evaluación detallada de grupo:
+      - Grupo: ${groupInfo.name}
+      - Miembros: ${groupInfo.members} (mínimo: ${minUsers})
+      - Publicaciones año: ${groupInfo.postsYear} (mínimo: ${minPostsYear}, vacío: ${yearEmpty})
+      - Publicaciones mes: ${groupInfo.postsMonth} (mínimo: ${minPostsMonth}, vacío: ${monthEmpty})
+      - Publicaciones día: ${groupInfo.postsDay} (mínimo: ${minPostsDay}, vacío: ${dayEmpty})
+    `);
     
-    console.log('Evaluación de criterios:', {
+    // Verificar cada criterio individualmente
+    const yearCriteriaMet = yearEmpty || (groupInfo.postsYear >= minPostsYear);
+    const monthCriteriaMet = monthEmpty || (groupInfo.postsMonth >= minPostsMonth);
+    const dayCriteriaMet = dayEmpty || (groupInfo.postsDay >= minPostsDay);
+    
+    console.log('Evaluación de criterios de publicaciones:', {
       añoCumple: yearCriteriaMet,
       mesCumple: monthCriteriaMet,
       díaCumple: dayCriteriaMet,
@@ -456,15 +654,27 @@ class GroupFinder {
       postsDay: groupInfo.postsDay
     });
     
-    // Debe cumplir con al menos uno de los criterios de publicaciones que estén definidos
-    const meetsPostCriteria = yearCriteriaMet || monthCriteriaMet || dayCriteriaMet;
+    // Para aplicar la lógica: Si se establece algún criterio de publicaciones,
+    // el grupo debe cumplir AL MENOS UNO de ellos para ser aceptado
+    let meetsPostCriteria = true; // Por defecto asumimos que cumple
     
-    if (!meetsPostCriteria) {
-      console.log('Grupo rechazado por no cumplir ningún criterio de publicaciones');
+    // Solo verificamos si hay al menos un criterio de publicaciones definido
+    if (!yearEmpty || !monthEmpty || !dayEmpty) {
+      meetsPostCriteria = yearCriteriaMet || monthCriteriaMet || dayCriteriaMet;
+      
+      if (!meetsPostCriteria) {
+        console.log('Grupo rechazado por no cumplir ningún criterio de publicaciones');
+      } else {
+        console.log('Grupo aceptado por cumplir al menos uno de los criterios de publicaciones');
+      }
     } else {
-      console.log('Grupo aceptado por cumplir al menos uno de los criterios de publicaciones');
+      console.log('No hay criterios de publicaciones definidos, esta validación se omite');
     }
     
+    // Para que el grupo sea incluido, DEBE cumplir con:
+    // 1. El filtro de tipo de grupo (ya verificado arriba)
+    // 2. El mínimo de usuarios (ya verificado arriba)
+    // 3. Al menos uno de los criterios de publicaciones (si se definieron)
     return meetsPostCriteria;
   }
 
@@ -500,9 +710,11 @@ class GroupFinder {
           publicGroups: this.options.publicGroups,
           privateGroups: this.options.privateGroups,
           minUsers: this.options.minUsers,
-          minPostsYear: this.options.minPostsYear,
-          minPostsMonth: this.options.minPostsMonth,
-          minPostsDay: this.options.minPostsDay
+          minPostsYear: this.options.minPostsYear !== undefined ? this.options.minPostsYear : '',
+          minPostsMonth: this.options.minPostsMonth !== undefined ? this.options.minPostsMonth : '',
+          minPostsDay: this.options.minPostsDay !== undefined ? this.options.minPostsDay : '',
+          maxScrolls: this.maxScrolls,
+          scrollDelay: this.scrollTimeout / 1000
         },
         scrollCount: this.scrollCount
       };

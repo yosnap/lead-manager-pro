@@ -33,14 +33,15 @@ chrome.storage.local.get([
     scrollDelay: result.scrollDelay || 2,
     groupPublic: result.groupPublic !== undefined ? result.groupPublic : true,
     groupPrivate: result.groupPrivate !== undefined ? result.groupPrivate : true,
-    minUsers: result.minUsers || 100,
-    // Para las publicaciones mínimas, permitir valores vacíos
-    minPostsYear: result.minPostsYear !== undefined ? result.minPostsYear : 10,
-    minPostsMonth: result.minPostsMonth !== undefined ? result.minPostsMonth : 5,
-    minPostsDay: result.minPostsDay !== undefined ? result.minPostsDay : 1
+    minUsers: result.minUsers || 1000,
+    // Para las publicaciones mínimas, establecer valores predeterminados
+    minPostsYear: result.minPostsYear !== undefined ? result.minPostsYear : '1000',
+    minPostsMonth: result.minPostsMonth !== undefined ? result.minPostsMonth : '100',
+    minPostsDay: result.minPostsDay !== undefined ? result.minPostsDay : '5'
   };
   
   chrome.storage.local.set(defaultOptions);
+  console.log('Opciones por defecto establecidas en chrome.storage.local:', defaultOptions);
 });
 
 // Manejador de mensajes

@@ -20,10 +20,10 @@ let state = {
   groupOptions: {
     publicGroups: true,
     privateGroups: true,
-    minUsers: 0,
-    minPostsYear: 0,
-    minPostsMonth: 0,
-    minPostsDay: 0
+    minUsers: 1000,
+    minPostsYear: '1000',
+    minPostsMonth: '100',
+    minPostsDay: '5'
   },
   
   // Criterios guardados
@@ -404,6 +404,11 @@ function performSearch() {
       const minPostsMonthValue = minPostsMonthInput.value.trim() === '' ? '' : (parseInt(minPostsMonthInput.value, 10) || 0);
       const minPostsDayValue = minPostsDayInput.value.trim() === '' ? '' : (parseInt(minPostsDayInput.value, 10) || 0);
       
+      // Verificar que al menos hay un valor de usuarios
+      if (minUsersValue === '') {
+        throw new Error('Por favor ingresa una cantidad mínima de usuarios para filtrar grupos');
+      }
+      
       const groupOptions = {
         publicGroups: publicGroupsCheckbox.checked,
         privateGroups: privateGroupsCheckbox.checked,
@@ -416,17 +421,34 @@ function performSearch() {
       searchData.groupOptions = groupOptions;
       state.groupOptions = groupOptions;
       
-      // Agregar información del filtro
+      // Agregar información del filtro y explicación sobre cómo se aplica
       console.log('Criterios de filtrado para grupos:', {
         'Mínimo de usuarios': minUsersValue,
         'Mínimo publicaciones por año': minPostsYearValue,
         'Mínimo publicaciones por mes': minPostsMonthValue,
-        'Mínimo publicaciones por día': minPostsDayValue
+        'Mínimo publicaciones por día': minPostsDayValue,
+        'Lógica aplicada': 'Debe cumplir mínimo de usuarios Y cualquiera de los mínimos de publicaciones'
       });
       
       // Guardar estas opciones también en chrome.storage.local para acceso desde el background script
       try {
+        // Guardar TODAS las opciones en chrome.storage.local
         chrome.storage.local.set({
+          // Opciones de configuración general
+          maxScrolls: maxScrollsValue,
+          scrollDelay: scrollDelayValue,
+          // Opciones específicas para grupos
+          groupPublic: publicGroupsCheckbox.checked,
+          groupPrivate: privateGroupsCheckbox.checked,
+          minUsers: minUsersValue,
+          minPostsYear: minPostsYearValue,
+          minPostsMonth: minPostsMonthValue,
+          minPostsDay: minPostsDayValue
+        });
+        
+        console.log('Opciones guardadas correctamente en chrome.storage.local:', {
+          maxScrolls: maxScrollsValue,
+          scrollDelay: scrollDelayValue,
           groupPublic: publicGroupsCheckbox.checked,
           groupPrivate: privateGroupsCheckbox.checked,
           minUsers: minUsersValue,
@@ -472,6 +494,9 @@ function performSearch() {
         
         // Guardar para sincronización futura con base de datos
         localStorage.setItem('snap_lead_manager_group_options_for_sync', JSON.stringify(groupOptionsForSync));
+        
+        // Preparar datos para enviar posteriormente a la base de datos
+        prepareDataForDatabase(groupOptionsForSync);
         
         // Loggear las opciones guardadas para debugging
         console.log('Opciones de grupo guardadas para sincronización:', groupOptionsForSync);
@@ -1631,6 +1656,11 @@ document.addEventListener('DOMContentLoaded', () => {
       
       state.maxScrolls = options.maxScrolls || 50;
       state.scrollDelay = options.scrollDelay || 2;
+      
+      console.log('Opciones generales cargadas desde localStorage:', {
+        maxScrolls: state.maxScrolls,
+        scrollDelay: state.scrollDelay
+      });
     }
   } catch (error) {
     console.error('Error al cargar opciones generales:', error);
@@ -1644,11 +1674,22 @@ document.addEventListener('DOMContentLoaded', () => {
       if (publicGroupsCheckbox) publicGroupsCheckbox.checked = options.publicGroups !== false;
       if (privateGroupsCheckbox) privateGroupsCheckbox.checked = options.privateGroups !== false;
       if (minUsersInput) minUsersInput.value = options.minUsers || 0;
-      if (minPostsYearInput) minPostsYearInput.value = options.minPostsYear || 0;
-      if (minPostsMonthInput) minPostsMonthInput.value = options.minPostsMonth || 0;
-      if (minPostsDayInput) minPostsDayInput.value = options.minPostsDay || 0;
+      
+      // Manejo correcto de valores vacíos para las publicaciones
+      if (minPostsYearInput) minPostsYearInput.value = options.minPostsYear === '' ? '' : (options.minPostsYear || '');
+      if (minPostsMonthInput) minPostsMonthInput.value = options.minPostsMonth === '' ? '' : (options.minPostsMonth || '');
+      if (minPostsDayInput) minPostsDayInput.value = options.minPostsDay === '' ? '' : (options.minPostsDay || '');
       
       state.groupOptions = options;
+      
+      console.log('Opciones de grupo cargadas desde localStorage:', {
+        publicGroups: options.publicGroups,
+        privateGroups: options.privateGroups,
+        minUsers: options.minUsers,
+        minPostsYear: options.minPostsYear,
+        minPostsMonth: options.minPostsMonth,
+        minPostsDay: options.minPostsDay
+      });
     }
   } catch (error) {
     console.error('Error al cargar opciones de grupo:', error);
@@ -1738,6 +1779,46 @@ function stopStatusChecking() {
     clearInterval(state.statusUpdateInterval);
     state.statusUpdateInterval = null;
     console.log('Detenida verificación periódica de estado');
+  }
+}
+
+// Prepara los datos de configuración para enviarlos a la base de datos
+function prepareDataForDatabase(options) {
+  try {
+    // Estructurar los datos para guardarlos
+    const dataForSync = {
+      timestamp: Date.now(),
+      user_id: localStorage.getItem('user_id') || 'anonymous',
+      search_term: options.searchTerm || state.currentSearchTerm,
+      search_type: options.searchType || state.currentSearchType,
+      // Opciones generales
+      max_scrolls: options.maxScrolls || state.maxScrolls,
+      scroll_delay: options.scrollDelay || state.scrollDelay,
+      // Opciones específicas para grupos
+      group_options: {
+        public_groups: options.publicGroups !== undefined ? options.publicGroups : true,
+        private_groups: options.privateGroups !== undefined ? options.privateGroups : true,
+        min_users: options.minUsers,
+        min_posts_year: options.minPostsYear !== undefined ? options.minPostsYear : '',
+        min_posts_month: options.minPostsMonth !== undefined ? options.minPostsMonth : '',
+        min_posts_day: options.minPostsDay !== undefined ? options.minPostsDay : ''
+      },
+      // Datos del cliente
+      user_agent: navigator.userAgent,
+      client_version: '1.0.0'
+    };
+    
+    // Guardamos en localStorage para futura sincronización con la base de datos
+    localStorage.setItem('lead_manager_pro_db_sync_data', JSON.stringify(dataForSync));
+    console.log('Datos preparados para sincronización con base de datos:', dataForSync);
+    
+    // Aquí se agregaría el código para enviar a la base de datos
+    // Por ahora solo lo guardaremos en localStorage
+    
+    // También podríamos incluir un timestamp de cuándo se deberá intentar sincronizar
+    localStorage.setItem('lead_manager_pro_db_sync_timestamp', Date.now());
+  } catch (error) {
+    console.error('Error al preparar datos para base de datos:', error);
   }
 }
 
