@@ -9,7 +9,7 @@ window.LeadManagerPro.state = window.LeadManagerPro.state || {};
 // Estado de opciones globales
 window.LeadManagerPro.state.options = {
   // Opciones generales
-  maxScrolls: 50,  // Valor por defecto: 50 scrolls
+  maxScrolls: 4,  // Valor por defecto: 4 scrolls
   scrollDelay: 2,  // Valor por defecto: 2 segundos
   
   // Opciones de búsqueda de grupos

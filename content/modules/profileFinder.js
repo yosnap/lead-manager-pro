@@ -232,52 +232,36 @@ window.LeadManagerPro.modules.findProfiles = async function() {
     // Enviar mensaje directamente al sidebar con información completa
     const iframe = document.getElementById('snap-lead-manager-iframe');
     if (iframe && iframe.contentWindow) {
-      // Mensaje claro y completo sobre los resultados
-      const resultMessage = {
+      iframe.contentWindow.postMessage({
         action: 'search_result',
         result: {
           success: true,
-          profiles: searchState.foundProfiles, // Para compatibilidad con versiones anteriores
-          results: searchState.foundProfiles,  // Nombre más claro para resultados
-          count: searchState.foundProfiles.length,
-          totalTime: duration,
-          searchType: searchState.searchType,
-          searchTerm: searchState.searchTerm,
-          city: searchState.city,
-          message: `Búsqueda completada. Se encontraron ${searchState.foundProfiles.length} ${resultType} en ${duration} segundos.`
+          message: `Búsqueda completada. Se encontraron ${searchState.foundProfiles.length} ${resultType}.`,
+          profiles: searchState.foundProfiles
         }
-      };
-      
-      // Enviar inmediatamente al sidebar
-      iframe.contentWindow.postMessage(resultMessage, '*');
-      
-      // También notificar que la búsqueda ha terminado por completo
-      setTimeout(() => {
-        iframe.contentWindow.postMessage({
-          action: 'search_complete',
-          status: {
-            isSearching: false,
-            foundCount: searchState.foundProfiles.length,
-            searchType: searchState.searchType
-          }
-        }, '*');
-      }, 500);
-      
-      console.log('Enviados resultados finales al sidebar:', searchState.foundProfiles.length);
+      }, '*');
     }
     
-    return { 
-      success: true, 
-      message: `Búsqueda de ${resultType} completada con éxito`,
-      profiles: searchState.foundProfiles, // Incluimos ambos nombres de propiedad para compatibilidad
-      results: searchState.foundProfiles,
-      stats: {
-        duration,
-        pages: searchState.currentPage,
-        searchType: searchState.searchType,
-        searchTerm: searchState.searchTerm,
-        city: searchState.city
-      }
+    // Deshabilitar todos los enlaces para prevenir navegación
+    document.querySelectorAll('a[href*="/groups/"]').forEach(link => {
+      link.style.pointerEvents = 'none';
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }, true);
+    });
+    
+    // Volver al inicio de la página
+    window.scrollTo(0, 0);
+    
+    // Detener cualquier búsqueda en curso
+    searchState.stopSearch = true;
+    
+    return {
+      success: true,
+      message: `Búsqueda completada. Se encontraron ${searchState.foundProfiles.length} ${resultType}.`,
+      profiles: searchState.foundProfiles
     };
     
   } catch (error) {

@@ -61,6 +61,233 @@ async function initContentScript() {
   // Manejar acciones para mensajes de Chrome
   setupChromeMessagesListener();
   
+  // Inicializar los nuevos módulos de opciones
+  if (window.leadManagerPro) {
+    // Inicializar opciones generales
+    if (window.leadManagerPro.generalOptions) {
+      window.leadManagerPro.generalOptions.loadOptions();
+    }
+    
+    // Inicializar opciones de búsqueda de grupos
+    if (window.leadManagerPro.groupSearchOptions) {
+      window.leadManagerPro.groupSearchOptions.loadOptions();
+    }
+    
+    // Inicializar la interfaz de opciones generales
+    if (window.leadManagerPro.generalOptionsUI) {
+      window.leadManagerPro.generalOptionsUI.init();
+    }
+    
+    // Inicializar la interfaz de opciones de visualización
+    if (window.leadManagerPro.displayOptionsUI) {
+      window.leadManagerPro.displayOptionsUI.init();
+    }
+    
+    // Inicializar la interfaz de opciones de búsqueda de grupos
+    if (window.leadManagerPro.groupSearchOptionsUI) {
+      window.leadManagerPro.groupSearchOptionsUI.init();
+    }
+    
+    // Inicializar la interfaz de interacción con miembros
+    if (window.leadManagerPro.memberInteractionUI) {
+      window.leadManagerPro.memberInteractionUI.init();
+    }
+  }
+  
+  // Comprobar si estamos en una página de grupo para activar el extractor de miembros
+  if (window.location.href.includes('/groups/') && !window.location.href.includes('/groups/feed')) {
+    console.log('Lead Manager Pro: Detectada página de grupo de Facebook');
+    
+    // Verificar si los módulos de extracción de miembros están disponibles
+    if (window.leadManagerPro && window.leadManagerPro.groupMemberUI) {
+      console.log('Lead Manager Pro: Inicializando extractor de miembros');
+      
+      // Asegurarnos de que todas las dependencias estén presentes
+      if (!window.leadManagerPro.groupMemberFinder) {
+        window.leadManagerPro.groupMemberFinder = new GroupMemberFinder();
+      }
+      
+      // Crear un contenedor para los botones flotantes
+      const floatingButtonsContainer = document.createElement('div');
+      floatingButtonsContainer.id = 'lead-manager-floating-buttons-container';
+      floatingButtonsContainer.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 9998;
+      `;
+      
+      // Botón para contar miembros
+      const countMembersButton = document.createElement('button');
+      countMembersButton.id = 'lead-manager-count-members-button';
+      countMembersButton.className = 'lead-manager-floating-button';
+      countMembersButton.innerHTML = '<span style="font-size: 16px;">👥</span><span style="font-size: 14px; margin-left: 2px;">#</span>';
+      countMembersButton.title = 'Contar miembros del grupo';
+      countMembersButton.style.cssText = `
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background-color: #38A169;
+        color: white;
+        font-size: 24px;
+        border: none;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.2s, background-color 0.2s;
+      `;
+      
+      // Agregar estilos de hover
+      countMembersButton.addEventListener('mouseover', () => {
+        countMembersButton.style.transform = 'scale(1.05)';
+        countMembersButton.style.backgroundColor = '#2F855A';
+      });
+      
+      countMembersButton.addEventListener('mouseout', () => {
+        countMembersButton.style.transform = 'scale(1)';
+        countMembersButton.style.backgroundColor = '#38A169';
+      });
+      
+      // Agregar evento de clic para mostrar la interfaz y contar miembros
+      countMembersButton.addEventListener('click', async () => {
+        // Mostrar un pequeño feedback visual al hacer clic
+        countMembersButton.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+          countMembersButton.style.transform = 'scale(1)';
+        }, 200);
+        
+        // Inicializar la interfaz si no está inicializada
+        if (!window.leadManagerPro.groupMemberUI.container) {
+          window.leadManagerPro.groupMemberUI.init();
+        }
+        
+        // Mostrar la interfaz
+        window.leadManagerPro.groupMemberUI.show();
+        
+        // Ejecutar el conteo de miembros
+        await window.leadManagerPro.groupMemberUI.countMembers();
+      });
+      
+      // Botón para interactuar con miembros
+      const extractMembersButton = document.createElement('button');
+      extractMembersButton.id = 'lead-manager-member-extractor-button';
+      extractMembersButton.className = 'lead-manager-floating-button';
+      extractMembersButton.innerHTML = '<span style="font-size: 16px;">👥</span><span style="font-size: 14px; margin-left: 2px;">💬</span>';
+      extractMembersButton.title = 'Interactuar con los miembros';
+      extractMembersButton.style.cssText = `
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background-color: #4267B2;
+        color: white;
+        font-size: 24px;
+        border: none;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.2s, background-color 0.2s;
+      `;
+      
+      // Agregar estilos de hover
+      extractMembersButton.addEventListener('mouseover', () => {
+        extractMembersButton.style.transform = 'scale(1.05)';
+        extractMembersButton.style.backgroundColor = '#365899';
+      });
+      
+      extractMembersButton.addEventListener('mouseout', () => {
+        extractMembersButton.style.transform = 'scale(1)';
+        extractMembersButton.style.backgroundColor = '#4267B2';
+      });
+      
+      // Agregar evento de clic para mostrar la interfaz de interacción con miembros
+      extractMembersButton.addEventListener('click', () => {
+        // Mostrar un pequeño feedback visual al hacer clic
+        extractMembersButton.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+          extractMembersButton.style.transform = 'scale(1)';
+        }, 200);
+        
+        // En lugar de mostrar la interfaz de extracción, mostrar la interfaz de interacción
+        if (window.leadManagerPro.memberInteractionUI) {
+          window.leadManagerPro.memberInteractionUI.show();
+        } else {
+          console.error('La interfaz de interacción con miembros no está disponible');
+          
+          // Mensaje de alerta si la interfaz no está disponible
+          alert('La interfaz de interacción con miembros no está disponible en este momento.');
+        }
+      });
+      
+      // Botón para interactuar con miembros (hover y mensajes)
+      const interactMembersButton = document.createElement('button');
+      interactMembersButton.id = 'lead-manager-member-interaction-button';
+      interactMembersButton.className = 'lead-manager-floating-button';
+      interactMembersButton.innerHTML = '<span style="font-size: 16px;">👥</span><span style="font-size: 14px; margin-left: 2px;">💬</span>';
+      interactMembersButton.title = 'Interactuar con miembros del grupo';
+      interactMembersButton.style.cssText = `
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background-color: #38A169;
+        color: white;
+        font-size: 24px;
+        border: none;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.2s, background-color 0.2s;
+      `;
+      
+      // Agregar estilos de hover
+      interactMembersButton.addEventListener('mouseover', () => {
+        interactMembersButton.style.transform = 'scale(1.05)';
+        interactMembersButton.style.backgroundColor = '#2F855A';
+      });
+      
+      interactMembersButton.addEventListener('mouseout', () => {
+        interactMembersButton.style.transform = 'scale(1)';
+        interactMembersButton.style.backgroundColor = '#38A169';
+      });
+      
+      // Agregar evento de clic para mostrar la interfaz de interacción
+      interactMembersButton.addEventListener('click', () => {
+        // Mostrar un pequeño feedback visual al hacer clic
+        interactMembersButton.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+          interactMembersButton.style.transform = 'scale(1)';
+        }, 200);
+        
+        // Inicializar la interfaz si no está inicializada
+        if (window.leadManagerPro.memberInteractionUI) {
+          window.leadManagerPro.memberInteractionUI.show();
+        } else {
+          console.error('MemberInteractionUI no disponible');
+        }
+      });
+      
+      // Agregar botones al contenedor
+      floatingButtonsContainer.appendChild(countMembersButton);
+      floatingButtonsContainer.appendChild(extractMembersButton);
+      floatingButtonsContainer.appendChild(interactMembersButton);
+      
+      // Agregar contenedor al cuerpo del documento
+      document.body.appendChild(floatingButtonsContainer);
+      
+      console.log('Lead Manager Pro: Botón de extracción de miembros agregado');
+    } else {
+      console.log('Lead Manager Pro: Módulos de extracción de miembros no disponibles');
+    }
+  }
+  
   // Comprobar si estamos en una recarga forzada para búsqueda
   const forceReload = localStorage.getItem('snap_lead_manager_force_reload') === 'true';
   const searchUrl = localStorage.getItem('snap_lead_manager_search_url');
@@ -401,6 +628,78 @@ function setupChromeMessagesListener() {
         const format = message.format || 'json';
         const url = window.leadManagerPro.groupFinder.exportResults(format);
         sendResponse({ success: true, downloadUrl: url });
+        return false;
+      }
+    }
+    
+    if (message.action === 'startGroupMemberExtraction') {
+      if (window.leadManagerPro && window.leadManagerPro.groupMemberFinder) {
+        console.log('Lead Manager Pro: Iniciando extracción de miembros del grupo');
+        
+        // Mostrar la interfaz de extracción
+        if (window.leadManagerPro.groupMemberUI) {
+          // Inicializar la interfaz si no está inicializada
+          if (!window.leadManagerPro.groupMemberUI.container) {
+            window.leadManagerPro.groupMemberUI.init();
+          }
+          
+          // Mostrar la interfaz
+          window.leadManagerPro.groupMemberUI.show();
+          
+          // Iniciar la extracción
+          window.leadManagerPro.groupMemberUI.startExtraction();
+          
+          sendResponse({ success: true, message: 'Extracción de miembros iniciada' });
+        } else {
+          // Si la interfaz no está disponible, iniciar la extracción directamente
+          const progressCallback = (progressData) => {
+            chrome.runtime.sendMessage({
+              type: 'status_update',
+              message: progressData.message || 'Extrayendo miembros...',
+              progress: progressData.type === 'progress' ? progressData.value : null,
+              membersFound: progressData.membersFound || 0,
+              finished: progressData.type === 'complete'
+            });
+          };
+          
+          window.leadManagerPro.groupMemberFinder.init({}, progressCallback).startExtraction();
+          sendResponse({ success: true, message: 'Extracción de miembros iniciada sin interfaz' });
+        }
+        return true;
+      } else {
+        sendResponse({ success: false, error: 'Módulo de extracción de miembros no disponible' });
+        return false;
+      }
+    }
+    
+    if (message.action === 'stopGroupMemberExtraction') {
+      if (window.leadManagerPro && window.leadManagerPro.groupMemberFinder) {
+        console.log('Lead Manager Pro: Deteniendo extracción de miembros del grupo');
+        
+        // Detener extracción a través de la interfaz si está disponible
+        if (window.leadManagerPro.groupMemberUI && window.leadManagerPro.groupMemberUI.isExtracting) {
+          window.leadManagerPro.groupMemberUI.stopExtraction();
+        } else {
+          // Si no hay interfaz, detener directamente
+          const members = window.leadManagerPro.groupMemberFinder.stopExtraction();
+        }
+        
+        sendResponse({ success: true, message: 'Extracción de miembros detenida' });
+        return false;
+      } else {
+        sendResponse({ success: false, error: 'Módulo de extracción de miembros no disponible' });
+        return false;
+      }
+    }
+    
+    if (message.action === 'exportGroupMemberResults') {
+      if (window.leadManagerPro && window.leadManagerPro.groupMemberFinder) {
+        const format = message.format || 'json';
+        const url = window.leadManagerPro.groupMemberFinder.exportResults(format);
+        sendResponse({ success: true, downloadUrl: url });
+        return false;
+      } else {
+        sendResponse({ success: false, error: 'Módulo de extracción de miembros no disponible' });
         return false;
       }
     }

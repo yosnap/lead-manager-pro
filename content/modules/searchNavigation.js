@@ -110,6 +110,12 @@ window.LeadManagerPro.modules.navigateToNextPage = async function(searchState) {
     }
   }
   
+  // Si la búsqueda está marcada como completada, no continuar
+  if (!searchState.isSearching) {
+    console.log('Búsqueda completada, no se navegará a más páginas');
+    return false;
+  }
+  
   updateStatus(`Navegando a la página ${searchState.currentPage + 1}...`, 50 + (searchState.currentPage / searchState.totalPages) * 30);
   
   try {
@@ -123,6 +129,11 @@ window.LeadManagerPro.modules.navigateToNextPage = async function(searchState) {
     });
     
     if (nextButtons.length > 0) {
+      // No continuar si la búsqueda se detuvo mientras buscábamos botones
+      if (searchState.stopSearch || !searchState.isSearching) {
+        return false;
+      }
+      
       // Ordenar por relevancia (preferimos los que tienen texto explícito)
       nextButtons.sort((a, b) => {
         const textA = a.textContent.toLowerCase();
@@ -136,19 +147,18 @@ window.LeadManagerPro.modules.navigateToNextPage = async function(searchState) {
         return 0;
       });
       
-      // Hacer clic en el mejor botón
-      nextButtons[0].click();
+      // Deshabilitar navegación automática
+      nextButtons.forEach(button => {
+        button.style.pointerEvents = 'none';
+        button.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }, true);
+      });
       
-      // Incrementar contador de página
-      searchState.currentPage++;
-      
-      // Esperar a que se cargue la nueva página
-      await sleep(3000);
-      
-      // Volver al inicio de la página
-      window.scrollTo(0, 0);
-      
-      return true;
+      updateStatus('No se continuará navegando a más páginas.', 80);
+      return false;
     } else {
       updateStatus('No se encontraron más páginas de resultados.', 80);
       return false;
@@ -170,43 +180,23 @@ window.LeadManagerPro.modules.autoScroll = async function(searchState) {
   const updateStatus = window.LeadManagerPro.utils.updateStatus;
   const sleep = window.LeadManagerPro.utils.sleep;
   
-  // Obtener opciones de configuración DIRECTAMENTE desde localStorage
-  let MAX_SCROLLS = 50; // valor por defecto
-  let SCROLL_DELAY = 2000; // valor por defecto en milisegundos
+  // Obtener opciones de configuración desde chrome.storage.local
+  const config = await new Promise((resolve) => {
+    chrome.storage.local.get(['maxScrolls', 'scrollDelay'], (result) => {
+      resolve({
+        maxScrolls: result.maxScrolls !== undefined ? Number(result.maxScrolls) : 4,
+        scrollDelay: result.scrollDelay !== undefined ? Number(result.scrollDelay) * 1000 : 2000
+      });
+    });
+  });
   
-  try {
-    // Leer directamente desde localStorage donde el sidebar guarda la configuración
-    const generalOptionsStr = localStorage.getItem('snap_lead_manager_general_options');
-    if (generalOptionsStr) {
-      const generalOptions = JSON.parse(generalOptionsStr);
-      
-      // Usar configuración del sidebar si está disponible
-      if (generalOptions && !isNaN(Number(generalOptions.maxScrolls))) {
-        MAX_SCROLLS = Number(generalOptions.maxScrolls);
-      }
-      
-      if (generalOptions && !isNaN(Number(generalOptions.scrollDelay))) {
-        SCROLL_DELAY = Number(generalOptions.scrollDelay) * 1000; // Convertir a milisegundos
-      }
-      
-      console.log('autoScroll: Usando configuración de localStorage:', {
-        maxScrolls: MAX_SCROLLS, 
-        scrollDelay: SCROLL_DELAY/1000
-      });
-    } else {
-      // Usar opciones del estado global solo como respaldo
-      const options = window.LeadManagerPro.state.options || {};
-      MAX_SCROLLS = !isNaN(Number(options.maxScrolls)) ? Number(options.maxScrolls) : 50;
-      SCROLL_DELAY = (!isNaN(Number(options.scrollDelay)) ? Number(options.scrollDelay) : 2) * 1000;
-      
-      console.log('autoScroll: No se encontró configuración en localStorage, usando respaldo:', {
-        maxScrolls: MAX_SCROLLS, 
-        scrollDelay: SCROLL_DELAY/1000
-      });
-    }
-  } catch (error) {
-    console.error('Error al leer configuración para autoScroll:', error);
-  }
+  const MAX_SCROLLS = config.maxScrolls;
+  const SCROLL_DELAY = config.scrollDelay;
+  
+  console.log('autoScroll: Usando configuración de chrome.storage:', {
+    maxScrolls: MAX_SCROLLS,
+    scrollDelay: SCROLL_DELAY/1000
+  });
   
   updateStatus(`Realizando scroll para cargar todos los resultados (máx. ${MAX_SCROLLS} scrolls)...`, 35);
   
@@ -214,6 +204,9 @@ window.LeadManagerPro.modules.autoScroll = async function(searchState) {
     let totalHeight = 0;
     let distance = 300;
     let scrollCount = 0;
+    let lastHeight = document.documentElement.scrollHeight;
+    let noChangeCount = 0;
+    
     let timer = setInterval(async () => {
       // Verificar si se debe detener la búsqueda
       if (searchState.stopSearch) {
@@ -224,13 +217,10 @@ window.LeadManagerPro.modules.autoScroll = async function(searchState) {
       
       // Verificar si se debe pausar la búsqueda
       if (searchState.pauseSearch) {
-        // No resolvemos la promesa, solo esperamos
-        // Bucle de espera mientras está pausada
         while (searchState.pauseSearch && !searchState.stopSearch) {
           updateStatus('Búsqueda pausada. Esperando para continuar...', 35);
           await sleep(1000);
         }
-        // Si después de la pausa se indicó detener, salimos
         if (searchState.stopSearch) {
           clearInterval(timer);
           resolve();
@@ -249,20 +239,39 @@ window.LeadManagerPro.modules.autoScroll = async function(searchState) {
       }
       
       // Verificar si hemos llegado al final o si ya hemos hecho suficiente scroll
-      const scrollHeight = document.documentElement.scrollHeight;
-      const innerHeight = window.innerHeight;
+      const currentHeight = document.documentElement.scrollHeight;
       const scrollTop = document.documentElement.scrollTop;
+      const innerHeight = window.innerHeight;
       
-      // Condiciones para detenerse:
-      // 1. Si hemos hecho el máximo de scrolls configurado
+      // Detectar si la altura no ha cambiado después del scroll
+      if (currentHeight === lastHeight) {
+        noChangeCount++;
+      } else {
+        noChangeCount = 0;
+        lastHeight = currentHeight;
+      }
+      
+      // Condiciones para detener el scroll:
+      // 1. Si hemos alcanzado el máximo de scrolls configurado
       // 2. Si estamos cerca del final de la página
-      // 3. Si no ha cambiado la altura de la página en los últimos 5 scrolls
-      if (scrollCount > MAX_SCROLLS || 
-          (scrollTop + innerHeight >= scrollHeight - 100) || 
+      // 3. Si la altura no ha cambiado en 3 intentos consecutivos
+      // 4. Si hemos hecho más de 10 scrolls y superado cierta altura total
+      if (scrollCount >= MAX_SCROLLS || 
+          (scrollTop + innerHeight >= currentHeight - 100) || 
+          noChangeCount >= 3 ||
           (scrollCount > 10 && totalHeight > 15000)) {
+        
         clearInterval(timer);
-        // Volver al inicio de la página
         window.scrollTo(0, 0);
+        
+        // Enviar mensaje de finalización
+        window.parent.postMessage({
+          action: 'scroll_complete',
+          message: noChangeCount >= 3 ? 
+            'No se detectaron más resultados para cargar' : 
+            'Scroll completado'
+        }, '*');
+        
         resolve();
       }
     }, SCROLL_DELAY);

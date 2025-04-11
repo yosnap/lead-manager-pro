@@ -450,6 +450,15 @@ footer {
   line-height: 1.4;
 }
 
+/* Texto de ayuda para los inputs */
+.input-help {
+  display: block;
+  font-size: 11px;
+  color: #777;
+  margin-top: 2px;
+  font-style: italic;
+}
+
 /* Gestión de criterios */
 .criteria-management {
   display: flex;

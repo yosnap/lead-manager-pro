@@ -29,7 +29,7 @@ chrome.storage.local.get([
 ], function(result) {
   const defaultOptions = {
     // Si no existe la opción, se establece el valor por defecto
-    maxScrolls: result.maxScrolls || 50,
+    maxScrolls: result.maxScrolls || 4,
     scrollDelay: result.scrollDelay || 2,
     groupPublic: result.groupPublic !== undefined ? result.groupPublic : true,
     groupPrivate: result.groupPrivate !== undefined ? result.groupPrivate : true,
@@ -326,6 +326,110 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     sendResponse({ success: true });
     return false;
+  } else if (message.action === 'startGroupMemberExtraction') {
+    // Iniciar la extracción de miembros de grupo
+    console.log('Background: Iniciando extracción de miembros de grupo');
+    
+    // Enviar la solicitud a la pestaña activa
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length > 0) {
+        try {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'startGroupMemberExtraction'
+          }, function(response) {
+            // Comprobar si hay un error de runtime
+            if (chrome.runtime.lastError) {
+              console.error('Background: Error al comunicarse con content script:', chrome.runtime.lastError);
+              sendResponse({ 
+                success: false, 
+                error: 'Error de comunicación: ' + chrome.runtime.lastError.message 
+              });
+              return;
+            }
+            
+            console.log('Background: Respuesta de content script:', response);
+            sendResponse(response);
+          });
+        } catch (error) {
+          console.error('Background: Error al enviar mensaje:', error);
+          sendResponse({ success: false, error: 'Error al enviar mensaje: ' + error.message });
+        }
+      } else {
+        console.error('Background: No hay pestañas activas');
+        sendResponse({ success: false, error: 'No hay pestañas activas' });
+      }
+    });
+    
+    return true; // Mantener el puerto abierto para respuesta asíncrona
+  } else if (message.action === 'stopGroupMemberExtraction') {
+    // Detener la extracción de miembros de grupo
+    console.log('Background: Deteniendo extracción de miembros de grupo');
+    
+    // Enviar la solicitud a la pestaña activa
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length > 0) {
+        try {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'stopGroupMemberExtraction'
+          }, function(response) {
+            if (chrome.runtime.lastError) {
+              console.error('Background: Error al comunicarse con content script:', chrome.runtime.lastError);
+              sendResponse({ 
+                success: false, 
+                error: 'Error de comunicación: ' + chrome.runtime.lastError.message 
+              });
+              return;
+            }
+            
+            console.log('Background: Respuesta de content script:', response);
+            sendResponse(response);
+          });
+        } catch (error) {
+          console.error('Background: Error al enviar mensaje:', error);
+          sendResponse({ success: false, error: 'Error al enviar mensaje: ' + error.message });
+        }
+      } else {
+        console.error('Background: No hay pestañas activas');
+        sendResponse({ success: false, error: 'No hay pestañas activas' });
+      }
+    });
+    
+    return true; // Mantener el puerto abierto para respuesta asíncrona
+  } else if (message.action === 'exportGroupMemberResults') {
+    // Exportar resultados de la extracción de miembros
+    console.log('Background: Exportando resultados de extracción de miembros');
+    
+    // Enviar la solicitud a la pestaña activa
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length > 0) {
+        try {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'exportGroupMemberResults',
+            format: message.format || 'json'
+          }, function(response) {
+            if (chrome.runtime.lastError) {
+              console.error('Background: Error al comunicarse con content script:', chrome.runtime.lastError);
+              sendResponse({ 
+                success: false, 
+                error: 'Error de comunicación: ' + chrome.runtime.lastError.message 
+              });
+              return;
+            }
+            
+            console.log('Background: Respuesta de content script:', response);
+            sendResponse(response);
+          });
+        } catch (error) {
+          console.error('Background: Error al enviar mensaje:', error);
+          sendResponse({ success: false, error: 'Error al enviar mensaje: ' + error.message });
+        }
+      } else {
+        console.error('Background: No hay pestañas activas');
+        sendResponse({ success: false, error: 'No hay pestañas activas' });
+      }
+    });
+    
+    return true; // Mantener el puerto abierto para respuesta asíncrona
   } else if (message.action === 'updateOptions') {
     // Guardar las opciones actualizadas
     chrome.storage.local.set(message.options, function() {

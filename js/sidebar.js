@@ -660,27 +660,15 @@ function stopSearch() {
 function updateResultsList(profiles) {
   if (!searchResultsList) return;
   
-  // Registrar lo que estamos recibiendo
-  console.log('Actualizando lista de resultados con:', profiles);
-  
-  // Limpiar lista de resultados
+  // Limpiar lista actual
   searchResultsList.innerHTML = '';
   
-  // Actualizar el resumen de resultados
-  if (resultsSummary) {
-    resultsSummary.innerHTML = `<p>Se encontraron <strong>${profiles.length}</strong> ${state.currentSearchType === 'people' ? 'perfiles' : 'grupos'}</p>`;
-  }
-  
-  // Si no hay perfiles, mostrar mensaje
+  // Si no hay resultados, mostrar mensaje
   if (!profiles || profiles.length === 0) {
-    if (resultsSummary) {
-      resultsSummary.innerHTML = `<p>Se encontraron <strong>0</strong> ${state.currentSearchType === 'people' ? 'perfiles' : 'grupos'}</p>`;
-    }
-    
-    const emptyMessage = document.createElement('li');
-    emptyMessage.className = 'result-empty';
-    emptyMessage.textContent = `No se encontraron ${state.currentSearchType === 'people' ? 'perfiles' : 'grupos'} para esta búsqueda.`;
-    searchResultsList.appendChild(emptyMessage);
+    const noResults = document.createElement('li');
+    noResults.className = 'no-results';
+    noResults.textContent = 'No se encontraron resultados';
+    searchResultsList.appendChild(noResults);
     return;
   }
   
@@ -696,7 +684,7 @@ function updateResultsList(profiles) {
     let htmlContent = `
       <div class="result-header">
         <span class="result-name">${profile.name || 'Sin nombre'}</span>
-        <a href="${isPerson ? (profile.profileUrl || '#') : (profile.groupUrl || '#')}" target="_blank" class="result-link">Ver</a>
+        <span class="result-link">Ver</span>
       </div>
       <div class="result-info">
     `;
@@ -706,9 +694,10 @@ function updateResultsList(profiles) {
       if (profile.location) htmlContent += `<div>📍 ${profile.location}</div>`;
       if (profile.occupation) htmlContent += `<div>💼 ${profile.occupation}</div>`;
     } else {
-      if (profile.groupType) htmlContent += `<div>🔒 ${profile.groupType}</div>`;
-      if (profile.members) htmlContent += `<div>👥 ${profile.members}</div>`;
-      if (profile.frequency) htmlContent += `<div>📊 ${profile.frequency}</div>`;
+      if (profile.type) htmlContent += `<div>🔒 ${profile.type}</div>`;
+      if (profile.members) htmlContent += `<div>👥 ${profile.members} miembros</div>`;
+      if (profile.postsMonth) htmlContent += `<div>📊 ${profile.postsMonth} publicaciones al mes</div>`;
+      if (profile.postsDay) htmlContent += `<div>📊 ${profile.postsDay} publicaciones al día</div>`;
     }
     
     htmlContent += `</div>`;
@@ -1646,53 +1635,43 @@ document.addEventListener('DOMContentLoaded', () => {
     state.savedCriteria = [];
   }
   
-  // Cargar opciones generales desde localStorage
-  try {
-    const generalOptions = localStorage.getItem('snap_lead_manager_general_options');
-    if (generalOptions) {
-      const options = JSON.parse(generalOptions);
-      if (maxScrollsInput) maxScrollsInput.value = options.maxScrolls || 50;
-      if (scrollDelayInput) scrollDelayInput.value = options.scrollDelay || 2;
-      
-      state.maxScrolls = options.maxScrolls || 50;
-      state.scrollDelay = options.scrollDelay || 2;
-      
-      console.log('Opciones generales cargadas desde localStorage:', {
-        maxScrolls: state.maxScrolls,
-        scrollDelay: state.scrollDelay
-      });
-    }
-  } catch (error) {
-    console.error('Error al cargar opciones generales:', error);
+  // Cargar opciones generales desde chrome.storage.local
+  chrome.storage.local.get(['maxScrolls', 'scrollDelay'], function(result) {
+    if (maxScrollsInput) maxScrollsInput.value = result.maxScrolls || 4;
+    if (scrollDelayInput) scrollDelayInput.value = result.scrollDelay || 2;
+    
+    state.maxScrolls = result.maxScrolls || 4;
+    state.scrollDelay = result.scrollDelay || 2;
+    
+    console.log('Opciones generales cargadas desde chrome.storage:', {
+      maxScrolls: state.maxScrolls,
+      scrollDelay: state.scrollDelay
+    });
+  });
+  
+  // Guardar opciones cuando cambien
+  if (maxScrollsInput) {
+    maxScrollsInput.addEventListener('change', function() {
+      const value = parseInt(this.value);
+      if (!isNaN(value) && value > 0) {
+        chrome.storage.local.set({ maxScrolls: value }, function() {
+          console.log('maxScrolls guardado:', value);
+        });
+        state.maxScrolls = value;
+      }
+    });
   }
   
-  // Cargar opciones de grupo desde localStorage
-  try {
-    const groupOptions = localStorage.getItem('snap_lead_manager_group_options');
-    if (groupOptions) {
-      const options = JSON.parse(groupOptions);
-      if (publicGroupsCheckbox) publicGroupsCheckbox.checked = options.publicGroups !== false;
-      if (privateGroupsCheckbox) privateGroupsCheckbox.checked = options.privateGroups !== false;
-      if (minUsersInput) minUsersInput.value = options.minUsers || 0;
-      
-      // Manejo correcto de valores vacíos para las publicaciones
-      if (minPostsYearInput) minPostsYearInput.value = options.minPostsYear === '' ? '' : (options.minPostsYear || '');
-      if (minPostsMonthInput) minPostsMonthInput.value = options.minPostsMonth === '' ? '' : (options.minPostsMonth || '');
-      if (minPostsDayInput) minPostsDayInput.value = options.minPostsDay === '' ? '' : (options.minPostsDay || '');
-      
-      state.groupOptions = options;
-      
-      console.log('Opciones de grupo cargadas desde localStorage:', {
-        publicGroups: options.publicGroups,
-        privateGroups: options.privateGroups,
-        minUsers: options.minUsers,
-        minPostsYear: options.minPostsYear,
-        minPostsMonth: options.minPostsMonth,
-        minPostsDay: options.minPostsDay
-      });
-    }
-  } catch (error) {
-    console.error('Error al cargar opciones de grupo:', error);
+  if (scrollDelayInput) {
+    scrollDelayInput.addEventListener('change', function() {
+      const value = parseFloat(this.value);
+      if (!isNaN(value) && value >= 0.5) {
+        chrome.storage.local.set({ scrollDelay: value }, function() {
+          console.log('scrollDelay guardado:', value);
+        });
+        state.scrollDelay = value;
+      }
+    });
   }
   
   // Restaurar datos de búsqueda guardados si existen
@@ -1803,6 +1782,8 @@ function prepareDataForDatabase(options) {
         min_posts_month: options.minPostsMonth !== undefined ? options.minPostsMonth : '',
         min_posts_day: options.minPostsDay !== undefined ? options.minPostsDay : ''
       },
+      // Filtro lógico
+      filter_logic: "Se requiere el mínimo de usuarios Y al menos uno de los mínimos de publicaciones",
       // Datos del cliente
       user_agent: navigator.userAgent,
       client_version: '1.0.0'

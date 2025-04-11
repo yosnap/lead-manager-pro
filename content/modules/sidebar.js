@@ -236,6 +236,30 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
     // Manejadores para diferentes acciones
     if (message.action === 'sidebar_ready') {
       console.log('Lead Manager Pro: Sidebar listo para recibir mensajes');
+      
+      // Verificar si tenemos los módulos de opciones nuevos
+      if (window.leadManagerPro && window.leadManagerPro.generalOptionsUI) {
+        // Enviar mensaje al iframe para añadir pestaña de opciones generales
+        const iframe = document.getElementById('snap-lead-manager-iframe');
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({
+            action: 'add_general_options_tab',
+            tabName: 'Opciones Generales'
+          }, '*');
+        }
+      }
+      
+      // Verificar si tenemos los módulos de opciones de búsqueda de grupos
+      if (window.leadManagerPro && window.leadManagerPro.groupSearchOptionsUI) {
+        // Enviar mensaje al iframe para añadir pestaña de opciones de búsqueda de grupos
+        const iframe = document.getElementById('snap-lead-manager-iframe');
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({
+            action: 'add_group_search_options_tab',
+            tabName: 'Opciones de Grupos'
+          }, '*');
+        }
+      }
     }
     
     else if (message.action === 'find_profiles') {
@@ -436,6 +460,96 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
           }
         }
       }, 1000);
+    }
+    
+    else if (message.action === 'render_general_options') {
+      // Solicitud para renderizar opciones generales en el sidebar
+      console.log('Renderizando opciones generales en el sidebar');
+      
+      if (window.leadManagerPro && window.leadManagerPro.generalOptionsUI) {
+        // Crear elemento temporal para renderizar las opciones
+        const optionsContainer = document.createElement('div');
+        
+        // Inyectar formulario de opciones en el contenedor
+        window.leadManagerPro.generalOptionsUI.injectOptionsForm(optionsContainer);
+        
+        // Convertir a HTML para enviar al iframe
+        const optionsHtml = optionsContainer.innerHTML;
+        
+        // Enviar HTML al iframe
+        const iframe = document.getElementById('snap-lead-manager-iframe');
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({
+            action: 'render_general_options_content',
+            content: optionsHtml
+          }, '*');
+        }
+      } else {
+        console.error('GeneralOptionsUI no disponible');
+      }
+    }
+    
+    else if (message.action === 'render_group_search_options') {
+      // Solicitud para renderizar opciones de búsqueda de grupos en el sidebar
+      console.log('Renderizando opciones de búsqueda de grupos en el sidebar');
+      
+      if (window.leadManagerPro && window.leadManagerPro.groupSearchOptionsUI) {
+        // Crear elemento temporal para renderizar las opciones
+        const optionsContainer = document.createElement('div');
+        
+        // Inyectar formulario de opciones en el contenedor
+        window.leadManagerPro.groupSearchOptionsUI.injectOptionsForm(optionsContainer);
+        
+        // Convertir a HTML para enviar al iframe
+        const optionsHtml = optionsContainer.innerHTML;
+        
+        // Enviar HTML al iframe
+        const iframe = document.getElementById('snap-lead-manager-iframe');
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({
+            action: 'render_group_search_options_content',
+            content: optionsHtml
+          }, '*');
+        }
+      } else {
+        console.error('GroupSearchOptionsUI no disponible');
+      }
+    }
+    
+    else if (message.action === 'save_general_options') {
+      // Recibir y guardar opciones generales
+      console.log('Guardando opciones generales:', message.options);
+      
+      if (window.leadManagerPro && window.leadManagerPro.generalOptions) {
+        const success = window.leadManagerPro.generalOptions.saveOptions(message.options);
+        
+        // Notificar resultado al sidebar
+        const iframe = document.getElementById('snap-lead-manager-iframe');
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({
+            action: 'general_options_saved',
+            success: success
+          }, '*');
+        }
+      }
+    }
+    
+    else if (message.action === 'save_group_search_options') {
+      // Recibir y guardar opciones de búsqueda de grupos
+      console.log('Guardando opciones de búsqueda de grupos:', message.options);
+      
+      if (window.leadManagerPro && window.leadManagerPro.groupSearchOptions) {
+        const success = window.leadManagerPro.groupSearchOptions.saveOptions(message.options);
+        
+        // Notificar resultado al sidebar
+        const iframe = document.getElementById('snap-lead-manager-iframe');
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({
+            action: 'group_search_options_saved',
+            success: success
+          }, '*');
+        }
+      }
     }
     
     else if (message.action === 'updateOptions') {

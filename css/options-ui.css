@@ -1,0 +1,287 @@
+/**
+ * Estilos para los formularios de opciones y interfaces de usuario
+ */
+
+.lead-manager-options-form,
+.lead-manager-group-options-form,
+.lead-manager-db-config-form,
+.lead-manager-interaction-ui {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #1c1e21;
+  line-height: 1.4;
+}
+
+/* Estilos para etiquetas */
+.lead-manager-options-form label,
+.lead-manager-group-options-form label,
+.lead-manager-db-config-form label,
+.lead-manager-interaction-ui label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: normal;
+}
+
+/* Estilos para inputs */
+.lead-manager-options-form input,
+.lead-manager-group-options-form input,
+.lead-manager-db-config-form input,
+.lead-manager-interaction-ui input,
+.lead-manager-options-form select,
+.lead-manager-group-options-form select,
+.lead-manager-db-config-form select,
+.lead-manager-interaction-ui select,
+.lead-manager-options-form textarea,
+.lead-manager-group-options-form textarea,
+.lead-manager-db-config-form textarea,
+.lead-manager-interaction-ui textarea {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+  border: 1px solid #CED0D4;
+  box-sizing: border-box;
+}
+
+/* Estilos para botones */
+.lead-manager-button,
+.lead-manager-options-form button,
+.lead-manager-group-options-form button,
+.lead-manager-db-config-form button,
+.lead-manager-interaction-ui button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.lead-manager-button.primary,
+.lead-manager-options-form button[type="submit"],
+.lead-manager-group-options-form button[type="submit"],
+.lead-manager-db-config-form button[type="submit"] {
+  background-color: #4267B2;
+  color: white;
+}
+
+.lead-manager-button.secondary {
+  background-color: #E4E6EB;
+  color: #050505;
+}
+
+.lead-manager-button:hover,
+.lead-manager-options-form button:hover,
+.lead-manager-group-options-form button:hover,
+.lead-manager-db-config-form button:hover {
+  opacity: 0.9;
+}
+
+.lead-manager-button:active,
+.lead-manager-options-form button:active,
+.lead-manager-group-options-form button:active,
+.lead-manager-db-config-form button:active {
+  transform: scale(0.98);
+}
+
+/* Contenedores de secciones */
+.lead-manager-section {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #f7f8fa;
+  border-radius: 8px;
+}
+
+.lead-manager-section-title {
+  font-weight: bold;
+  font-size: 16px;
+  margin-bottom: 10px;
+  color: #4267B2;
+}
+
+/* Checkbox personalizado */
+.lead-manager-checkbox {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.lead-manager-checkbox input[type="checkbox"] {
+  width: auto;
+  margin-right: 8px;
+}
+
+/* Estilo para mensajes de éxito */
+.lead-manager-success-message {
+  color: #00C851;
+  margin-top: 8px;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Estilo para mensajes de error */
+.lead-manager-error-message {
+  color: #ff3547;
+  margin-top: 8px;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Estilo para barras de progreso */
+.lead-manager-progress-container {
+  margin: 10px 0;
+}
+
+.lead-manager-progress-bar {
+  height: 6px;
+  background-color: #E4E6EB;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.lead-manager-progress-fill {
+  height: 100%;
+  background-color: #4267B2;
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+/* Estilos para elementos flotantes */
+.lead-manager-floating-button {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background-color: #4267B2;
+  color: white;
+  border: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  z-index: 9999;
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+.lead-manager-floating-button:hover {
+  transform: scale(1.05);
+  background-color: #365899;
+}
+
+.lead-manager-floating-button:active {
+  transform: scale(0.95);
+}
+
+/* Elementos de interfaz modal */
+.lead-manager-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.lead-manager-modal-content {
+  background-color: white;
+  border-radius: 8px;
+  width: 400px;
+  max-width: 90%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.lead-manager-modal-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #E4E6EB;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lead-manager-modal-title {
+  font-weight: bold;
+}
+
+.lead-manager-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.lead-manager-modal-body {
+  padding: 16px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.lead-manager-modal-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #E4E6EB;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Estilo de elementos colapsables */
+.lead-manager-collapsible-header {
+  cursor: pointer;
+  padding: 10px;
+  background-color: #f0f2f5;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.lead-manager-collapsible-content {
+  padding: 0 10px;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.lead-manager-collapsible-content.open {
+  max-height: 1000px;
+}
+
+/* Estilo para tooltips */
+.lead-manager-tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.lead-manager-tooltip-text {
+  visibility: hidden;
+  width: 200px;
+  background-color: #555;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -100px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.lead-manager-tooltip:hover .lead-manager-tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}

@@ -2,6 +2,23 @@ document.addEventListener('DOMContentLoaded', function() {
   // Variables para los elementos del DOM
   const openSidebarButton = document.getElementById('open-sidebar-btn');
   const resetSidebarButton = document.getElementById('reset-sidebar-btn');
+  const extractMembersButton = document.createElement('button');
+  extractMembersButton.id = 'extract-members-btn';
+  extractMembersButton.className = 'btn btn-primary';
+  extractMembersButton.textContent = 'Extraer miembros del grupo';
+  
+  // Verificar si estamos en una página de grupo de Facebook
+  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+    const activeTab = tabs[0];
+    
+    if (activeTab.url.includes('facebook.com/groups/') && !activeTab.url.includes('/groups/feed')) {
+      // Estamos en una página de grupo, mostrar el botón de extracción de miembros
+      const footer = document.querySelector('footer');
+      if (footer) {
+        footer.insertBefore(extractMembersButton, resetSidebarButton);
+      }
+    }
+  });
   
   // Función para mostrar un mensaje genérico
   function showMessage(message, type = 'info') {
@@ -42,6 +59,30 @@ document.addEventListener('DOMContentLoaded', function() {
         window.close();
       } else {
         showMessage('Esta extensión solo funciona en Facebook', 'error');
+      }
+    });
+  });
+  
+  // Botón para extraer miembros del grupo
+  extractMembersButton.addEventListener('click', function() {
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      const activeTab = tabs[0];
+      
+      // Verificar si la URL es de un grupo de Facebook
+      if (activeTab.url.includes('facebook.com/groups/') && !activeTab.url.includes('/groups/feed')) {
+        // Enviar mensaje para iniciar extracción de miembros
+        chrome.tabs.sendMessage(activeTab.id, {
+          action: 'startGroupMemberExtraction'
+        }, function(response) {
+          if (response && response.success) {
+            showMessage('Iniciando extracción de miembros...', 'info');
+          } else {
+            showMessage('Error al iniciar la extracción: ' + (response?.error || 'Desconocido'), 'error');
+          }
+        });
+        window.close();
+      } else {
+        showMessage('Esta funcionalidad solo está disponible en páginas de grupos de Facebook', 'error');
       }
     });
   });
