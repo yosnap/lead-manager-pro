@@ -8,7 +8,7 @@ class GroupSidebar {
     this.settings = {
       membersToInteract: 10,
       interactionDelay: 3000,
-      messageToSend: 'Hola, me interesa conectar contigo.',
+      messageToSend: 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!',
       autoCloseChat: true
     };
     this.eventListeners = [];

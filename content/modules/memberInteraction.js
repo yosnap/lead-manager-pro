@@ -7,7 +7,7 @@ class MemberInteraction {
     this.members = [];
     this.interactionDelay = 2000; // tiempo de espera entre acciones en ms
     this.stopInteraction = false;
-    this.messageToSend = 'Hola, me interesa conectar contigo.'; // mensaje a enviar
+    this.messageToSend = 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!'; // mensaje a enviar
     this.autoCloseChat = true; // cerrar ventana de chat automáticamente
     this.maxMembersToInteract = 10; // número máximo de miembros para interactuar
     this.currentGroupInfo = null; // información del grupo actual
@@ -36,6 +36,11 @@ class MemberInteraction {
     this.isInteracting = true;
     this.stopInteraction = false;
     this.currentMemberIndex = 0;
+
+    // Ocultar la interfaz de interacción si está visible
+    if (window.leadManagerPro.memberInteractionUI) {
+      window.leadManagerPro.memberInteractionUI.hide();
+    }
     
     // Determinar cuántos miembros procesar
     const membersToProcess = Math.min(this.members.length, this.maxMembersToInteract);
@@ -44,172 +49,106 @@ class MemberInteraction {
     // Obtener las últimas configuraciones desde Extension Storage
     await this.loadConfigFromStorage();
     
-    // Obtener información del grupo actual
-    this.currentGroupInfo = this.extractCurrentGroupInfo();
-    
-    // Verificar si hay miembros para procesar
-    if (membersToProcess === 0) {
-      console.warn('MemberInteraction: No hay miembros para interactuar');
-      
-      if (callback) {
-        callback({
-          type: 'error',
-          message: 'No hay miembros disponibles para interactuar'
-        });
-      }
-      
-      this.isInteracting = false;
-      return false;
-    }
-    
     let processedMembers = 0;
     
-    // Procesar cada miembro hasta alcanzar el límite o hasta que se detenga manualmente
     for (let i = 0; i < membersToProcess; i++) {
-      // Verificar si se ha solicitado detener
       if (this.stopInteraction) {
         console.log('MemberInteraction: Interacción detenida por el usuario');
         break;
       }
       
       const member = this.members[i];
-      this.currentMemberIndex = i;
       
       try {
-        // Notificar que estamos comenzando con este miembro
+        // Notificar progreso
         if (callback) {
           callback({
             type: 'progress',
             memberIndex: i,
             totalMembers: membersToProcess,
             memberElement: member,
-            messageOpened: false,
-            message: `Iniciando hover sobre el miembro ${i+1} de ${membersToProcess}...`
+            messageOpened: false
           });
         }
         
-        // Realizar hover sobre el miembro
-        console.log(`MemberInteraction: Realizando hover sobre el miembro ${i+1}`);
-        await this.hoverOnMember(member);
+        // Hacer hover sobre el miembro
+        await this.hoverMember(member);
         
-        // Notificar que se completó el hover
-        if (callback) {
-          callback({
-            type: 'progress',
-            memberIndex: i,
-            totalMembers: membersToProcess,
-            memberElement: member,
-            messageOpened: false,
-            message: `Hover completado, esperando ${this.interactionDelay/1000} segundos...`
-          });
-        }
-        
-        // Esperar el tiempo configurado
+        // Esperar el delay configurado
         await new Promise(resolve => setTimeout(resolve, this.interactionDelay));
         
-        // Verificar nuevamente si se ha solicitado detener
-        if (this.stopInteraction) {
-          console.log('MemberInteraction: Interacción detenida durante la espera');
-          break;
+        // Buscar y hacer clic en el botón de mensaje
+        const messageButton = await this.findMessageButton(member);
+        if (!messageButton) {
+          console.log('No se encontró el botón de mensaje para este miembro');
+          continue;
         }
         
-        // Notificar que vamos a abrir la ventana de mensaje
+        messageButton.click();
+        
+        // Esperar a que aparezca el campo de mensaje
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Buscar el campo de mensaje usando múltiples selectores
+        const messageField = await this.waitForElement('[contenteditable="true"][role="textbox"], div[contenteditable="true"]', 5000);
+        if (!messageField) {
+          console.log('No se encontró el campo de mensaje');
+          continue;
+        }
+
+        // Escribir el mensaje con el formato HTML correcto
+        await this.sendMessage(messageField);
+        
+        processedMembers++;
+        
+        // Esperar antes de cerrar el chat si está configurado
+        if (this.autoCloseChat) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Buscar el botón de cerrar usando el selector específico
+          const closeButton = document.querySelector('div[aria-label="Cerrar chat"][role="button"]');
+          if (closeButton) {
+            closeButton.click();
+          }
+        }
+        
+        // Notificar que se envió el mensaje
         if (callback) {
           callback({
             type: 'progress',
             memberIndex: i,
             totalMembers: membersToProcess,
             memberElement: member,
-            messageOpened: false,
-            message: 'Abriendo ventana de mensaje...'
+            messageOpened: true,
+            messageSent: true
           });
         }
         
-        // Intentar abrir la ventana de mensaje
-        console.log('MemberInteraction: Abriendo ventana de mensaje');
-        const messageWindowOpened = await this.openMessageWindow(member);
-        
-        if (messageWindowOpened) {
-          // Notificar que se abrió la ventana
-          if (callback) {
-            callback({
-              type: 'progress',
-              memberIndex: i,
-              totalMembers: membersToProcess,
-              memberElement: member,
-              messageOpened: true,
-              message: 'Ventana de mensaje abierta, esperando acción...'
-            });
-          }
-          
-          // Esperar a que la ventana se cierre antes de continuar
-          console.log('MemberInteraction: Esperando a que se cierre la ventana de mensaje');
-          const messageResult = await this.waitForMessageWindowToBeClosed();
-          
-          // Incrementar contador solo si se envió el mensaje
-          if (messageResult && messageResult.messageSent) {
-            processedMembers++;
-          }
-          
-          // Notificar que se cerró la ventana
-          if (callback) {
-            callback({
-              type: 'progress',
-              memberIndex: i,
-              totalMembers: membersToProcess,
-              memberElement: member,
-              messageOpened: false,
-              message: messageResult && messageResult.messageSent ? 
-                'Mensaje enviado y ventana cerrada.' : 
-                'Ventana cerrada sin enviar mensaje.'
-            });
-          }
-        } else {
-          console.log('MemberInteraction: No se pudo abrir la ventana de mensaje');
-          
-          if (callback) {
-            callback({
-              type: 'progress',
-              memberIndex: i,
-              totalMembers: membersToProcess,
-              memberElement: member,
-              messageOpened: false,
-              message: 'No se pudo abrir la ventana de mensaje para este miembro.'
-            });
-          }
-        }
-        
-        // Pequeña pausa antes de continuar con el siguiente miembro
+        // Esperar un momento antes de continuar con el siguiente miembro
         await new Promise(resolve => setTimeout(resolve, 1000));
         
       } catch (error) {
-        console.error(`MemberInteraction: Error en interacción con miembro ${i+1}`, error);
-        
+        console.error(`Error al procesar miembro ${i}:`, error);
         if (callback) {
           callback({
             type: 'error',
             memberIndex: i,
-            totalMembers: membersToProcess,
-            error: error,
-            message: 'Error durante la interacción: ' + error.message
+            error: error
           });
         }
       }
     }
     
-    // Finalizar la interacción
+    // Finalizar interacción
     this.isInteracting = false;
-    
     if (callback) {
       callback({
         type: 'complete',
-        processedMembers: processedMembers,
-        totalMembers: membersToProcess,
-        message: `Interacción completada: Se envió mensaje a ${processedMembers} de ${membersToProcess} miembros.`
+        processedMembers,
+        totalMembers: membersToProcess
       });
     }
     
-    console.log(`MemberInteraction: Interacción completada. Se procesaron ${membersToProcess} miembros.`);
     return true;
   }
   
@@ -245,80 +184,78 @@ class MemberInteraction {
   }
   
   // Realizar hover sobre un elemento de miembro
-  async hoverOnMember(memberElement) {
+  async hoverMember(member) {
     return new Promise((resolve) => {
       try {
-        console.log('MemberInteraction: Intentando realizar hover en elemento:', memberElement);
+        // Encontrar el enlace del nombre del usuario
+        const userLink = member.querySelector('a[role="link"][href*="/user/"]');
         
-        // Buscar el enlace principal (perfil de usuario)
-        const profileLinks = memberElement.querySelectorAll('a[href*="/user/"], a[href*="/profile.php"]');
-        
-        if (profileLinks.length > 0) {
-          // Seleccionar el primer enlace (normalmente es el nombre del usuario)
-          const nameLink = profileLinks[0];
-          
-          console.log('MemberInteraction: Enlace de perfil encontrado:', nameLink);
-          
-          // Hacer scroll para asegurar que el elemento esté visible
-          nameLink.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          
-          // Pequeña pausa para que se complete el scroll
-          setTimeout(() => {
-            // Crear y disparar el evento de mouse over
-            const mouseoverEvent = new MouseEvent('mouseover', {
-              bubbles: true,
-              cancelable: true,
-              view: window
-            });
-            
-            nameLink.dispatchEvent(mouseoverEvent);
-            console.log('MemberInteraction: Evento mouseover disparado en el enlace de perfil');
-            
-            // También intentar hacer hover sobre el elemento contenedor (tarjeta completa)
-            const parentCard = nameLink.closest('div[role="listitem"]');
-            if (parentCard) {
-              parentCard.dispatchEvent(new MouseEvent('mouseover', {
-                bubbles: true,
-                cancelable: true,
-                view: window
-              }));
-              console.log('MemberInteraction: Evento mouseover disparado en la tarjeta completa');
-            }
-            
-            // Intento adicional: encontrar la imagen del usuario y hacer hover en ella también
-            const userImage = memberElement.querySelector('svg, img');
-            if (userImage) {
-              userImage.dispatchEvent(new MouseEvent('mouseover', {
-                bubbles: true,
-                cancelable: true,
-                view: window
-              }));
-              console.log('MemberInteraction: Evento mouseover disparado en la imagen de perfil');
-            }
-            
-            console.log('MemberInteraction: Hover realizado exitosamente sobre el miembro');
-            
-            // Resolver después de un pequeño retraso para permitir que aparezca la tarjeta informativa
-            setTimeout(resolve, 500);
-          }, 500);
-        } else {
-          console.warn('MemberInteraction: No se encontró ningún enlace de perfil para hacer hover');
-          
-          // Intentar hacer hover en todo el elemento de la tarjeta
-          memberElement.dispatchEvent(new MouseEvent('mouseover', {
+        if (!userLink) {
+          console.error('No se encontró el enlace del usuario');
+          resolve(false);
+          return;
+        }
+
+        // Hacer scroll al elemento para asegurarnos que está visible
+        userLink.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Esperar un momento para que el scroll termine
+        setTimeout(() => {
+          // Simular hover sobre el enlace del usuario
+          userLink.dispatchEvent(new MouseEvent('mouseover', {
+            bubbles: true,
+            cancelable: true,
+            view: window
+          }));
+
+          userLink.dispatchEvent(new MouseEvent('mouseenter', {
             bubbles: true,
             cancelable: true,
             view: window
           }));
           
-          console.log('MemberInteraction: Intento alternativo de hover en el elemento completo');
-          setTimeout(resolve, 500);
-        }
+          resolve(true);
+        }, 500);
+
       } catch (error) {
-        console.error('MemberInteraction: Error al realizar hover:', error);
-        resolve(); // Resolver la promesa incluso en caso de error
+        console.error('Error al hacer hover:', error);
+        resolve(false);
       }
     });
+  }
+  
+  // Extraer nombre del miembro
+  extractMemberName(element) {
+    // Buscar el nombre en el enlace al perfil
+    const link = element.querySelector('a[href*="/user/"], a[href*="/profile.php"]');
+    if (link) {
+      // Si el enlace tiene un texto, es probablemente el nombre
+      const linkText = link.textContent.trim();
+      if (linkText) return linkText;
+      
+      // Si no, buscar elementos de texto dentro del enlace
+      const spanText = link.querySelector('span')?.textContent.trim();
+      if (spanText) return spanText;
+    }
+    
+    // Alternativa: buscar elementos de encabezado o texto destacado
+    const nameElement = element.querySelector('span[dir="auto"], strong, h3, h4');
+    return nameElement ? nameElement.textContent.trim() : 'Miembro sin nombre';
+  }
+  
+  // Extraer ID de usuario de un enlace
+  extractUserIdFromLink(link) {
+    const href = link.getAttribute('href');
+    
+    if (href.includes('/user/')) {
+      const match = href.match(/\/user\/([^/?]+)/);
+      return match ? match[1] : null;
+    } else if (href.includes('/profile.php')) {
+      const match = href.match(/id=([^&]+)/);
+      return match ? match[1] : null;
+    }
+    
+    return null;
   }
   
   // Abrir ventana de mensaje
@@ -375,40 +312,6 @@ class MemberInteraction {
         resolve(false);
       }
     });
-  }
-  
-  // Extraer nombre del miembro
-  extractMemberName(element) {
-    // Buscar el nombre en el enlace al perfil
-    const link = element.querySelector('a[href*="/user/"], a[href*="/profile.php"]');
-    if (link) {
-      // Si el enlace tiene un texto, es probablemente el nombre
-      const linkText = link.textContent.trim();
-      if (linkText) return linkText;
-      
-      // Si no, buscar elementos de texto dentro del enlace
-      const spanText = link.querySelector('span')?.textContent.trim();
-      if (spanText) return spanText;
-    }
-    
-    // Alternativa: buscar elementos de encabezado o texto destacado
-    const nameElement = element.querySelector('span[dir="auto"], strong, h3, h4');
-    return nameElement ? nameElement.textContent.trim() : 'Miembro sin nombre';
-  }
-  
-  // Extraer ID de usuario de un enlace
-  extractUserIdFromLink(link) {
-    const href = link.getAttribute('href');
-    
-    if (href.includes('/user/')) {
-      const match = href.match(/\/user\/([^/?]+)/);
-      return match ? match[1] : null;
-    } else if (href.includes('/profile.php')) {
-      const match = href.match(/id=([^&]+)/);
-      return match ? match[1] : null;
-    }
-    
-    return null;
   }
   
   // Abrir ventana de mensaje de Facebook para un usuario específico
@@ -763,6 +666,117 @@ class MemberInteraction {
   async syncData() {
     console.log('MemberInteraction: Sincronización de datos no implementada');
     return false;
+  }
+
+  async findMessageButton(member) {
+    return new Promise(async (resolve) => {
+      const startTime = Date.now();
+      
+      const findButton = async () => {
+        try {
+          // Buscar el modal que aparece al hacer hover
+          const modal = document.querySelector('.xu96u03.xm80bdy.x10l6tqk.x13vifvy');
+          
+          if (modal) {
+            // Buscar el botón de mensaje dentro del modal
+            const messageButton = modal.querySelector('div[aria-label="Mensaje"]');
+            
+            if (messageButton) {
+              console.log('Botón de mensaje encontrado');
+              resolve(messageButton);
+              return;
+            }
+          }
+          
+          // Si no hemos encontrado el botón y no ha pasado el timeout, seguir intentando
+          if (Date.now() - startTime < 5000) {
+            setTimeout(findButton, 100);
+          } else {
+            console.log('Tiempo de espera agotado buscando el botón de mensaje');
+            resolve(null);
+          }
+        } catch (error) {
+          console.error('Error buscando el botón de mensaje:', error);
+          resolve(null);
+        }
+      };
+      
+      findButton();
+    });
+  }
+
+  async waitForElement(selector, timeout = 5000) {
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+      
+      const checkElement = () => {
+        const element = document.querySelector(selector);
+        if (element) {
+          resolve(element);
+          return;
+        }
+        
+        if (Date.now() - startTime >= timeout) {
+          reject(new Error(`Tiempo de espera agotado buscando: ${selector}`));
+          return;
+        }
+        
+        setTimeout(checkElement, 100);
+      };
+      
+      checkElement();
+    });
+  }
+
+  async sendMessage(messageField) {
+    try {
+      // Insertar el mensaje con el formato HTML correcto
+      messageField.innerHTML = `<p class="xat24cr xdj266r xdpxx8g" dir="ltr"><span data-lexical-text="true">${this.messageToSend}</span></p>`;
+      
+      // Disparar evento de input para que Facebook detecte el cambio
+      messageField.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: this.messageToSend
+      }));
+
+      // Esperar un momento para que Facebook procese el evento
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Enviar el mensaje con la tecla Enter
+      messageField.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        cancelable: true
+      }));
+
+      console.log('Mensaje enviado exitosamente');
+
+      // Si está configurado para cerrar automáticamente, esperar un momento y cerrar
+      if (this.autoCloseChat) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const closeButton = document.querySelector('div[aria-label="Cerrar chat"][role="button"]');
+        if (closeButton) {
+          closeButton.click();
+          console.log('Chat cerrado automáticamente');
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error al enviar el mensaje:', error);
+      return false;
+    }
+  }
+
+  async findSendButton() {
+    // Buscar el botón de enviar por su atributo aria-label
+    const sendButton = await this.waitForElement('div[aria-label="Enviar"]', 5000);
+    return sendButton;
   }
 }
 

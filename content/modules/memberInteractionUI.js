@@ -264,7 +264,7 @@ class MemberInteractionUI {
     messageLabel.style.marginBottom = '8px';
     
     const messageTextarea = document.createElement('textarea');
-    messageTextarea.value = 'Hola, me interesa conectar contigo.';
+    messageTextarea.value = 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!';
     messageTextarea.style.width = '100%';
     messageTextarea.style.padding = '8px';
     messageTextarea.style.marginBottom = '16px';
@@ -615,8 +615,12 @@ class MemberInteractionUI {
     // Detener el proceso de interacción
     this.memberInteraction.stopInteractionProcess();
     
-    // Actualizar UI
-    this.statusText.textContent = 'Deteniendo interacción...';
+    // Restaurar todos los botones Play
+    const playButtons = document.querySelectorAll('.lmp-play-button');
+    playButtons.forEach(button => {
+      button.innerHTML = this.icons.play;
+      button.style.backgroundColor = '#1b74e4';
+    });
   }
   
   // Finalizar la interacción (llamado cuando se completa o se detiene)
@@ -987,16 +991,10 @@ class MemberInteractionUI {
     }
   }
 
-  async handlePlayClick(sectionType, sectionTitle) {
-    console.log('Click en botón Play para:', sectionType, sectionTitle);
+  async handlePlayClick(button) {
+    console.log('Click en botón Play');
     
     try {
-      // Verificar si estamos en la sección correcta
-      if (!this.isInPeopleSection()) {
-        await this.navigateToPeopleSection();
-        return;
-      }
-
       // Si ya está interactuando, detener
       if (this.isInteracting) {
         this.stopInteraction();
@@ -1009,21 +1007,8 @@ class MemberInteractionUI {
         window.leadManagerPro.memberInteraction = this.memberInteraction;
       }
 
-      // Primero mostramos la interfaz
-      this.show();
-      
-      // Esperamos un momento para asegurar que el DOM está listo
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Asegurarnos de seleccionar administradores en el selector
-      if (this.memberSelector) {
-        this.memberSelector.value = 'admins';
-        const event = new Event('change');
-        this.memberSelector.dispatchEvent(event);
-      }
-
-      // Resaltar la sección
-      this.highlightAdminSection();
+      // Ocultar la interfaz principal si está visible
+      this.hide();
       
       // Obtener la configuración guardada
       const config = await this.getStoredConfig();
@@ -1036,25 +1021,32 @@ class MemberInteractionUI {
       }
       
       // Inicializar el módulo de interacción con los miembros encontrados
-      this.memberInteraction.messageToSend = config.message || 'Hola, me interesa conectar contigo.';
+      this.memberInteraction.messageToSend = config.message || 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!';
       this.memberInteraction.autoCloseChat = config.autoCloseChat !== undefined ? config.autoCloseChat : true;
       this.memberInteraction.maxMembersToInteract = config.maxMembers || 10;
       
       // Configurar el delay
       const delay = config.delay || 2000;
       
+      // Cambiar el estado del botón a "Pause"
+      button.innerHTML = this.icons.pause;
+      button.style.backgroundColor = '#dc3545';
+      
       // Inicializar y comenzar la interacción
       this.memberInteraction.init(memberElements, { delay });
-      await this.startInteraction();
-      
-      // Actualizar el estado del botón
-      this.updatePlayButton(sectionType, true);
+      await this.memberInteraction.startInteraction((progress) => {
+        if (progress.type === 'complete') {
+          // Restaurar el botón a estado "Play"
+          button.innerHTML = this.icons.play;
+          button.style.backgroundColor = '#1b74e4';
+        }
+      });
       
     } catch (error) {
       console.error('Error al iniciar la interacción:', error);
-      this.statusText.textContent = 'Error: ' + error.message;
-      this.statusText.style.color = 'red';
-      this.updatePlayButton(sectionType, false);
+      // Restaurar el botón a estado "Play" en caso de error
+      button.innerHTML = this.icons.play;
+      button.style.backgroundColor = '#1b74e4';
     }
   }
 
@@ -1062,7 +1054,7 @@ class MemberInteractionUI {
     return new Promise((resolve) => {
       chrome.storage.local.get(['leadManagerGroupSettings'], (result) => {
         const defaultConfig = {
-          message: 'Hola, me interesa conectar contigo.',
+          message: 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!',
           autoCloseChat: true,
           delay: 2000,
           maxMembers: 10
