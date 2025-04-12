@@ -728,8 +728,17 @@ class MemberInteraction {
     });
   }
 
-  async sendMessage(messageField) {
+  async sendMessage(messageButton) {
     try {
+      // Hacer clic en el botón de mensaje
+      messageButton.click();
+      
+      // Esperar a que aparezca el campo de mensaje
+      const messageField = await this.waitForElement('div[contenteditable="true"][role="textbox"]');
+      if (!messageField) {
+        throw new Error('No se pudo encontrar el campo de mensaje');
+      }
+
       // Insertar el mensaje con el formato HTML correcto
       messageField.innerHTML = `<p class="xat24cr xdj266r xdpxx8g" dir="ltr"><span data-lexical-text="true">${this.messageToSend}</span></p>`;
       
@@ -754,21 +763,40 @@ class MemberInteraction {
         cancelable: true
       }));
 
-      console.log('Mensaje enviado exitosamente');
+      // Esperar a que el mensaje se envíe verificando que el texto desaparezca del campo
+      await new Promise((resolve) => {
+        const checkMessageSent = () => {
+          if (!messageField.textContent.trim()) {
+            resolve();
+          } else {
+            setTimeout(checkMessageSent, 100);
+          }
+        };
+        setTimeout(checkMessageSent, 500); // Empezar a verificar después de 500ms
+      });
 
-      // Si está configurado para cerrar automáticamente, esperar un momento y cerrar
-      if (this.autoCloseChat) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const closeButton = document.querySelector('div[aria-label="Cerrar chat"][role="button"]');
-        if (closeButton) {
-          closeButton.click();
-          console.log('Chat cerrado automáticamente');
+      // Esperar un momento adicional para asegurar que el mensaje se procesó
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Cerrar el modal usando el selector específico
+      const closeButton = document.querySelector('div[aria-label="Cerrar"][role="button"].x1i10hfl.xjqpnuy.xa49m3k.xqeqjp1.x2hbi6w');
+      if (closeButton) {
+        closeButton.click();
+        console.log('Modal cerrado exitosamente');
+      } else {
+        // Intentar con un selector alternativo si el primero falla
+        const alternativeCloseButton = document.querySelector('div[aria-label="Cerrar"] svg[class*="x1lliihq"]').closest('[role="button"]');
+        if (alternativeCloseButton) {
+          alternativeCloseButton.click();
+          console.log('Modal cerrado usando selector alternativo');
+        } else {
+          console.log('No se encontró el botón de cierre del modal');
         }
       }
 
       return true;
     } catch (error) {
-      console.error('Error al enviar el mensaje:', error);
+      console.error('Error al enviar mensaje:', error);
       return false;
     }
   }
