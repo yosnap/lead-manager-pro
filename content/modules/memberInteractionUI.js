@@ -30,6 +30,14 @@ class MemberInteractionUI {
           userList: 'div[role="list"]',
           userItem: 'div[data-visualcompletion="ignore-dynamic"][role="listitem"]',
           userLink: 'a[href*="/groups/"][href*="/user/"][role="link"]'
+        },
+        common: {
+          container: '.x1n2onr6.x1ja2u2z.x9f619.x78zum5.xdt5ytf.x2lah0s.x193iq5w.xx6bls6.x1jx94hy',
+          title: 'h2.xdj266r',
+          titleText: "Miembros con cosas en común",
+          userList: 'div[role="list"]',
+          userItem: 'div[data-visualcompletion="ignore-dynamic"][role="listitem"]',
+          userLink: 'a[href*="/groups/"][href*="/user/"][role="link"]'
         }
       },
       navigation: {
@@ -42,10 +50,30 @@ class MemberInteractionUI {
     this.memberInteraction = window.leadManagerPro.memberInteraction || new MemberInteraction();
     window.leadManagerPro.memberInteraction = this.memberInteraction;
     
+    // Cargar configuración inicial
+    this.loadInitialConfig();
+    
     // Verificar inmediatamente si estamos en una página de grupo
     this.checkAndHideSidebar();
     
     this.init();
+  }
+
+  async loadInitialConfig() {
+    try {
+      const config = await this.getStoredConfig();
+      console.log('Configuración inicial cargada:', config);
+      
+      // Actualizar el mensaje en memberInteraction
+      if (this.memberInteraction) {
+        this.memberInteraction.messageToSend = config.messageToSend;
+        this.memberInteraction.autoCloseChat = config.autoCloseChat;
+        this.memberInteraction.maxMembersToInteract = config.maxMembers;
+        console.log('Mensaje inicial configurado:', this.memberInteraction.messageToSend);
+      }
+    } catch (error) {
+      console.error('Error al cargar configuración inicial:', error);
+    }
   }
 
   // Nueva función para verificar y ocultar el sidebar
@@ -211,21 +239,19 @@ class MemberInteractionUI {
       
       try {
         if (!this.isInPeopleSection()) {
-          // Navegar sin mostrar alert
           await this.navigateToPeopleSection();
-          return; // La página se recargará, así que no seguimos
+          return;
         }
 
-        if (selectedType === 'admins') {
-          console.log('Intentando resaltar sección de administradores');
-          this.highlightAdminSection();
-        } else {
-          console.log('Removiendo resaltado');
-          this.removeHighlight();
+        // Remover highlight anterior
+        this.removeHighlight();
+        
+        // Aplicar highlight según el tipo seleccionado
+        if (selectedType === 'admins' || selectedType === 'common') {
+          this.highlightSection(selectedType);
         }
       } catch (error) {
         console.error('Error al cambiar selección:', error);
-        // Resetear el selector al valor anterior
         e.target.value = '';
       }
     });
@@ -367,60 +393,115 @@ class MemberInteractionUI {
     
     // Evento para iniciar interacción
     startButton.addEventListener('click', async () => {
-      // Obtener valores de configuración
-      const memberType = memberSelector.value;
-      const delay = parseFloat(delayInput.value) * 1000; // Convertir a milisegundos
-      const message = messageTextarea.value.trim();
-      const autoCloseChat = autoCloseChatCheckbox.checked;
-      const maxMembers = parseInt(maxMembersInput.value);
-      
-      // Validaciones
-      if (isNaN(delay) || delay < 1000) {
-        alert('Por favor, ingrese un tiempo de espera válido (mínimo 1 segundo)');
-        return;
-      }
-      
-      if (!message) {
-        alert('Por favor, ingrese un mensaje para enviar a los miembros');
-        return;
-      }
-      
-      if (isNaN(maxMembers) || maxMembers < 1) {
-        alert('Por favor, ingrese un número válido para el máximo de miembros');
-        return;
-      }
-      
-      // Obtener los elementos de miembros según el tipo seleccionado
-      const memberElements = this.getMemberElements(memberType);
-      
-      if (memberElements.length === 0) {
-        alert('No se encontraron miembros del tipo seleccionado');
-        return;
-      }
-      
-      // Guardar configuración para futuros usos
       try {
-        chrome.storage.local.set({
-          'leadManagerGroupSettings': {
-            messageToSend: message,
-            autoCloseChat: autoCloseChat,
-            interactionDelay: delay,
-            membersToInteract: maxMembers,
-            lastMemberType: memberType
+        // Si ya está interactuando, detener
+        if (this.isInteracting) {
+          this.stopInteraction();
+          return;
+        }
+
+        // Obtener valores de configuración
+        const memberType = memberSelector.value;
+        const delay = parseFloat(delayInput.value) * 1000;
+        const message = messageTextarea.value.trim();
+        const autoCloseChat = autoCloseChatCheckbox.checked;
+        const maxMembers = parseInt(maxMembersInput.value);
+        
+        // Validaciones
+        if (isNaN(delay) || delay < 1000) {
+          alert('Por favor, ingrese un tiempo de espera válido (mínimo 1 segundo)');
+          return;
+        }
+        
+        if (!message) {
+          alert('Por favor, ingrese un mensaje para enviar a los miembros');
+          return;
+        }
+        
+        if (isNaN(maxMembers) || maxMembers < 1) {
+          alert('Por favor, ingrese un número válido para el máximo de miembros');
+          return;
+        }
+
+        // Guardar configuración
+        const settings = {
+          messageToSend: message,
+          autoCloseChat: autoCloseChat,
+          interactionDelay: delay / 1000,
+          membersToInteract: maxMembers,
+          lastMemberType: memberType
+        };
+        
+        await new Promise((resolve, reject) => {
+          chrome.storage.local.set({ 'leadManagerGroupSettings': settings }, () => {
+            if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+            else resolve();
+          });
+        });
+
+        // Asegurar que memberInteraction esté inicializado
+        if (!this.memberInteraction) {
+          this.memberInteraction = window.leadManagerPro.memberInteraction || new MemberInteraction();
+          window.leadManagerPro.memberInteraction = this.memberInteraction;
+        }
+
+        // Resaltar la sección correspondiente
+        this.highlightSection(memberType);
+
+        // Obtener los elementos de la sección resaltada
+        const memberElements = await this.getMemberElements(memberType);
+        
+        if (!memberElements || memberElements.length === 0) {
+          throw new Error('No se encontraron miembros en la sección seleccionada');
+        }
+
+        // Inicializar el módulo de interacción
+        this.memberInteraction.messageToSend = message;
+        this.memberInteraction.autoCloseChat = autoCloseChat;
+        this.memberInteraction.maxMembersToInteract = maxMembers;
+        
+        // Actualizar estado y UI
+        this.isInteracting = true;
+        startButton.style.backgroundColor = '#dc3545';
+        startButton.textContent = 'Detener Interacción';
+        
+        // Actualizar botón Play de la sección correspondiente
+        const sectionTitle = document.querySelector(`h2:contains("${this.selectors.sections[memberType].titleText}")`);
+        if (sectionTitle) {
+          const playButton = sectionTitle.parentElement.querySelector('.lmp-play-button');
+          if (playButton) {
+            playButton.innerHTML = this.icons.pause;
+            playButton.style.backgroundColor = '#dc3545';
+          }
+        }
+
+        // Inicializar y comenzar la interacción
+        this.memberInteraction.init(memberElements, { delay });
+        await this.memberInteraction.startInteraction((progress) => {
+          this.updateProgress(progress);
+          if (progress.type === 'complete') {
+            this.isInteracting = false;
+            startButton.style.backgroundColor = '#4267B2';
+            startButton.textContent = 'Iniciar Interacción';
+            
+            // Restaurar botón Play
+            if (playButton) {
+              playButton.innerHTML = this.icons.play;
+              playButton.style.backgroundColor = '#1b74e4';
+            }
           }
         });
+
       } catch (error) {
-        console.error('Error al guardar configuración:', error);
+        console.error('Error al iniciar la interacción:', error);
+        this.statusText.textContent = 'Error: ' + error.message;
+        this.statusText.style.color = 'red';
+        
+        // Restaurar UI
+        this.isInteracting = false;
+        startButton.style.backgroundColor = '#4267B2';
+        startButton.textContent = 'Iniciar Interacción';
       }
-      
-      // Inicializar el módulo de interacción con los miembros encontrados
-      this.memberInteraction.messageToSend = message;
-      this.memberInteraction.autoCloseChat = autoCloseChat;
-      this.memberInteraction.maxMembersToInteract = maxMembers;
-      this.memberInteraction.init(memberElements, { delay });
-      
-      // Iniciar la interacción
-      this.startInteraction();
     });
     
     // Evento para detener interacción
@@ -613,7 +694,18 @@ class MemberInteractionUI {
     this.removeHighlight();
     
     // Detener el proceso de interacción
-    this.memberInteraction.stopInteractionProcess();
+    if (this.memberInteraction) {
+      this.memberInteraction.stopInteractionProcess();
+      
+      // Cerrar el chat si está abierto
+      const chatWindow = document.querySelector('[role="dialog"]');
+      if (chatWindow) {
+        const closeButton = chatWindow.querySelector('[aria-label="Cerrar"]');
+        if (closeButton) {
+          closeButton.click();
+        }
+      }
+    }
     
     // Restaurar todos los botones Play
     const playButtons = document.querySelectorAll('.lmp-play-button');
@@ -621,6 +713,14 @@ class MemberInteractionUI {
       button.innerHTML = this.icons.play;
       button.style.backgroundColor = '#1b74e4';
     });
+    
+    // Restaurar botón de Iniciar Interacción
+    if (this.startButton) {
+      this.startButton.style.backgroundColor = '#4267B2';
+      this.startButton.textContent = 'Iniciar Interacción';
+    }
+    
+    this.isInteracting = false;
   }
   
   // Finalizar la interacción (llamado cuando se completa o se detiene)
@@ -685,28 +785,34 @@ class MemberInteractionUI {
     }
   }
 
-  // Nueva función específica para resaltar la sección de administradores
-  highlightAdminSection() {
-    console.log('Iniciando highlightAdminSection');
+  // Renombrar y actualizar la función para manejar múltiples secciones
+  highlightSection(memberType) {
+    console.log('Iniciando highlightSection para:', memberType);
     
-    // Primero encontramos todos los h2 que contengan el texto de administradores
+    // Remover highlight anterior si existe
+    this.removeHighlight();
+    
+    const sectionConfig = this.selectors.sections[memberType];
+    if (!sectionConfig) {
+      console.error('Tipo de sección no válido:', memberType);
+      return;
+    }
+    
+    // Encontrar todos los h2 que contengan el texto de la sección
     const titles = Array.from(document.querySelectorAll('h2'));
-    const adminTitle = titles.find(title => title.textContent.includes('Administradores y moderadores'));
+    const sectionTitle = titles.find(title => title.textContent.includes(sectionConfig.titleText));
     
-    if (adminTitle) {
-      console.log('Título de administradores encontrado');
+    if (sectionTitle) {
+      console.log('Título de sección encontrado:', sectionTitle.textContent);
       
-      // Buscamos el contenedor que incluya tanto el título como la lista
-      // Subimos en el DOM hasta encontrar el contenedor que tenga role="list" como hijo
-      let currentElement = adminTitle;
+      // Buscar el contenedor que incluya tanto el título como la lista
+      let currentElement = sectionTitle;
       let container = null;
       
-      // Iteramos hacia arriba hasta encontrar un contenedor que tenga la lista
       while (currentElement && !container) {
         const parentElement = currentElement.parentElement;
         if (!parentElement) break;
         
-        // Verificamos si este contenedor tiene un elemento role="list"
         if (parentElement.querySelector('[role="list"]')) {
           container = parentElement;
           break;
@@ -716,10 +822,10 @@ class MemberInteractionUI {
       }
       
       if (container) {
-        console.log('Contenedor de administradores encontrado (incluye lista)');
+        console.log('Contenedor de sección encontrado');
         this.lastHighlightedSection = container;
         
-        // Aplicamos los estilos
+        // Aplicar estilos
         this.lastHighlightedSection.style.transition = 'all 0.3s ease';
         this.lastHighlightedSection.style.backgroundColor = '#e6f7ff';
         this.lastHighlightedSection.style.padding = '10px';
@@ -728,13 +834,7 @@ class MemberInteractionUI {
         
         // Scroll suave a la sección
         this.lastHighlightedSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        console.log('Sección completa de administradores resaltada visualmente');
-      } else {
-        console.error('No se encontró el contenedor que incluye la lista');
       }
-    } else {
-      console.error('No se encontró el título de administradores');
     }
   }
 
@@ -885,9 +985,10 @@ class MemberInteractionUI {
     return [];
   }
 
-  createPlayButton() {
+  createPlayButton(sectionType) {
     const button = document.createElement('button');
     button.className = 'lmp-play-button';
+    button.setAttribute('data-section-type', sectionType);
     button.setAttribute('data-lmp-button-id', Math.random().toString(36).substring(7));
     
     // Estilos del botón
@@ -914,7 +1015,11 @@ class MemberInteractionUI {
     });
 
     button.addEventListener('mouseout', () => {
-      button.style.backgroundColor = '#1b74e4';
+      if (!this.isInteracting || button.getAttribute('data-section-type') !== this.currentInteractionSection) {
+        button.style.backgroundColor = '#1b74e4';
+      } else {
+        button.style.backgroundColor = '#dc3545';
+      }
       button.style.transform = 'scale(1)';
     });
 
@@ -932,12 +1037,15 @@ class MemberInteractionUI {
   }
 
   tryAddPlayButtons() {
-    // Buscar específicamente el título de la sección de administradores
-    const titleElements = document.querySelectorAll(this.selectors.sections.admins.title);
+    // Buscar títulos para ambas secciones
+    const titleElements = document.querySelectorAll(this.selectors.sections.admins.title + ', ' + this.selectors.sections.common.title);
     
     titleElements.forEach((titleElement) => {
-        // Verificar que el título corresponda a "Administradores y moderadores"
-        if (!titleElement.textContent.includes(this.selectors.sections.admins.titleText)) {
+        // Verificar si el título corresponde a alguna de las secciones
+        const isAdminSection = titleElement.textContent.includes(this.selectors.sections.admins.titleText);
+        const isCommonSection = titleElement.textContent.includes(this.selectors.sections.common.titleText);
+        
+        if (!isAdminSection && !isCommonSection) {
             return;
         }
 
@@ -947,13 +1055,16 @@ class MemberInteractionUI {
             return;
         }
 
-        // Verificar que el título esté dentro del contenedor correcto
-        const adminContainer = titleElement.closest(this.selectors.sections.admins.container);
-        if (!adminContainer) {
+        // Determinar el tipo de sección
+        const sectionType = isAdminSection ? 'admins' : 'common';
+        const sectionConfig = this.selectors.sections[sectionType];
+        const sectionContainer = titleElement.closest(sectionConfig.container);
+        
+        if (!sectionContainer) {
             return;
         }
 
-        const button = this.createPlayButton();
+        const button = this.createPlayButton(sectionType);
         
         // Crear contenedor flex para el título y el botón
         const container = document.createElement('div');
@@ -969,7 +1080,7 @@ class MemberInteractionUI {
         container.appendChild(titleElement);
         container.appendChild(button);
 
-        console.log('Botón Play añadido a la sección de administradores');
+        console.log(`Botón Play añadido a la sección de ${isAdminSection ? 'administradores' : 'miembros con cosas en común'}`);
     });
   }
 
@@ -1013,22 +1124,38 @@ class MemberInteractionUI {
       // Obtener la configuración guardada
       const config = await this.getStoredConfig();
       
-      // Obtener los elementos de miembros
-      const memberElements = await this.getMemberElements('admins');
+      // Determinar el tipo de sección basado en el título más cercano
+      const nearestTitle = button.closest('div').querySelector('h2');
+      let memberType = 'admins'; // valor por defecto
       
-      if (!memberElements || memberElements.length === 0) {
-        throw new Error('No se encontraron miembros del tipo seleccionado');
+      if (nearestTitle) {
+        if (nearestTitle.textContent.includes(this.selectors.sections.admins.titleText)) {
+          memberType = 'admins';
+        } else if (nearestTitle.textContent.includes(this.selectors.sections.common.titleText)) {
+          memberType = 'common';
+        }
       }
       
-      // Inicializar el módulo de interacción con los miembros encontrados
-      this.memberInteraction.messageToSend = config.message || 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!';
-      this.memberInteraction.autoCloseChat = config.autoCloseChat !== undefined ? config.autoCloseChat : true;
-      this.memberInteraction.maxMembersToInteract = config.maxMembers || 10;
+      // Resaltar la sección correspondiente
+      this.highlightSection(memberType);
+      
+      // Obtener los elementos de la sección resaltada
+      const memberElements = await this.getMemberElements(memberType);
+      
+      if (!memberElements || memberElements.length === 0) {
+        throw new Error('No se encontraron miembros en esta sección');
+      }
+      
+      // Inicializar el módulo de interacción
+      this.memberInteraction.messageToSend = config.messageToSend;
+      this.memberInteraction.autoCloseChat = config.autoCloseChat;
+      this.memberInteraction.maxMembersToInteract = config.maxMembers;
       
       // Configurar el delay
       const delay = config.delay || 2000;
       
-      // Cambiar el estado del botón a "Pause"
+      // Actualizar estado y UI
+      this.isInteracting = true;
       button.innerHTML = this.icons.pause;
       button.style.backgroundColor = '#dc3545';
       
@@ -1036,7 +1163,7 @@ class MemberInteractionUI {
       this.memberInteraction.init(memberElements, { delay });
       await this.memberInteraction.startInteraction((progress) => {
         if (progress.type === 'complete') {
-          // Restaurar el botón a estado "Play"
+          this.isInteracting = false;
           button.innerHTML = this.icons.play;
           button.style.backgroundColor = '#1b74e4';
         }
@@ -1044,29 +1171,35 @@ class MemberInteractionUI {
       
     } catch (error) {
       console.error('Error al iniciar la interacción:', error);
-      // Restaurar el botón a estado "Play" en caso de error
+      // Restaurar estado del botón en caso de error
       button.innerHTML = this.icons.play;
       button.style.backgroundColor = '#1b74e4';
+      this.isInteracting = false;
     }
   }
 
   async getStoredConfig() {
     return new Promise((resolve) => {
       chrome.storage.local.get(['leadManagerGroupSettings'], (result) => {
+        console.log('Configuración recuperada de storage:', result); // Debug
+        
         const defaultConfig = {
-          message: 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!',
+          messageToSend: 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!',
           autoCloseChat: true,
           delay: 2000,
           maxMembers: 10
         };
 
         const savedConfig = result.leadManagerGroupSettings || {};
-        resolve({
+        console.log('Configuración guardada:', savedConfig); // Debug
+        
+        const finalConfig = {
           ...defaultConfig,
-          ...savedConfig,
-          // Convertir delay a milisegundos si está en segundos
-          delay: (savedConfig.interactionDelay || defaultConfig.delay) * 1000
-        });
+          ...savedConfig
+        };
+        
+        console.log('Configuración final:', finalConfig); // Debug
+        resolve(finalConfig);
       });
     });
   }
