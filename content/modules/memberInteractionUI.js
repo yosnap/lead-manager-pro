@@ -11,6 +11,8 @@ class MemberInteractionUI {
     this.memberSelector = null;
     this.isInteracting = false;
     this.lastHighlightedSection = null; // Para mantener referencia de la última sección resaltada
+    this.isVisible = false;
+    this.sidebarHidden = false;
     this.icons = {
       play: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
         <path d="M8 5v14l11-7z"/>
@@ -29,22 +31,78 @@ class MemberInteractionUI {
           userItem: 'div[data-visualcompletion="ignore-dynamic"][role="listitem"]',
           userLink: 'a[href*="/groups/"][href*="/user/"][role="link"]'
         }
+      },
+      navigation: {
+        peopleTab: 'a[href*="/members"][role="link"]',
+        activeTab: '[role="tab"][aria-selected="true"]'
       }
     };
+    
+    // Inicializar memberInteraction
+    this.memberInteraction = window.leadManagerPro.memberInteraction || new MemberInteraction();
+    window.leadManagerPro.memberInteraction = this.memberInteraction;
+    
+    // Verificar inmediatamente si estamos en una página de grupo
+    this.checkAndHideSidebar();
     
     this.init();
   }
 
-  // Inicializar el módulo
+  // Nueva función para verificar y ocultar el sidebar
+  checkAndHideSidebar() {
+    // Si no estamos en una página de grupo, no hacer nada
+    if (!window.location.href.includes('/groups/')) {
+      return;
+    }
+
+    // Intentar ocultar el sidebar
+    this.hideSidebar();
+
+    // Crear un observer específico para el sidebar
+    const sidebarObserver = new MutationObserver((mutations, observer) => {
+      const sidebar = document.querySelector('.sidebar-container');
+      if (sidebar) {
+        console.log('MemberInteractionUI: Sidebar encontrado y ocultado');
+        sidebar.style.display = 'none';
+        this.sidebarHidden = true;
+        // Una vez que encontramos y ocultamos el sidebar, podemos detener este observer
+        observer.disconnect();
+      }
+    });
+
+    // Observar el documento completo para detectar cuando se agrega el sidebar
+    sidebarObserver.observe(document, {
+      childList: true,
+      subtree: true
+    });
+  }
+
+  // Modificar la función hideSidebar para ser más agresiva
+  hideSidebar() {
+    const sidebar = document.querySelector('.sidebar-container');
+    if (sidebar) {
+      console.log('MemberInteractionUI: Ocultando sidebar');
+      sidebar.style.display = 'none';
+      this.sidebarHidden = true;
+    }
+  }
+
+  // Modificar init para incluir la verificación del sidebar
   init() {
-    console.log('MemberInteractionUI: Initializing module');
+    // Verificar si estamos en una página de grupo
+    const inGroupPage = window.location.href.includes('/groups/') && !window.location.href.includes('/feed');
     
-    // Inicializar el módulo de interacción con miembros
-    this.memberInteraction = window.leadManagerPro.memberInteraction;
+    // Limpiar botones existentes
+    this.cleanupButtons();
     
-    // Observar cambios en el DOM para detectar cuando se carga la página de miembros
-    const observer = new MutationObserver((mutations) => {
-      if (window.location.href.includes('/members')) {
+    if (!inGroupPage) {
+      this.hideInterface();
+      return;
+    }
+
+    // Configurar observer para cambios en el DOM
+    const observer = new MutationObserver(() => {
+      if (document.querySelector(this.selectors.sections.admins.title)) {
         this.tryAddPlayButtons();
       }
     });
@@ -54,12 +112,18 @@ class MemberInteractionUI {
       subtree: true
     });
 
-    // Intentar añadir los botones inmediatamente si ya estamos en la página de miembros
-    if (window.location.href.includes('/members')) {
-      this.tryAddPlayButtons();
-    }
-    
-    return this;
+    // Intentar añadir botones inicialmente
+    this.tryAddPlayButtons();
+  }
+
+  cleanupButtons() {
+    const existingButtons = document.querySelectorAll('.lmp-play-button');
+    existingButtons.forEach(button => button.remove());
+  }
+
+  hideInterface() {
+    const existingButtons = document.querySelectorAll('.lmp-play-button');
+    existingButtons.forEach(button => button.style.display = 'none');
   }
 
   // Crear la interfaz de usuario
@@ -141,16 +205,28 @@ class MemberInteractionUI {
     this.memberSelector = memberSelector;
     
     // Añadimos el evento change con logs para depuración
-    memberSelector.addEventListener('change', (e) => {
+    memberSelector.addEventListener('change', async (e) => {
       const selectedType = e.target.value;
       console.log('Tipo seleccionado:', selectedType);
       
-      if (selectedType === 'admins') { // Cambiado de 'admin' a 'admins'
-        console.log('Intentando resaltar sección de administradores');
-        this.highlightAdminSection();
-      } else {
-        console.log('Removiendo resaltado');
-        this.removeHighlight();
+      try {
+        if (!this.isInPeopleSection()) {
+          // Navegar sin mostrar alert
+          await this.navigateToPeopleSection();
+          return; // La página se recargará, así que no seguimos
+        }
+
+        if (selectedType === 'admins') {
+          console.log('Intentando resaltar sección de administradores');
+          this.highlightAdminSection();
+        } else {
+          console.log('Removiendo resaltado');
+          this.removeHighlight();
+        }
+      } catch (error) {
+        console.error('Error al cambiar selección:', error);
+        // Resetear el selector al valor anterior
+        e.target.value = '';
       }
     });
     
@@ -358,23 +434,31 @@ class MemberInteractionUI {
     // Opciones avanzadas (expandible)
     const advancedOptionsToggle = document.createElement('div');
     advancedOptionsToggle.innerHTML = '⚙️ Opciones avanzadas <span style="font-size:12px;">(click para mostrar)</span>';
-    advancedOptionsToggle.style.fontWeight = 'bold';
-    advancedOptionsToggle.style.marginBottom = '8px';
-    advancedOptionsToggle.style.cursor = 'pointer';
-    advancedOptionsToggle.style.color = '#4267B2';
+    advancedOptionsToggle.style.cssText = `
+      font-weight: bold;
+      margin-bottom: 8px;
+      cursor: pointer;
+      color: #4267B2;
+      user-select: none;
+    `;
     
     const advancedOptionsContainer = document.createElement('div');
-    advancedOptionsContainer.style.display = 'none';
-    advancedOptionsContainer.style.padding = '8px';
-    advancedOptionsContainer.style.marginBottom = '16px';
-    advancedOptionsContainer.style.backgroundColor = '#F0F2F5';
-    advancedOptionsContainer.style.borderRadius = '4px';
-    
-    // Cerrar automáticamente el chat
+    advancedOptionsContainer.style.cssText = `
+      display: none;
+      padding: 12px;
+      margin-bottom: 16px;
+      background-color: #F0F2F5;
+      border-radius: 8px;
+    `;
+
+    // Opción de cerrar chat automáticamente
     const autoCloseChatLabel = document.createElement('label');
-    autoCloseChatLabel.style.display = 'flex';
-    autoCloseChatLabel.style.alignItems = 'center';
-    autoCloseChatLabel.style.marginBottom = '8px';
+    autoCloseChatLabel.style.cssText = `
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      cursor: pointer;
+    `;
     
     const autoCloseChatCheckbox = document.createElement('input');
     autoCloseChatCheckbox.type = 'checkbox';
@@ -385,57 +469,64 @@ class MemberInteractionUI {
     
     autoCloseChatLabel.appendChild(autoCloseChatCheckbox);
     autoCloseChatLabel.appendChild(autoCloseChatText);
+
+    // Nueva opción de agregar amigos (próximamente)
+    const addFriendLabel = document.createElement('label');
+    addFriendLabel.style.cssText = `
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      opacity: 0.7;
+      cursor: not-allowed;
+    `;
     
-    // Opción avanzada adicional futura (placeholder)
-    const advancedOptionLabel = document.createElement('label');
-    advancedOptionLabel.style.display = 'flex';
-    advancedOptionLabel.style.alignItems = 'center';
-    advancedOptionLabel.style.marginBottom = '8px';
+    const addFriendCheckbox = document.createElement('input');
+    addFriendCheckbox.type = 'checkbox';
+    addFriendCheckbox.checked = false;
+    addFriendCheckbox.disabled = true;
+    addFriendCheckbox.style.marginRight = '8px';
     
-    const advancedOptionCheckbox = document.createElement('input');
-    advancedOptionCheckbox.type = 'checkbox';
-    advancedOptionCheckbox.checked = false;
-    advancedOptionCheckbox.disabled = true;
-    advancedOptionCheckbox.style.marginRight = '8px';
+    const addFriendText = document.createElement('span');
+    addFriendText.style.display = 'flex';
+    addFriendText.style.alignItems = 'center';
+    addFriendText.innerHTML = 'Agregar como amigo antes de enviar mensaje <span style="background-color: #e4e6eb; color: #65676b; font-size: 12px; padding: 2px 6px; border-radius: 10px; margin-left: 8px;">Próximamente</span>';
     
-    const advancedOptionText = document.createTextNode('Modo avanzado (próximamente)');
+    addFriendLabel.title = 'Esta función permitirá enviar solicitud de amistad antes de iniciar la conversación';
     
-    advancedOptionLabel.appendChild(advancedOptionCheckbox);
-    advancedOptionLabel.appendChild(advancedOptionText);
-    
+    addFriendLabel.appendChild(addFriendCheckbox);
+    addFriendLabel.appendChild(addFriendText);
+
     // Máximo de miembros para interactuar
     const maxMembersLabel = document.createElement('div');
     maxMembersLabel.textContent = 'Máximo de miembros para interactuar:';
-    maxMembersLabel.style.marginBottom = '4px';
+    maxMembersLabel.style.marginBottom = '8px';
     
     const maxMembersInput = document.createElement('input');
     maxMembersInput.type = 'number';
     maxMembersInput.min = '1';
     maxMembersInput.value = '10';
-    maxMembersInput.style.width = '100%';
-    maxMembersInput.style.padding = '6px';
-    maxMembersInput.style.marginBottom = '8px';
-    maxMembersInput.style.borderRadius = '4px';
-    maxMembersInput.style.border = '1px solid #CED0D4';
-    
+    maxMembersInput.style.cssText = `
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 12px;
+      border-radius: 6px;
+      border: 1px solid #CED0D4;
+    `;
+
     // Ensamblar opciones avanzadas
     advancedOptionsContainer.appendChild(autoCloseChatLabel);
-    advancedOptionsContainer.appendChild(advancedOptionLabel);
+    advancedOptionsContainer.appendChild(addFriendLabel);
     advancedOptionsContainer.appendChild(maxMembersLabel);
     advancedOptionsContainer.appendChild(maxMembersInput);
-    
+
     // Evento para mostrar/ocultar opciones avanzadas
     advancedOptionsToggle.addEventListener('click', () => {
-      if (advancedOptionsContainer.style.display === 'none') {
-        advancedOptionsContainer.style.display = 'block';
-        advancedOptionsToggle.innerHTML = '⚙️ Opciones avanzadas <span style="font-size:12px;">(click para ocultar)</span>';
-      } else {
-        advancedOptionsContainer.style.display = 'none';
-        advancedOptionsToggle.innerHTML = '⚙️ Opciones avanzadas <span style="font-size:12px;">(click para mostrar)</span>';
-      }
+      const isHidden = advancedOptionsContainer.style.display === 'none';
+      advancedOptionsContainer.style.display = isHidden ? 'block' : 'none';
+      advancedOptionsToggle.innerHTML = `⚙️ Opciones avanzadas <span style="font-size:12px;">(click para ${isHidden ? 'ocultar' : 'mostrar'})</span>`;
     });
-    
-    // Ensamblar la interfaz
+
+    // Ensamblar la interfaz completa
     body.appendChild(description);
     body.appendChild(memberSelectorLabel);
     body.appendChild(memberSelector);
@@ -457,16 +548,22 @@ class MemberInteractionUI {
 
   // Mostrar la interfaz
   show() {
+    this.isVisible = true;
     if (!this.container) {
       this.container = this.createUI();
       document.body.appendChild(this.container);
-    } else {
-      this.container.style.display = 'flex';
+    }
+    this.container.style.display = 'flex';
+    
+    // Verificar y ocultar el sidebar si es necesario
+    if (window.location.href.includes('/groups/')) {
+      this.checkAndHideSidebar();
     }
   }
   
   // Ocultar la interfaz
   hide() {
+    this.isVisible = false;
     if (this.container) {
       // Si estamos interactuando, detener primero
       if (this.isInteracting) {
@@ -638,14 +735,24 @@ class MemberInteractionUI {
   }
 
   // Obtener elementos de miembros según el tipo seleccionado
-  getMemberElements(memberType) {
+  async getMemberElements(memberType) {
+    if (!this.isInPeopleSection()) {
+      console.log('MemberInteractionUI: No estamos en la sección de Personas, intentando navegar...');
+      const success = await this.navigateToPeopleSection();
+      if (!success) {
+        throw new Error('Por favor, navega a la sección "Personas" del grupo para comenzar la interacción.');
+      }
+      // Esperar a que el contenido se cargue
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
     let memberElements = [];
     console.log('MemberInteractionUI: Buscando miembros de tipo:', memberType);
     
     const sectionConfig = this.selectors.sections[memberType];
     if (!sectionConfig) {
       console.error('MemberInteractionUI: Tipo de sección no válido:', memberType);
-      return [];
+      throw new Error('Tipo de sección no válido');
     }
 
     const allSections = document.querySelectorAll(sectionConfig.container);
@@ -774,95 +881,92 @@ class MemberInteractionUI {
     return [];
   }
 
-  async tryAddPlayButtons() {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    Object.entries(this.selectors.sections).forEach(([sectionType, config]) => {
-      try {
-        const sectionContainer = document.querySelector(config.container);
-        if (!sectionContainer) return;
-
-        const titleElement = Array.from(sectionContainer.querySelectorAll(config.title))
-          .find(el => el.textContent.includes(config.titleText));
-
-        if (titleElement && !titleElement.querySelector('.lmp-play-button')) {
-          // Crear un contenedor flex para el título y el botón
-          const titleContainer = document.createElement('div');
-          titleContainer.style.cssText = `
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            width: 100%;
-          `;
-
-          // Mover el contenido del título al nuevo contenedor
-          while (titleElement.firstChild) {
-            titleContainer.appendChild(titleElement.firstChild);
-          }
-
-          const playButton = this.createPlayButton();
-          playButton.className = 'lmp-play-button';
-          playButton.querySelector('button').setAttribute('data-section-type', sectionType);
-          
-          playButton.querySelector('button').title = `Iniciar interacción con ${config.titleText}`;
-
-          playButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.handlePlayClick(sectionType, config.titleText);
-          });
-
-          // Añadir el botón al contenedor
-          titleContainer.appendChild(playButton);
-
-          // Insertar el nuevo contenedor en el título
-          titleElement.appendChild(titleContainer);
-        }
-      } catch (error) {
-        console.error(`Error al añadir botón para ${sectionType}:`, error);
-      }
-    });
-  }
-
   createPlayButton() {
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.cssText = `
-      display: flex;
-      align-items: center;
-      margin-left: auto; // Empuja el botón a la derecha
-    `;
-
     const button = document.createElement('button');
-    button.innerHTML = this.icons.play;
+    button.className = 'lmp-play-button';
+    button.setAttribute('data-lmp-button-id', Math.random().toString(36).substring(7));
+    
+    // Estilos del botón
     button.style.cssText = `
-      background-color: #0866ff;
+      background-color: #1b74e4;
       border: none;
       border-radius: 6px;
       color: white;
+      padding: 8px 12px;
       cursor: pointer;
-      padding: 8px;
-      transition: all 0.2s ease;
-      display: inline-flex;
+      font-weight: 600;
+      font-size: 14px;
+      margin-left: 12px;
+      display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      min-width: 32px;
-      height: 32px;
+      transition: all 0.2s ease;
     `;
 
-    // Efecto hover
+    // Hover effect
     button.addEventListener('mouseover', () => {
-      button.style.backgroundColor = '#0055d4';
+      button.style.backgroundColor = '#0a60cc';
       button.style.transform = 'scale(1.05)';
     });
 
     button.addEventListener('mouseout', () => {
-      button.style.backgroundColor = '#0866ff';
+      button.style.backgroundColor = '#1b74e4';
       button.style.transform = 'scale(1)';
     });
 
-    buttonContainer.appendChild(button);
-    return buttonContainer;
+    // Añadir icono SVG de play
+    button.innerHTML = this.icons.play;
+    
+    // Click handler
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.handlePlayClick(button);
+    });
+
+    return button;
+  }
+
+  tryAddPlayButtons() {
+    // Buscar específicamente el título de la sección de administradores
+    const titleElements = document.querySelectorAll(this.selectors.sections.admins.title);
+    
+    titleElements.forEach((titleElement) => {
+        // Verificar que el título corresponda a "Administradores y moderadores"
+        if (!titleElement.textContent.includes(this.selectors.sections.admins.titleText)) {
+            return;
+        }
+
+        // Verificar si ya existe un botón para este título
+        const existingButton = titleElement.parentElement.querySelector('.lmp-play-button');
+        if (existingButton) {
+            return;
+        }
+
+        // Verificar que el título esté dentro del contenedor correcto
+        const adminContainer = titleElement.closest(this.selectors.sections.admins.container);
+        if (!adminContainer) {
+            return;
+        }
+
+        const button = this.createPlayButton();
+        
+        // Crear contenedor flex para el título y el botón
+        const container = document.createElement('div');
+        container.style.cssText = `
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        `;
+        
+        // Reemplazar el título con el nuevo contenedor
+        titleElement.parentNode.insertBefore(container, titleElement);
+        container.appendChild(titleElement);
+        container.appendChild(button);
+
+        console.log('Botón Play añadido a la sección de administradores');
+    });
   }
 
   updatePlayButton(sectionType, isPlaying) {
@@ -887,10 +991,22 @@ class MemberInteractionUI {
     console.log('Click en botón Play para:', sectionType, sectionTitle);
     
     try {
+      // Verificar si estamos en la sección correcta
+      if (!this.isInPeopleSection()) {
+        await this.navigateToPeopleSection();
+        return;
+      }
+
       // Si ya está interactuando, detener
       if (this.isInteracting) {
         this.stopInteraction();
         return;
+      }
+
+      // Asegurarnos de que memberInteraction esté inicializado
+      if (!this.memberInteraction) {
+        this.memberInteraction = window.leadManagerPro.memberInteraction || new MemberInteraction();
+        window.leadManagerPro.memberInteraction = this.memberInteraction;
       }
 
       // Primero mostramos la interfaz
@@ -902,7 +1018,6 @@ class MemberInteractionUI {
       // Asegurarnos de seleccionar administradores en el selector
       if (this.memberSelector) {
         this.memberSelector.value = 'admins';
-        // Disparar el evento change manualmente
         const event = new Event('change');
         this.memberSelector.dispatchEvent(event);
       }
@@ -914,9 +1029,9 @@ class MemberInteractionUI {
       const config = await this.getStoredConfig();
       
       // Obtener los elementos de miembros
-      const memberElements = this.getMemberElements('admins');
+      const memberElements = await this.getMemberElements('admins');
       
-      if (memberElements.length === 0) {
+      if (!memberElements || memberElements.length === 0) {
         throw new Error('No se encontraron miembros del tipo seleccionado');
       }
       
@@ -926,13 +1041,11 @@ class MemberInteractionUI {
       this.memberInteraction.maxMembersToInteract = config.maxMembers || 10;
       
       // Configurar el delay
-      const delay = config.delay || 2000; // 2 segundos por defecto
+      const delay = config.delay || 2000;
       
       // Inicializar y comenzar la interacción
       this.memberInteraction.init(memberElements, { delay });
-      
-      // Iniciar la interacción
-      this.startInteraction();
+      await this.startInteraction();
       
       // Actualizar el estado del botón
       this.updatePlayButton(sectionType, true);
@@ -941,7 +1054,6 @@ class MemberInteractionUI {
       console.error('Error al iniciar la interacción:', error);
       this.statusText.textContent = 'Error: ' + error.message;
       this.statusText.style.color = 'red';
-      // Asegurar que el botón vuelve a su estado original en caso de error
       this.updatePlayButton(sectionType, false);
     }
   }
@@ -985,6 +1097,37 @@ class MemberInteractionUI {
 
     document.body.appendChild(errorDiv);
     setTimeout(() => errorDiv.remove(), 5000);
+  }
+
+  // Función para verificar si estamos en la sección de Personas
+  isInPeopleSection() {
+    return window.location.href.endsWith('/members');
+  }
+
+  // Función para navegar a la sección de Personas
+  async navigateToPeopleSection() {
+    const currentURL = window.location.href;
+    
+    // Si ya estamos en la sección de miembros, no hacer nada
+    if (this.isInPeopleSection()) {
+      return true;
+    }
+
+    // Asegurarnos de que la URL termine en /members
+    const newURL = currentURL.endsWith('/') 
+      ? currentURL + 'members'
+      : currentURL + '/members';
+
+    console.log('MemberInteractionUI: Navegando a la sección de miembros:', newURL);
+    
+    // Guardar el estado de visibilidad antes de navegar
+    const wasVisible = this.isVisible;
+    
+    // Navegar a la sección de miembros
+    window.location.href = newURL;
+    
+    // La página se recargará, y el init() restaurará la visibilidad
+    return true;
   }
 }
 

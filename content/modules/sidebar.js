@@ -7,60 +7,47 @@
 window.LeadManagerPro = window.LeadManagerPro || {};
 window.LeadManagerPro.modules = window.LeadManagerPro.modules || {};
 
-/**
- * Inserta el sidebar en la página
- * @returns {HTMLElement} - El contenedor del sidebar
- */
-window.LeadManagerPro.modules.insertSidebar = function() {
-  console.log('Lead Manager Pro: Insertando sidebar');
-  
-  // Verificar si ya existe el sidebar
-  if (document.getElementById('snap-lead-manager-container')) {
-    console.log('Lead Manager Pro: Sidebar ya existe');
-    return document.getElementById('snap-lead-manager-container');
+// Agregar estilos CSS al documento
+const style = document.createElement('style');
+style.textContent = `
+  /* Ajuste global para el contenido cuando el sidebar está activo */
+  body.snap-lead-manager-body-shift {
+    margin-right: 320px !important;
+    transition: margin 0.3s ease;
   }
-  
-  // Crear contenedor para el sidebar
-  const sidebarContainer = document.createElement('div');
-  sidebarContainer.id = 'snap-lead-manager-container';
-  sidebarContainer.style.cssText = `
+
+  /* Contenedor principal del sidebar */
+  .snap-lead-manager-container {
     position: fixed;
     top: 0;
-    right: 0;
+    right: -320px; /* Cambiado para iniciar oculto */
     width: 320px;
     height: 100vh;
-    z-index: 9999;
     background: white;
     box-shadow: -2px 0 5px rgba(0,0,0,0.2);
     border-left: 1px solid #ddd;
     overflow: hidden;
     transition: transform 0.3s ease;
-  `;
+    z-index: 9999;
+  }
   
-  // Crear iframe para el sidebar
-  const iframe = document.createElement('iframe');
-  iframe.id = 'snap-lead-manager-iframe';
-  iframe.src = chrome.runtime.getURL('sidebar.html');
-  iframe.style.cssText = `
+  .snap-lead-manager-container.visible {
+    transform: translateX(-320px);
+  }
+  
+  .snap-lead-manager-iframe {
     width: 100%;
     height: 100%;
     border: none;
     overflow: hidden;
-  `;
+  }
   
-  // Añadir iframe al contenedor
-  sidebarContainer.appendChild(iframe);
-  
-  // Crear botón para mostrar/ocultar (FUERA del sidebar)
-  const toggleButton = document.createElement('div');
-  toggleButton.id = 'snap-lead-manager-toggle';
-  toggleButton.innerHTML = '►';
-  toggleButton.style.cssText = `
+  .snap-lead-manager-toggle {
     position: fixed;
-    right: 0;
+    right: 320px;
     top: 50%;
     transform: translateY(-50%);
-    background: #4267B2;
+    background: #0866ff;
     color: white;
     width: 30px;
     height: 50px;
@@ -72,66 +59,178 @@ window.LeadManagerPro.modules.insertSidebar = function() {
     font-size: 18px;
     font-weight: bold;
     box-shadow: -2px 0 5px rgba(0,0,0,0.2);
-    z-index: 9990;
+    z-index: 9999;
     transition: all 0.3s ease;
-  `;
-  // Agregar el botón de toggle directamente al body, fuera del contenedor
+  }
+
+  /* Ajustes específicos para contenedores de Facebook */
+  body.snap-lead-manager-body-shift [role="main"],
+  body.snap-lead-manager-body-shift [role="complementary"],
+  body.snap-lead-manager-body-shift [data-pagelet="RightRail"] {
+    margin-right: 0 !important;
+    width: auto !important;
+  }
+`;
+document.head.appendChild(style);
+
+/**
+ * Verifica si estamos en una página de grupo específica
+ * @returns {boolean}
+ */
+function isSpecificGroupPage() {
+  const url = window.location.href;
+  return url.includes('/groups/') && !url.includes('/groups/feed');
+}
+
+/**
+ * Verifica si estamos en el feed general de grupos
+ * @returns {boolean}
+ */
+function isGroupsFeedPage() {
+  const url = window.location.href;
+  return url.includes('/groups/feed');
+}
+
+/**
+ * Inserta el sidebar en la página
+ * @returns {HTMLElement} - El contenedor del sidebar
+ */
+window.LeadManagerPro.modules.insertSidebar = function() {
+  console.log('Lead Manager Pro: Insertando sidebar');
+  
+  // Verificar si ya existe el sidebar
+  const existingSidebar = document.getElementById('snap-lead-manager-container');
+  const existingToggle = document.getElementById('snap-lead-manager-toggle');
+  
+  if (existingSidebar && existingToggle) {
+    console.log('Lead Manager Pro: Sidebar ya existe');
+    return existingSidebar;
+  }
+  
+  // Crear contenedor para el sidebar
+  const sidebarContainer = document.createElement('div');
+  sidebarContainer.id = 'snap-lead-manager-container';
+  sidebarContainer.className = 'snap-lead-manager-container';
+  
+  // Crear iframe para el sidebar
+  const iframe = document.createElement('iframe');
+  iframe.id = 'snap-lead-manager-iframe';
+  iframe.className = 'snap-lead-manager-iframe';
+  iframe.src = chrome.runtime.getURL('sidebar.html');
+  
+  // Crear botón para mostrar/ocultar
+  const toggleButton = document.createElement('div');
+  toggleButton.id = 'snap-lead-manager-toggle';
+  toggleButton.className = 'snap-lead-manager-toggle';
+  toggleButton.innerHTML = '►';
+  toggleButton.setAttribute('title', 'Ocultar Lead Manager');
+  
+  // Añadir iframe al contenedor
+  sidebarContainer.appendChild(iframe);
+  
+  // Añadir elementos al DOM
+  document.body.appendChild(sidebarContainer);
   document.body.appendChild(toggleButton);
   
-  // Ya no necesitamos un botón de cierre separado, usaremos solo el botón de toggle
+  // Función para ajustar el contenido
+  const adjustContent = (show) => {
+    if (show) {
+      document.body.classList.add('snap-lead-manager-body-shift');
+    } else {
+      document.body.classList.remove('snap-lead-manager-body-shift');
+    }
+  };
   
-  // Por defecto, ocultar el sidebar inicialmente
-  sidebarContainer.style.transform = 'translateX(100%)';
+  // Por defecto, mostrar el sidebar excepto en páginas de grupo específicas
+  const wasHidden = localStorage.getItem('snap_lead_manager_sidebar_hidden') === 'true';
+  const inSpecificGroup = isSpecificGroupPage();
+  
+  if (wasHidden || inSpecificGroup) {
+    // Ocultar el sidebar
+    sidebarContainer.classList.remove('visible');
+    toggleButton.style.right = '0';
+    toggleButton.innerHTML = '◄';
+    toggleButton.setAttribute('title', 'Mostrar Lead Manager');
+    adjustContent(false);
+  } else {
+    // Mostrar el sidebar
+    sidebarContainer.classList.add('visible');
+    toggleButton.style.right = '320px';
+    toggleButton.innerHTML = '►';
+    toggleButton.setAttribute('title', 'Ocultar Lead Manager');
+    adjustContent(true);
+  }
   
   // Manejar clic en el botón de toggle
   toggleButton.addEventListener('click', function() {
-    const isVisible = sidebarContainer.style.transform !== 'translateX(100%)';
+    const isVisible = sidebarContainer.classList.contains('visible');
     if (isVisible) {
       // Ocultar el sidebar
-      sidebarContainer.style.transform = 'translateX(100%)';
-      toggleButton.innerHTML = '◄';
+      sidebarContainer.classList.remove('visible');
       toggleButton.style.right = '0';
+      toggleButton.innerHTML = '◄';
       toggleButton.setAttribute('title', 'Mostrar Lead Manager');
-      
-      // Guardar preferencia del usuario
+      adjustContent(false);
       localStorage.setItem('snap_lead_manager_sidebar_hidden', 'true');
     } else {
       // Mostrar el sidebar
-      sidebarContainer.style.transform = 'translateX(0)';
-      toggleButton.innerHTML = '►';
+      sidebarContainer.classList.add('visible');
       toggleButton.style.right = '320px';
+      toggleButton.innerHTML = '►';
       toggleButton.setAttribute('title', 'Ocultar Lead Manager');
-      
-      // Guardar preferencia del usuario
+      adjustContent(true);
       localStorage.setItem('snap_lead_manager_sidebar_hidden', 'false');
     }
   });
   
-  // Ya no necesitamos este manejador de eventos para el botón de cerrar
+  // Observar cambios en la URL
+  let lastUrl = location.href;
   
-  // Verificar si el sidebar estaba oculto anteriormente
-  const wasHidden = localStorage.getItem('snap_lead_manager_sidebar_hidden') === 'true';
-  if (!wasHidden) {
-    // Mostrar sidebar si no estaba oculto previamente
-    sidebarContainer.style.transform = 'translateX(0)';
-    toggleButton.innerHTML = '►';
-    toggleButton.style.right = '320px';
-    toggleButton.setAttribute('title', 'Ocultar Lead Manager');
-  } else {
-    // Mantener oculto
-    toggleButton.innerHTML = '◄';
-    toggleButton.style.right = '0';
-    toggleButton.setAttribute('title', 'Mostrar Lead Manager');
-  }
+  // Función para manejar cambios de URL
+  const handleUrlChange = () => {
+    const currentUrl = location.href;
+    if (currentUrl !== lastUrl) {
+      lastUrl = currentUrl;
+      
+      const inSpecificGroup = isSpecificGroupPage();
+      const inGroupsFeed = isGroupsFeedPage();
+      
+      if (inSpecificGroup) {
+        // En página de grupo específica
+        sidebarContainer.style.display = 'none';
+        toggleButton.style.display = 'none';
+        adjustContent(false);
+      } else {
+        // En cualquier otra página
+        sidebarContainer.style.display = 'block';
+        toggleButton.style.display = 'flex';
+        
+        // Restaurar estado anterior
+        const wasHidden = localStorage.getItem('snap_lead_manager_sidebar_hidden') === 'true';
+        if (!wasHidden) {
+          sidebarContainer.classList.add('visible');
+          toggleButton.style.right = '320px';
+          toggleButton.innerHTML = '►';
+          adjustContent(true);
+        }
+      }
+    }
+  };
   
-  // Ya no necesitamos agregar ningún botón adicional al sidebar
+  // Observar cambios en la URL
+  const observer = new MutationObserver(() => {
+    handleUrlChange();
+  });
   
-  // Añadir al DOM
-  document.body.appendChild(sidebarContainer);
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
   
-  console.log('Lead Manager Pro: Sidebar insertado');
+  // También escuchar el evento popstate para cambios en la navegación
+  window.addEventListener('popstate', handleUrlChange);
   
-  // Enviar un mensaje de "sidebar_ready" para notificar al iframe
+  // Enviar mensaje de "sidebar_ready"
   setTimeout(() => {
     const iframe = document.getElementById('snap-lead-manager-iframe');
     if (iframe && iframe.contentWindow) {
@@ -187,16 +286,16 @@ window.LeadManagerPro.modules.ensureToggleButtonVisible = function() {
         return;
       }
       
-      const isVisible = sidebarContainer.style.transform !== 'translateX(100%)';
+      const isVisible = sidebarContainer.classList.contains('visible');
       if (isVisible) {
         // Ocultar
-        sidebarContainer.style.transform = 'translateX(100%)';
+        sidebarContainer.classList.remove('visible');
         toggleButton.innerHTML = '►';
         toggleButton.style.right = '0';
         localStorage.setItem('snap_lead_manager_sidebar_hidden', 'true');
       } else {
         // Mostrar
-        sidebarContainer.style.transform = 'translateX(0)';
+        sidebarContainer.classList.add('visible');
         toggleButton.innerHTML = '◄';
         toggleButton.style.right = '320px';
         localStorage.setItem('snap_lead_manager_sidebar_hidden', 'false');
@@ -377,7 +476,7 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
       // Mostrar el sidebar cuando se solicita desde el popup
       const sidebarContainer = document.getElementById('snap-lead-manager-container');
       if (sidebarContainer) {
-        sidebarContainer.style.transform = 'translateX(0)';
+        sidebarContainer.classList.add('visible');
         const toggleButton = document.getElementById('snap-lead-manager-toggle');
         if (toggleButton) {
           toggleButton.innerHTML = '►';
@@ -410,7 +509,7 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
       // Primero, asegurarse de que el sidebar esté visible
       const sidebarContainer = document.getElementById('snap-lead-manager-container');
       if (sidebarContainer) {
-        sidebarContainer.style.transform = 'translateX(0)';
+        sidebarContainer.classList.add('visible');
         const toggleButton = document.getElementById('snap-lead-manager-toggle');
         if (toggleButton) {
           toggleButton.innerHTML = '►';
@@ -597,3 +696,15 @@ function sendMessageToSidebar(action, data = {}) {
     }, '*');
   }
 }
+
+// Función de inicialización automática
+(function initializeSidebar() {
+  // Esperar a que el DOM esté completamente cargado
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.LeadManagerPro.modules.insertSidebar();
+    });
+  } else {
+    window.LeadManagerPro.modules.insertSidebar();
+  }
+})();
