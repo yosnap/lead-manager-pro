@@ -2,14 +2,95 @@
 class FacebookInteraction {
   constructor() {
     this.selectors = {
-      memberCard: '[role="gridcell"]',
-      memberName: '[role="gridcell"] h2',
-      memberLink: '[role="gridcell"] a[href*="/user/"]',
-      messageButton: '[aria-label="Enviar mensaje"]',
+      // Selectores generales
+      memberCard: '[role="listitem"]',
+      memberName: 'a.x1i10hfl[role="link"]:not([aria-hidden="true"])',
+      memberLink: 'a.x1i10hfl[role="link"]:not([aria-hidden="true"])',
+      messageButton: '[aria-label="Mensaje"], [aria-label="Message"]',
       messageInput: '[contenteditable="true"]',
-      sendButton: '[aria-label="Enviar"]',
-      commonThingsButton: '[aria-label="Cosas en común"]'
+      sendButton: '[aria-label="Enviar"], [aria-label="Send"]',
+      
+      // Navegación
+      peopleTab: '[role="tablist"] a[href*="/members"]',
+      
+      // Selector específico para administradores
+      adminSection: {
+        // El contenedor principal de la sección de administradores
+        container: '.x1n2onr6.x1ja2u2z.x9f619.x78zum5.xdt5ytf.x2lah0s.x193iq5w.xx6bls6.x1jx94hy',
+        // La lista de miembros
+        memberList: '[role="list"]',
+        // El indicador de administrador/moderador (el span que contiene el texto)
+        adminIndicator: '.x1lliihq.x6ikm8r.x10wlt62.x1n2onr6:contains("Administrador"), .x1lliihq.x6ikm8r.x10wlt62.x1n2onr6:contains("Moderador")'
+      }
     };
+  }
+
+  // Método de inicialización
+  async initialize() {
+    try {
+      if (document.readyState === 'loading') {
+        await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve));
+      }
+      await this.navigateToPeopleSection();
+    } catch (error) {
+      console.error('Error durante la inicialización:', error);
+    }
+  }
+
+  // Navegar a la sección de personas
+  async navigateToPeopleSection() {
+    try {
+      const peopleTab = document.querySelector(this.selectors.peopleTab);
+      if (!peopleTab) {
+        throw new Error('No se encontró la pestaña de Personas');
+      }
+      
+      peopleTab.click();
+      await this.delay(2000);
+      return true;
+    } catch (error) {
+      console.error('Error al navegar a la sección de personas:', error);
+      return false;
+    }
+  }
+
+  // Obtener administradores y moderadores
+  async getAdmins(maxMembers = 10) {
+    try {
+      // Buscar el contenedor principal de administradores
+      const container = document.querySelector(this.selectors.adminSection.container);
+      if (!container) {
+        throw new Error('No se encontró el contenedor de administradores');
+      }
+
+      // Buscar la lista de miembros dentro del contenedor
+      const memberList = container.querySelector(this.selectors.adminSection.memberList);
+      if (!memberList) {
+        throw new Error('No se encontró la lista de administradores');
+      }
+
+      // Obtener todas las tarjetas de miembros
+      const memberCards = Array.from(memberList.querySelectorAll(this.selectors.memberCard));
+      const admins = [];
+
+      for (const card of memberCards) {
+        if (admins.length >= maxMembers) break;
+
+        // Verificar si es administrador o moderador
+        const isAdmin = card.querySelector(this.selectors.adminSection.adminIndicator);
+        if (isAdmin) {
+          const adminInfo = await this.getMemberInfo(card);
+          if (adminInfo) {
+            admins.push(adminInfo);
+          }
+        }
+      }
+
+      return admins;
+    } catch (error) {
+      console.error('Error al obtener administradores:', error);
+      return [];
+    }
   }
 
   // Obtener información de un miembro desde su tarjeta
@@ -17,16 +98,17 @@ class FacebookInteraction {
     try {
       const nameElement = memberCard.querySelector(this.selectors.memberName);
       const linkElement = memberCard.querySelector(this.selectors.memberLink);
+      const messageButton = memberCard.querySelector(this.selectors.messageButton);
       
-      if (!nameElement || !linkElement) {
-        throw new Error('No se pudo encontrar la información básica del miembro');
+      if (!nameElement || !linkElement || !messageButton) {
+        return null;
       }
 
       return {
-        id: this.extractUserId(linkElement.href),
         name: nameElement.textContent.trim(),
         profileUrl: linkElement.href,
-        element: memberCard
+        element: memberCard,
+        messageButton: messageButton
       };
     } catch (error) {
       console.error('Error al obtener información del miembro:', error);
@@ -34,68 +116,45 @@ class FacebookInteraction {
     }
   }
 
-  // Extraer ID de usuario de la URL del perfil
-  extractUserId(url) {
-    try {
-      const match = url.match(/\/user\/(\d+)/);
-      return match ? match[1] : null;
-    } catch (error) {
-      console.error('Error al extraer ID de usuario:', error);
-      return null;
-    }
-  }
-
   // Enviar mensaje a un miembro
-  async sendMessage(member, messageTemplate) {
+  async sendMessage(member, message) {
     try {
-      // Abrir diálogo de mensaje
-      const messageButton = member.element.querySelector(this.selectors.messageButton);
-      if (!messageButton) {
-        throw new Error('Botón de mensaje no encontrado');
-      }
-      
-      messageButton.click();
-      await this.delay(1000); // Esperar a que se abra el diálogo
+      member.messageButton.click();
+      await this.delay(1000);
 
-      // Encontrar el campo de entrada de mensaje
       const messageInput = document.querySelector(this.selectors.messageInput);
       if (!messageInput) {
-        throw new Error('Campo de mensaje no encontrado');
+        throw new Error('No se encontró el campo de mensaje');
       }
 
-      // Insertar mensaje personalizado
-      const personalizedMessage = this.personalizeMessage(messageTemplate, member);
-      await this.typeMessage(messageInput, personalizedMessage);
+      await this.typeMessage(messageInput, message);
+      await this.delay(500);
 
-      // Enviar mensaje
       const sendButton = document.querySelector(this.selectors.sendButton);
       if (!sendButton) {
-        throw new Error('Botón de enviar no encontrado');
+        throw new Error('No se encontró el botón de enviar');
       }
-      
+
       sendButton.click();
-      await this.delay(1000); // Esperar a que se envíe el mensaje
+      await this.delay(1000);
+
+      const closeButton = document.querySelector('[aria-label="Cerrar chat"], [aria-label="Close chat"]');
+      if (closeButton) {
+        closeButton.click();
+        await this.delay(500);
+      }
 
       return true;
     } catch (error) {
-      console.error('Error al enviar mensaje:', error);
+      console.error(`Error al enviar mensaje a ${member.name}:`, error);
       return false;
     }
   }
 
-  // Personalizar mensaje con datos del miembro
-  personalizeMessage(template, member) {
-    return template
-      .replace('{nombre}', member.name)
-      .replace('{perfil}', member.profileUrl);
-  }
-
   // Simular escritura natural
   async typeMessage(element, text) {
-    // Limpiar contenido existente
     element.innerHTML = '';
     
-    // Crear estructura del mensaje
     const p = document.createElement('p');
     p.className = 'xat24cr xdj266r xdpxx8g';
     p.setAttribute('dir', 'ltr');
@@ -107,29 +166,8 @@ class FacebookInteraction {
     p.appendChild(span);
     element.appendChild(p);
     
-    // Disparar eventos
     element.dispatchEvent(new Event('input', { bubbles: true }));
     element.dispatchEvent(new Event('change', { bubbles: true }));
-  }
-
-  // Verificar cosas en común
-  async checkCommonThings(member) {
-    try {
-      const commonButton = member.element.querySelector(this.selectors.commonThingsButton);
-      if (!commonButton) {
-        return null;
-      }
-
-      commonButton.click();
-      await this.delay(1000); // Esperar a que se cargue la información
-
-      // Aquí implementaremos la lógica para extraer la información de cosas en común
-      // Por ahora retornamos un objeto vacío
-      return {};
-    } catch (error) {
-      console.error('Error al verificar cosas en común:', error);
-      return null;
-    }
   }
 
   // Utilidad para esperar
