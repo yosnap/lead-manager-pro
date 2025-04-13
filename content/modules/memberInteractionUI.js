@@ -38,6 +38,14 @@ class MemberInteractionUI {
           userList: 'div[role="list"]',
           userItem: 'div[data-visualcompletion="ignore-dynamic"][role="listitem"]',
           userLink: 'a[href*="/groups/"][href*="/user/"][role="link"]'
+        },
+        newMembers: {
+          container: '.x1n2onr6.x1ja2u2z.x9f619.x78zum5.xdt5ytf.x2lah0s.x193iq5w.xx6bls6.x1jx94hy',
+          title: 'h2.xdj266r',
+          titleText: "Nuevos miembros del grupo",
+          userList: 'div[role="list"]',
+          userItem: 'div[data-visualcompletion="ignore-dynamic"][role="listitem"]',
+          userLink: 'a[href*="/groups/"][href*="/user/"][role="link"]'
         }
       },
       navigation: {
@@ -141,9 +149,9 @@ class MemberInteractionUI {
     });
 
     // Intentar añadir botones inicialmente
-    this.tryAddPlayButtons();
-  }
-
+      this.tryAddPlayButtons();
+    }
+    
   cleanupButtons() {
     const existingButtons = document.querySelectorAll('.lmp-play-button');
     existingButtons.forEach(button => button.remove());
@@ -236,6 +244,7 @@ class MemberInteractionUI {
     memberSelector.addEventListener('change', async (e) => {
       const selectedType = e.target.value;
       console.log('Tipo seleccionado:', selectedType);
+      console.log('Selector completo:', this.selectors.sections[selectedType]?.container);
       
       try {
         if (!this.isInPeopleSection()) {
@@ -246,10 +255,24 @@ class MemberInteractionUI {
         // Remover highlight anterior
         this.removeHighlight();
         
-        // Aplicar highlight según el tipo seleccionado
-        if (selectedType === 'admins' || selectedType === 'common') {
-          this.highlightSection(selectedType);
+        // Mapear el valor del selector al tipo de sección correcto
+        let sectionType;
+        switch(selectedType) {
+          case 'admins':
+            sectionType = 'admins';
+            break;
+          case 'common':
+            sectionType = 'common';
+            break;
+          case 'new':
+            sectionType = 'newMembers';
+            break;
+          default:
+            return;
         }
+        
+        // Aplicar highlight según el tipo seleccionado
+        this.highlightSection(sectionType);
       } catch (error) {
         console.error('Error al cambiar selección:', error);
         e.target.value = '';
@@ -400,36 +423,36 @@ class MemberInteractionUI {
           return;
         }
 
-        // Obtener valores de configuración
-        const memberType = memberSelector.value;
+      // Obtener valores de configuración
+      const memberType = memberSelector.value;
         const delay = parseFloat(delayInput.value) * 1000;
-        const message = messageTextarea.value.trim();
-        const autoCloseChat = autoCloseChatCheckbox.checked;
-        const maxMembers = parseInt(maxMembersInput.value);
-        
-        // Validaciones
-        if (isNaN(delay) || delay < 1000) {
-          alert('Por favor, ingrese un tiempo de espera válido (mínimo 1 segundo)');
-          return;
-        }
-        
-        if (!message) {
-          alert('Por favor, ingrese un mensaje para enviar a los miembros');
-          return;
-        }
-        
-        if (isNaN(maxMembers) || maxMembers < 1) {
-          alert('Por favor, ingrese un número válido para el máximo de miembros');
-          return;
-        }
-
+      const message = messageTextarea.value.trim();
+      const autoCloseChat = autoCloseChatCheckbox.checked;
+      const maxMembers = parseInt(maxMembersInput.value);
+      
+      // Validaciones
+      if (isNaN(delay) || delay < 1000) {
+        alert('Por favor, ingrese un tiempo de espera válido (mínimo 1 segundo)');
+        return;
+      }
+      
+      if (!message) {
+        alert('Por favor, ingrese un mensaje para enviar a los miembros');
+        return;
+      }
+      
+      if (isNaN(maxMembers) || maxMembers < 1) {
+        alert('Por favor, ingrese un número válido para el máximo de miembros');
+        return;
+      }
+      
         // Guardar configuración
         const settings = {
-          messageToSend: message,
-          autoCloseChat: autoCloseChat,
+            messageToSend: message,
+            autoCloseChat: autoCloseChat,
           interactionDelay: delay / 1000,
-          membersToInteract: maxMembers,
-          lastMemberType: memberType
+            membersToInteract: maxMembers,
+            lastMemberType: memberType
         };
         
         await new Promise((resolve, reject) => {
@@ -456,9 +479,9 @@ class MemberInteractionUI {
         }
 
         // Inicializar el módulo de interacción
-        this.memberInteraction.messageToSend = message;
-        this.memberInteraction.autoCloseChat = autoCloseChat;
-        this.memberInteraction.maxMembersToInteract = maxMembers;
+      this.memberInteraction.messageToSend = message;
+      this.memberInteraction.autoCloseChat = autoCloseChat;
+      this.memberInteraction.maxMembersToInteract = maxMembers;
         
         // Actualizar estado y UI
         this.isInteracting = true;
@@ -476,7 +499,7 @@ class MemberInteractionUI {
         }
 
         // Inicializar y comenzar la interacción
-        this.memberInteraction.init(memberElements, { delay });
+      this.memberInteraction.init(memberElements, { delay });
         await this.memberInteraction.startInteraction((progress) => {
           this.updateProgress(progress);
           if (progress.type === 'complete') {
@@ -550,7 +573,7 @@ class MemberInteractionUI {
     
     autoCloseChatLabel.appendChild(autoCloseChatCheckbox);
     autoCloseChatLabel.appendChild(autoCloseChatText);
-
+    
     // Nueva opción de agregar amigos (próximamente)
     const addFriendLabel = document.createElement('label');
     addFriendLabel.style.cssText = `
@@ -576,7 +599,7 @@ class MemberInteractionUI {
     
     addFriendLabel.appendChild(addFriendCheckbox);
     addFriendLabel.appendChild(addFriendText);
-
+    
     // Máximo de miembros para interactuar
     const maxMembersLabel = document.createElement('div');
     maxMembersLabel.textContent = 'Máximo de miembros para interactuar:';
@@ -593,13 +616,13 @@ class MemberInteractionUI {
       border-radius: 6px;
       border: 1px solid #CED0D4;
     `;
-
+    
     // Ensamblar opciones avanzadas
     advancedOptionsContainer.appendChild(autoCloseChatLabel);
     advancedOptionsContainer.appendChild(addFriendLabel);
     advancedOptionsContainer.appendChild(maxMembersLabel);
     advancedOptionsContainer.appendChild(maxMembersInput);
-
+    
     // Evento para mostrar/ocultar opciones avanzadas
     advancedOptionsToggle.addEventListener('click', () => {
       const isHidden = advancedOptionsContainer.style.display === 'none';
@@ -634,7 +657,7 @@ class MemberInteractionUI {
       this.container = this.createUI();
       document.body.appendChild(this.container);
     }
-    this.container.style.display = 'flex';
+      this.container.style.display = 'flex';
     
     // Verificar y ocultar el sidebar si es necesario
     if (window.location.href.includes('/groups/')) {
@@ -695,8 +718,8 @@ class MemberInteractionUI {
     
     // Detener el proceso de interacción
     if (this.memberInteraction) {
-      this.memberInteraction.stopInteractionProcess();
-      
+    this.memberInteraction.stopInteractionProcess();
+    
       // Cerrar el chat si está abierto
       const chatWindow = document.querySelector('[role="dialog"]');
       if (chatWindow) {
@@ -786,58 +809,44 @@ class MemberInteractionUI {
   }
 
   // Renombrar y actualizar la función para manejar múltiples secciones
-  highlightSection(memberType) {
-    console.log('Iniciando highlightSection para:', memberType);
-    
-    // Remover highlight anterior si existe
+  highlightSection(type) {
+    // Primero, remover el highlight anterior si existe
     this.removeHighlight();
-    
-    const sectionConfig = this.selectors.sections[memberType];
-    if (!sectionConfig) {
-      console.error('Tipo de sección no válido:', memberType);
-      return;
-    }
-    
-    // Encontrar todos los h2 que contengan el texto de la sección
-    const titles = Array.from(document.querySelectorAll('h2'));
-    const sectionTitle = titles.find(title => title.textContent.includes(sectionConfig.titleText));
-    
-    if (sectionTitle) {
-      console.log('Título de sección encontrado:', sectionTitle.textContent);
-      
-      // Buscar el contenedor que incluya tanto el título como la lista
-      let currentElement = sectionTitle;
-      let container = null;
-      
-      while (currentElement && !container) {
-        const parentElement = currentElement.parentElement;
-        if (!parentElement) break;
-        
-        if (parentElement.querySelector('[role="list"]')) {
-          container = parentElement;
-          break;
-        }
-        
-        currentElement = parentElement;
+
+    // Logs para debugging
+    console.log('Buscando sección:', type);
+    console.log('Selector del contenedor:', this.selectors.sections[type].container);
+
+    // Buscar directamente el contenedor usando el selector de clases
+    const containers = document.querySelectorAll(this.selectors.sections[type].container);
+    console.log('Contenedores encontrados:', containers.length);
+
+    // Encontrar el contenedor correcto verificando el título dentro de él
+    let targetContainer = null;
+    containers.forEach(container => {
+      const title = container.querySelector(this.selectors.sections[type].title);
+      if (title && title.textContent.includes(this.selectors.sections[type].titleText)) {
+        targetContainer = container;
+        console.log('Contenedor encontrado con título:', title.textContent);
       }
+    });
+
+    if (targetContainer) {
+      // Aplicar el highlight
+      targetContainer.style.backgroundColor = 'rgba(24, 119, 242, 0.1)';
+      targetContainer.style.padding = '12px';
+      targetContainer.style.borderRadius = '8px';
+      targetContainer.style.transition = 'background-color 0.3s ease';
       
-      if (container) {
-        console.log('Contenedor de sección encontrado');
-        this.lastHighlightedSection = container;
-        
-        // Aplicar estilos
-        this.lastHighlightedSection.style.transition = 'all 0.3s ease';
-        this.lastHighlightedSection.style.backgroundColor = '#e6f7ff';
-        this.lastHighlightedSection.style.padding = '10px';
-        this.lastHighlightedSection.style.borderRadius = '8px';
-        this.lastHighlightedSection.style.margin = '10px 0';
-        
-        // Scroll suave a la sección
-        this.lastHighlightedSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      // Guardar referencia de la sección resaltada
+      this.lastHighlightedSection = targetContainer;
+      
+      console.log(`Sección ${type} resaltada correctamente`);
+    } else {
+      console.log(`No se encontró la sección ${type} para resaltar`);
     }
   }
-
+  
   // Obtener elementos de miembros según el tipo seleccionado
   async getMemberElements(memberType) {
     if (!this.isInPeopleSection()) {
@@ -989,7 +998,6 @@ class MemberInteractionUI {
     const button = document.createElement('button');
     button.className = 'lmp-play-button';
     button.setAttribute('data-section-type', sectionType);
-    button.setAttribute('data-lmp-button-id', Math.random().toString(36).substring(7));
     
     // Estilos del botón
     button.style.cssText = `
@@ -1011,76 +1019,134 @@ class MemberInteractionUI {
     // Hover effect
     button.addEventListener('mouseover', () => {
       button.style.backgroundColor = '#0a60cc';
-      button.style.transform = 'scale(1.05)';
     });
 
     button.addEventListener('mouseout', () => {
-      if (!this.isInteracting || button.getAttribute('data-section-type') !== this.currentInteractionSection) {
+      if (!this.isInteracting) {
         button.style.backgroundColor = '#1b74e4';
       } else {
         button.style.backgroundColor = '#dc3545';
       }
-      button.style.transform = 'scale(1)';
     });
 
     // Añadir icono SVG de play
     button.innerHTML = this.icons.play;
     
     // Click handler
-    button.addEventListener('click', (e) => {
+    button.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      this.handlePlayClick(button);
+      
+      try {
+        // Si ya está interactuando, detener
+        if (this.isInteracting) {
+          this.stopInteraction();
+          return;
+        }
+
+        // Obtener la configuración guardada
+        const config = await this.getStoredConfig();
+        console.log('Configuración cargada:', config);
+
+        // Resaltar la sección correspondiente
+        this.highlightSection(sectionType);
+        
+        // Obtener los elementos de la sección
+        const memberElements = await this.getMemberElements(sectionType);
+        
+        if (!memberElements || memberElements.length === 0) {
+          throw new Error('No se encontraron miembros en esta sección');
+        }
+
+        // Asegurar que memberInteraction esté inicializado
+        if (!this.memberInteraction) {
+          this.memberInteraction = window.leadManagerPro.memberInteraction || new MemberInteraction();
+          window.leadManagerPro.memberInteraction = this.memberInteraction;
+        }
+        
+        // Inicializar el módulo de interacción
+        this.memberInteraction.messageToSend = config.messageToSend;
+        this.memberInteraction.autoCloseChat = config.autoCloseChat;
+        this.memberInteraction.maxMembersToInteract = config.maxMembers;
+        
+        // Actualizar estado y UI
+        this.isInteracting = true;
+        button.innerHTML = this.icons.pause;
+        button.style.backgroundColor = '#dc3545';
+        
+        // Inicializar y comenzar la interacción
+        this.memberInteraction.init(memberElements, { delay: config.delay || 2000 });
+        await this.memberInteraction.startInteraction((progress) => {
+          if (progress.type === 'complete') {
+            this.isInteracting = false;
+            button.innerHTML = this.icons.play;
+            button.style.backgroundColor = '#1b74e4';
+          }
+        });
+        
+      } catch (error) {
+        console.error('Error al iniciar la interacción:', error);
+        this.isInteracting = false;
+        button.innerHTML = this.icons.play;
+        button.style.backgroundColor = '#1b74e4';
+        this.showError(error.message);
+      }
     });
 
     return button;
   }
 
   tryAddPlayButtons() {
-    // Buscar títulos para ambas secciones
-    const titleElements = document.querySelectorAll(this.selectors.sections.admins.title + ', ' + this.selectors.sections.common.title);
+    // Buscar títulos para todas las secciones
+    const titleElements = document.querySelectorAll(this.selectors.sections.admins.title + ', ' + this.selectors.sections.common.title + ', ' + this.selectors.sections.newMembers.title);
     
     titleElements.forEach((titleElement) => {
-        // Verificar si el título corresponde a alguna de las secciones
-        const isAdminSection = titleElement.textContent.includes(this.selectors.sections.admins.titleText);
-        const isCommonSection = titleElement.textContent.includes(this.selectors.sections.common.titleText);
-        
-        if (!isAdminSection && !isCommonSection) {
-            return;
-        }
+      // Verificar si el título corresponde a alguna de las secciones
+      const isAdminSection = titleElement.textContent.includes(this.selectors.sections.admins.titleText);
+      const isCommonSection = titleElement.textContent.includes(this.selectors.sections.common.titleText);
+      const isNewMembersSection = titleElement.textContent.includes(this.selectors.sections.newMembers.titleText);
+      
+      if (!isAdminSection && !isCommonSection && !isNewMembersSection) {
+        return;
+      }
 
-        // Verificar si ya existe un botón para este título
-        const existingButton = titleElement.parentElement.querySelector('.lmp-play-button');
-        if (existingButton) {
-            return;
-        }
+      // Verificar si ya existe un botón para este título
+      const existingButton = titleElement.parentElement.querySelector('.lmp-play-button');
+      if (existingButton) {
+        return;
+      }
 
-        // Determinar el tipo de sección
-        const sectionType = isAdminSection ? 'admins' : 'common';
-        const sectionConfig = this.selectors.sections[sectionType];
-        const sectionContainer = titleElement.closest(sectionConfig.container);
-        
-        if (!sectionContainer) {
-            return;
-        }
+      // Determinar el tipo de sección
+      let sectionType = 'admins'; // valor por defecto
+      if (isCommonSection) {
+        sectionType = 'common';
+      } else if (isNewMembersSection) {
+        sectionType = 'newMembers';
+      }
+      const sectionConfig = this.selectors.sections[sectionType];
+      const sectionContainer = titleElement.closest(sectionConfig.container);
+      
+      if (!sectionContainer) {
+        return;
+      }
 
-        const button = this.createPlayButton(sectionType);
-        
-        // Crear contenedor flex para el título y el botón
-        const container = document.createElement('div');
-        container.style.cssText = `
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            width: 100%;
-        `;
-        
-        // Reemplazar el título con el nuevo contenedor
-        titleElement.parentNode.insertBefore(container, titleElement);
-        container.appendChild(titleElement);
-        container.appendChild(button);
+      const button = this.createPlayButton(sectionType);
+      
+      // Crear contenedor flex para el título y el botón
+      const container = document.createElement('div');
+      container.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+      `;
 
-        console.log(`Botón Play añadido a la sección de ${isAdminSection ? 'administradores' : 'miembros con cosas en común'}`);
+      // Reemplazar el título con el nuevo contenedor
+      titleElement.parentNode.insertBefore(container, titleElement);
+      container.appendChild(titleElement);
+      container.appendChild(button);
+
+      console.log(`Botón Play añadido a la sección de ${isAdminSection ? 'administradores' : isCommonSection ? 'miembros con cosas en común' : 'nuevos miembros del grupo'}`);
     });
   }
 
@@ -1099,82 +1165,6 @@ class MemberInteractionUI {
           button.style.backgroundColor = '#0866ff';
         }
       }
-    }
-  }
-
-  async handlePlayClick(button) {
-    console.log('Click en botón Play');
-    
-    try {
-      // Si ya está interactuando, detener
-      if (this.isInteracting) {
-        this.stopInteraction();
-        return;
-      }
-
-      // Asegurarnos de que memberInteraction esté inicializado
-      if (!this.memberInteraction) {
-        this.memberInteraction = window.leadManagerPro.memberInteraction || new MemberInteraction();
-        window.leadManagerPro.memberInteraction = this.memberInteraction;
-      }
-
-      // Ocultar la interfaz principal si está visible
-      this.hide();
-      
-      // Obtener la configuración guardada
-      const config = await this.getStoredConfig();
-      
-      // Determinar el tipo de sección basado en el título más cercano
-      const nearestTitle = button.closest('div').querySelector('h2');
-      let memberType = 'admins'; // valor por defecto
-      
-      if (nearestTitle) {
-        if (nearestTitle.textContent.includes(this.selectors.sections.admins.titleText)) {
-          memberType = 'admins';
-        } else if (nearestTitle.textContent.includes(this.selectors.sections.common.titleText)) {
-          memberType = 'common';
-        }
-      }
-      
-      // Resaltar la sección correspondiente
-      this.highlightSection(memberType);
-      
-      // Obtener los elementos de la sección resaltada
-      const memberElements = await this.getMemberElements(memberType);
-      
-      if (!memberElements || memberElements.length === 0) {
-        throw new Error('No se encontraron miembros en esta sección');
-      }
-      
-      // Inicializar el módulo de interacción
-      this.memberInteraction.messageToSend = config.messageToSend;
-      this.memberInteraction.autoCloseChat = config.autoCloseChat;
-      this.memberInteraction.maxMembersToInteract = config.maxMembers;
-      
-      // Configurar el delay
-      const delay = config.delay || 2000;
-      
-      // Actualizar estado y UI
-      this.isInteracting = true;
-      button.innerHTML = this.icons.pause;
-      button.style.backgroundColor = '#dc3545';
-      
-      // Inicializar y comenzar la interacción
-      this.memberInteraction.init(memberElements, { delay });
-      await this.memberInteraction.startInteraction((progress) => {
-        if (progress.type === 'complete') {
-          this.isInteracting = false;
-          button.innerHTML = this.icons.play;
-          button.style.backgroundColor = '#1b74e4';
-        }
-      });
-      
-    } catch (error) {
-      console.error('Error al iniciar la interacción:', error);
-      // Restaurar estado del botón en caso de error
-      button.innerHTML = this.icons.play;
-      button.style.backgroundColor = '#1b74e4';
-      this.isInteracting = false;
     }
   }
 
