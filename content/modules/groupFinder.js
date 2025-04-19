@@ -27,6 +27,7 @@ class GroupFinder {
       chrome.storage.local.get([
         'maxScrolls',
         'scrollDelay',
+        'maxScrollsLimit',
         'groupPublic',
         'groupPrivate',
         'minUsers',
@@ -37,7 +38,7 @@ class GroupFinder {
         console.log('GroupFinder: Leyendo opciones desde chrome.storage.local:', result);
         
         // Establecer valores de scroll
-        this.maxScrolls = result.maxScrolls ? Number(result.maxScrolls) : 4; // Default a 4
+        this.maxScrolls = result.maxScrolls ? Number(result.maxScrolls) : 50; // Default a 50
         this.scrollTimeout = result.scrollDelay ? Number(result.scrollDelay) * 1000 : 2000;
         
         console.log('GroupFinder: Configuración de scroll establecida:', {
@@ -77,7 +78,16 @@ class GroupFinder {
     this.groups = [];
     this.scrollCount = 0;
     
-    console.log('GroupFinder: Iniciando búsqueda de grupos');
+    console.log('GroupFinder: Iniciando búsqueda de grupos con configuración:');
+    console.log('  - maxScrolls:', this.maxScrolls);
+    console.log('  - scrollTimeout:', this.scrollTimeout, 'ms');
+    console.log('  - Opciones de filtrado:', this.options);
+    
+    // Verificar que estamos en la página correcta para buscar grupos
+    if (!window.location.href.includes('/search/groups')) {
+      console.error('GroupFinder: No estamos en una página de búsqueda de grupos. URL actual:', window.location.href);
+      return false;
+    }
     
     // Iniciar el observador para detectar nuevos grupos
     this.setupObserver();
@@ -144,11 +154,21 @@ class GroupFinder {
       return;
     }
 
-    if (this.scrollCount >= this.maxScrolls) {
-      console.log(`GroupFinder: Alcanzado máximo de scrolls (${this.maxScrolls})`);
+    // Verificar límite de scrolls - agregar conversión explícita a número
+    const maxScrollsValue = Number(this.maxScrolls);
+    if (isNaN(maxScrollsValue)) {
+      console.error('GroupFinder: maxScrolls no es un número válido:', this.maxScrolls);
+      this.maxScrolls = 50; // Establecer un valor por defecto si no es válido
+    }
+    
+    if (this.scrollCount >= maxScrollsValue) {
+      console.log(`GroupFinder: Alcanzado máximo de scrolls (${maxScrollsValue})`);
       this.finishSearch();
       return;
     }
+    
+    // Log para depuración
+    console.log(`GroupFinder: Scroll ${this.scrollCount + 1}/${maxScrollsValue}`);
 
     const heightBeforeScroll = document.documentElement.scrollHeight;
     const groupsBeforeScroll = this.groups.length;
@@ -430,13 +450,47 @@ class GroupFinder {
       }, true);
     });
     
+    // Enviar notificación de que la búsqueda terminó
     if (this.progressCallback) {
-      this.progressCallback({
-        type: 'complete',
-        groupsFound: this.groups.length,
-        message: `Búsqueda finalizada. Se encontraron ${this.groups.length} grupos que cumplen los criterios.`,
-        maxScrolls: this.maxScrolls
-      });
+      console.log('GroupFinder: Notificando finalización de búsqueda -', this.groups.length, 'grupos encontrados');
+      
+      try {
+        this.progressCallback({
+          type: 'complete',
+          groupsFound: this.groups.length,
+          message: `Búsqueda finalizada. Se encontraron ${this.groups.length} grupos que cumplen los criterios.`,
+          maxScrolls: this.maxScrolls
+        });
+      } catch (error) {
+        console.error('Error al llamar al callback de progreso:', error);
+      }
+    }
+    
+    // Notificar a todos los componentes que la búsqueda ha terminado
+    try {
+      window.dispatchEvent(new CustomEvent('SEARCH_COMPLETE', {
+        detail: {
+          groupsFound: this.groups.length,
+          groups: this.groups
+        }
+      }));
+      
+      // También enviar un mensaje al sidebar si está disponible
+      if (document.getElementById('snap-lead-manager-iframe')) {
+        const iframe = document.getElementById('snap-lead-manager-iframe');
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({
+            action: 'search_complete',
+            result: {
+              success: true,
+              groupsFound: this.groups.length,
+              message: `Búsqueda finalizada. Se encontraron ${this.groups.length} grupos que cumplen los criterios.`
+            }
+          }, '*');
+        }
+      }
+    } catch (error) {
+      console.error('Error al enviar evento de finalización:', error);
     }
     
     // Guardar resultados

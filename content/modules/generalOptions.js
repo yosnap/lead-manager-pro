@@ -4,7 +4,8 @@ class GeneralOptions {
   constructor() {
     this.defaultOptions = {
       maxScrolls: 50,
-      scrollDelay: 2 // en segundos
+      scrollDelay: 2, // en segundos
+      maxScrollsLimit: 50 // valor máximo para mostrar resultados
     };
     
     this.options = this.loadOptions();
@@ -45,7 +46,8 @@ class GeneralOptions {
       try {
         chrome.storage.local.set({
           'maxScrolls': newOptions.maxScrolls,
-          'scrollDelay': newOptions.scrollDelay
+          'scrollDelay': newOptions.scrollDelay,
+          'maxScrollsLimit': newOptions.maxScrollsLimit
         }, function() {
           console.log('Opciones generales guardadas en chrome.storage.local');
         });

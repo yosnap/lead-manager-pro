@@ -1,453 +1,640 @@
-// Módulo para el sidebar específico para páginas de grupos
-// Este sidebar contiene herramientas y configuraciones específicas para la interacción con grupos de Facebook
+// Módulo para gestionar el sidebar específico para páginas de grupos
 
 class GroupSidebar {
   constructor() {
     this.container = null;
-    this.isVisible = false;
-    this.settings = {
+    this.iframe = null;
+    this.toggleButton = null;
+    this.visible = false;
+    this.initializationComplete = false;
+    this.interactionSettings = {
       membersToInteract: 10,
-      interactionDelay: 3000,
-      messageToSend: 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!',
+      interactionDelay: 2, // en segundos
+      message: 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!',
       autoCloseChat: true
     };
-    this.eventListeners = [];
+
+    // Iniciar observación de la URL para detectar páginas de grupos
+    this.observeUrlChanges();
   }
 
-  // Inicializar el sidebar
-  async init() {
-    console.log('GroupSidebar: Inicializando sidebar para páginas de grupo');
-    
-    // Cargar configuraciones desde Extension Storage
-    await this.loadSettings();
-    
-    return this;
-  }
+  // Inicializar el módulo
+  init() {
+    console.log('GroupSidebar: Inicializando módulo');
 
-  // Cargar configuraciones desde Extension Storage
-  async loadSettings() {
-    try {
-      // Intentar obtener configuraciones del Extension Storage
-      const result = await new Promise(resolve => {
-        chrome.storage.local.get(['leadManagerGroupSettings'], (result) => {
-          resolve(result);
-        });
-      });
-
-      // Si hay configuraciones guardadas, usar esas
-      if (result && result.leadManagerGroupSettings) {
-        this.settings = { ...this.settings, ...result.leadManagerGroupSettings };
-        console.log('GroupSidebar: Configuraciones cargadas desde Extension Storage:', this.settings);
-      } else {
-        // Si no hay configuraciones guardadas, usar las predeterminadas
-        this.saveSettings();
-        console.log('GroupSidebar: Usando configuraciones predeterminadas');
-      }
-    } catch (error) {
-      console.error('GroupSidebar: Error al cargar configuraciones:', error);
-    }
-  }
-
-  // Guardar configuraciones en Extension Storage
-  async saveSettings() {
-    try {
-      // Guardar en Extension Storage
-      await new Promise(resolve => {
-        chrome.storage.local.set({ 'leadManagerGroupSettings': this.settings }, resolve);
-      });
-      
-      console.log('GroupSidebar: Configuraciones guardadas en Extension Storage:', this.settings);
-      
-      // Opcionalmente, también guardar en localStorage como respaldo
-      localStorage.setItem('lead_manager_group_settings', JSON.stringify(this.settings));
-      
-      return true;
-    } catch (error) {
-      console.error('GroupSidebar: Error al guardar configuraciones:', error);
+    // Verificar si estamos en una página de grupo
+    if (!this.isInGroupPage()) {
+      console.log('GroupSidebar: No estamos en una página de grupo, no se inicializa');
       return false;
     }
+
+    // Cargar configuración guardada
+    this.loadSavedSettings();
+
+    // Inicialización completada
+    this.initializationComplete = true;
+    
+    return true;
+  }
+
+  // Comprobar si estamos en una página de grupo
+  isInGroupPage() {
+    return window.location.href.includes('/groups/') && 
+           !window.location.href.includes('/groups/feed');
+  }
+
+  // Cargar la configuración guardada
+  loadSavedSettings() {
+    try {
+      chrome.storage.local.get(['leadManagerGroupSettings'], (result) => {
+        if (result && result.leadManagerGroupSettings) {
+          this.interactionSettings = {
+            ...this.interactionSettings,
+            ...result.leadManagerGroupSettings
+          };
+          console.log('GroupSidebar: Configuración cargada', this.interactionSettings);
+        }
+      });
+    } catch (error) {
+      console.error('GroupSidebar: Error al cargar configuración', error);
+    }
+  }
+
+  // Guardar la configuración
+  saveSettings(settings) {
+    try {
+      this.interactionSettings = {
+        ...this.interactionSettings,
+        ...settings
+      };
+
+      chrome.storage.local.set({
+        'leadManagerGroupSettings': this.interactionSettings
+      }, () => {
+        console.log('GroupSidebar: Configuración guardada', this.interactionSettings);
+      });
+
+      return true;
+    } catch (error) {
+      console.error('GroupSidebar: Error al guardar configuración', error);
+      return false;
+    }
+  }
+
+  // Crear la interfaz del sidebar para grupos
+  createSidebar() {
+    if (this.container) {
+      return this.container;
+    }
+
+    // Crear contenedor principal
+    const container = document.createElement('div');
+    container.className = 'lead-manager-group-sidebar';
+    container.style.cssText = `
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 320px;
+      height: 100vh;
+      background: white;
+      box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+      z-index: 9999;
+      overflow: auto;
+      transition: transform 0.3s ease;
+      transform: translateX(100%);
+    `;
+
+    // Cabecera
+    const header = document.createElement('div');
+    header.className = 'lead-manager-group-sidebar-header';
+    header.style.cssText = `
+      padding: 12px 16px;
+      background-color: #4267B2;
+      color: white;
+      font-weight: bold;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    `;
+
+    const title = document.createElement('div');
+    title.textContent = 'Lead Manager Pro - Grupo';
+
+    const closeButton = document.createElement('button');
+    closeButton.innerHTML = '&times;';
+    closeButton.style.cssText = `
+      background: none;
+      border: none;
+      color: white;
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+    `;
+    closeButton.addEventListener('click', () => this.hide());
+
+    header.appendChild(title);
+    header.appendChild(closeButton);
+
+    // Cuerpo
+    const body = document.createElement('div');
+    body.className = 'lead-manager-group-sidebar-body';
+    body.style.cssText = `
+      padding: 16px;
+    `;
+
+    // Estadísticas del grupo
+    const statsSection = document.createElement('div');
+    statsSection.className = 'lead-manager-group-stats-section';
+    statsSection.style.cssText = `
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #ddd;
+    `;
+
+    const statsTitle = document.createElement('h3');
+    statsTitle.textContent = 'Estadísticas del Grupo';
+    statsTitle.style.cssText = `
+      margin: 0 0 12px 0;
+      font-size: 18px;
+      color: #1c1e21;
+    `;
+
+    const statsContent = document.createElement('div');
+    statsContent.className = 'lead-manager-group-stats-content';
+    // Las estadísticas se cargarán dinámicamente
+
+    // Botones de acción principales
+    const mainActions = document.createElement('div');
+    mainActions.className = 'lead-manager-group-main-actions';
+    mainActions.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #ddd;
+    `;
+
+    const countMembersButton = document.createElement('button');
+    countMembersButton.textContent = '👥 Contar Miembros';
+    countMembersButton.className = 'lead-manager-button primary';
+    countMembersButton.style.cssText = `
+      padding: 10px 16px;
+      background-color: #4267B2;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      width: 100%;
+    `;
+    countMembersButton.addEventListener('click', () => this.countMembers());
+
+    const interactMembersButton = document.createElement('button');
+    interactMembersButton.textContent = '💬 Interactuar con Miembros';
+    interactMembersButton.className = 'lead-manager-button secondary';
+    interactMembersButton.style.cssText = `
+      padding: 10px 16px;
+      background-color: #42B72A;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      width: 100%;
+    `;
+    interactMembersButton.addEventListener('click', () => this.openInteractionUI());
+
+    mainActions.appendChild(countMembersButton);
+    mainActions.appendChild(interactMembersButton);
+
+    // Configuración de interacción
+    const interactionConfig = document.createElement('div');
+    interactionConfig.className = 'lead-manager-interaction-config';
+    interactionConfig.style.cssText = `
+      margin-bottom: 20px;
+    `;
+
+    const interactionTitle = document.createElement('h3');
+    interactionTitle.textContent = 'Configuración de Interacción';
+    interactionTitle.style.cssText = `
+      margin: 0 0 12px 0;
+      font-size: 18px;
+      color: #1c1e21;
+    `;
+
+    // Número de miembros a interactuar
+    const membersCountLabel = document.createElement('label');
+    membersCountLabel.textContent = 'Número de miembros a interactuar:';
+    membersCountLabel.style.cssText = `
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    `;
+
+    const membersCountInput = document.createElement('input');
+    membersCountInput.type = 'number';
+    membersCountInput.min = '1';
+    membersCountInput.value = this.interactionSettings.membersToInteract || 10;
+    membersCountInput.style.cssText = `
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 16px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+    `;
+
+    // Tiempo de espera entre interacciones
+    const delayLabel = document.createElement('label');
+    delayLabel.textContent = 'Tiempo entre interacciones (segundos):';
+    delayLabel.style.cssText = `
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    `;
+
+    const delayInput = document.createElement('input');
+    delayInput.type = 'number';
+    delayInput.min = '1';
+    delayInput.step = '0.5';
+    delayInput.value = this.interactionSettings.interactionDelay || 2;
+    delayInput.style.cssText = `
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 16px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+    `;
+
+    // Mensaje a enviar
+    const messageLabel = document.createElement('label');
+    messageLabel.textContent = 'Mensaje a enviar:';
+    messageLabel.style.cssText = `
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    `;
+
+    const messageTextarea = document.createElement('textarea');
+    messageTextarea.value = this.interactionSettings.message || '';
+    messageTextarea.style.cssText = `
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 16px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      min-height: 80px;
+      resize: vertical;
+    `;
+
+    // Opción para cerrar chat automáticamente
+    const autoCloseLabel = document.createElement('label');
+    autoCloseLabel.style.cssText = `
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+      cursor: pointer;
+    `;
+
+    const autoCloseCheckbox = document.createElement('input');
+    autoCloseCheckbox.type = 'checkbox';
+    autoCloseCheckbox.checked = this.interactionSettings.autoCloseChat !== false;
+    autoCloseCheckbox.style.cssText = `
+      margin-right: 8px;
+    `;
+
+    const autoCloseText = document.createTextNode('Cerrar chat automáticamente');
+    autoCloseLabel.appendChild(autoCloseCheckbox);
+    autoCloseLabel.appendChild(autoCloseText);
+
+    // Botón para guardar configuración
+    const saveConfigButton = document.createElement('button');
+    saveConfigButton.textContent = 'Guardar Configuración';
+    saveConfigButton.className = 'lead-manager-button';
+    saveConfigButton.style.cssText = `
+      padding: 8px 16px;
+      background-color: #4267B2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      width: 100%;
+    `;
+
+    saveConfigButton.addEventListener('click', () => {
+      const settings = {
+        membersToInteract: parseInt(membersCountInput.value) || 10,
+        interactionDelay: parseFloat(delayInput.value) || 2,
+        message: messageTextarea.value,
+        autoCloseChat: autoCloseCheckbox.checked
+      };
+
+      if (this.saveSettings(settings)) {
+        // Mostrar mensaje de éxito
+        const successMessage = document.createElement('div');
+        successMessage.textContent = '✓ Configuración guardada';
+        successMessage.style.cssText = `
+          color: #00C851;
+          text-align: center;
+          margin-top: 8px;
+          font-weight: bold;
+        `;
+
+        interactionConfig.appendChild(successMessage);
+        setTimeout(() => {
+          if (interactionConfig.contains(successMessage)) {
+            interactionConfig.removeChild(successMessage);
+          }
+        }, 3000);
+      }
+    });
+
+    // Estadísticas de interacción
+    const interactionStats = document.createElement('div');
+    interactionStats.className = 'lead-manager-interaction-stats';
+    interactionStats.style.cssText = `
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid #ddd;
+    `;
+
+    const interactionStatsTitle = document.createElement('h3');
+    interactionStatsTitle.textContent = 'Estadísticas de Interacción';
+    interactionStatsTitle.style.cssText = `
+      margin: 0 0 12px 0;
+      font-size: 18px;
+      color: #1c1e21;
+    `;
+
+    const interactionsCount = document.createElement('div');
+    interactionsCount.id = 'lmp-interactions-count';
+    interactionsCount.textContent = '0';
+    interactionsCount.style.cssText = `
+      font-size: 24px;
+      font-weight: bold;
+      text-align: center;
+      color: #4267B2;
+      margin-bottom: 8px;
+    `;
+
+    const interactionsLabel = document.createElement('div');
+    interactionsLabel.textContent = 'mensajes enviados en total';
+    interactionsLabel.style.cssText = `
+      text-align: center;
+      color: #65676B;
+    `;
+
+    // Ensamblar los componentes
+    statsSection.appendChild(statsTitle);
+    statsSection.appendChild(statsContent);
+
+    interactionConfig.appendChild(interactionTitle);
+    interactionConfig.appendChild(membersCountLabel);
+    interactionConfig.appendChild(membersCountInput);
+    interactionConfig.appendChild(delayLabel);
+    interactionConfig.appendChild(delayInput);
+    interactionConfig.appendChild(messageLabel);
+    interactionConfig.appendChild(messageTextarea);
+    interactionConfig.appendChild(autoCloseLabel);
+    interactionConfig.appendChild(saveConfigButton);
+
+    interactionStats.appendChild(interactionStatsTitle);
+    interactionStats.appendChild(interactionsCount);
+    interactionStats.appendChild(interactionsLabel);
+
+    body.appendChild(statsSection);
+    body.appendChild(mainActions);
+    body.appendChild(interactionConfig);
+    body.appendChild(interactionStats);
+
+    container.appendChild(header);
+    container.appendChild(body);
+
+    // Botón para mostrar/ocultar el sidebar
+    const toggleButton = document.createElement('div');
+    toggleButton.className = 'lead-manager-group-sidebar-toggle';
+    toggleButton.style.cssText = `
+      position: fixed;
+      top: 80px;
+      right: 0;
+      background-color: #4267B2;
+      color: white;
+      width: 30px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border-radius: 5px 0 0 5px;
+      font-size: 18px;
+      box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+      z-index: 9998;
+      transition: all 0.3s ease;
+    `;
+    toggleButton.innerHTML = '◄';
+    toggleButton.title = 'Mostrar configuración de grupo';
+
+    toggleButton.addEventListener('click', () => {
+      if (this.visible) {
+        this.hide();
+      } else {
+        this.show();
+      }
+    });
+
+    // Guardar referencias
+    this.container = container;
+    this.toggleButton = toggleButton;
+
+    // Agregar al DOM
+    document.body.appendChild(container);
+    document.body.appendChild(toggleButton);
+
+    // Cargar estadísticas iniciales
+    this.loadInteractionStats();
+
+    return container;
   }
 
   // Mostrar el sidebar
   show() {
-    if (this.isVisible) return;
-    
-    this.createSidebar();
-    this.isVisible = true;
-    
-    return this;
+    if (!this.container) {
+      this.createSidebar();
+    }
+
+    this.container.style.transform = 'translateX(0)';
+    this.toggleButton.style.right = '320px';
+    this.toggleButton.innerHTML = '►';
+    this.toggleButton.title = 'Ocultar configuración de grupo';
+    this.visible = true;
+
+    // Actualizar estadísticas
+    this.loadInteractionStats();
+    this.loadGroupStats();
   }
 
   // Ocultar el sidebar
   hide() {
-    if (!this.isVisible || !this.container) return;
-    
-    document.body.removeChild(this.container);
-    this.container = null;
-    this.isVisible = false;
-    
-    // Limpiar event listeners
-    this.clearEventListeners();
-    
-    return this;
+    if (this.container) {
+      this.container.style.transform = 'translateX(100%)';
+      this.toggleButton.style.right = '0';
+      this.toggleButton.innerHTML = '◄';
+      this.toggleButton.title = 'Mostrar configuración de grupo';
+      this.visible = false;
+    }
   }
 
-  // Crear el sidebar y sus elementos
-  createSidebar() {
-    // Si ya existe, no crear otro
-    if (this.container) return;
-    
-    // Crear elemento contenedor
-    this.container = document.createElement('div');
-    this.container.id = 'lmp-group-sidebar';
-    this.container.className = 'lmp-sidebar-container';
-    
-    // Estilos del contenedor
-    Object.assign(this.container.style, {
-      position: 'fixed',
-      top: '50px',
-      right: '0',
-      width: '300px',
-      height: 'calc(100vh - 50px)',
-      backgroundColor: 'white',
-      boxShadow: '-2px 0 10px rgba(0, 0, 0, 0.1)',
-      zIndex: '9998',
-      display: 'flex',
-      flexDirection: 'column',
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '14px',
-      color: '#333',
-      borderLeft: '1px solid #ddd',
-      transition: 'transform 0.3s ease'
-    });
-    
-    // Estructura interna
-    this.container.innerHTML = `
-      <div class="lmp-sidebar-header" style="padding: 15px; background: #4267B2; color: white; display: flex; justify-content: space-between; align-items: center;">
-        <span>Lead Manager Pro - Grupo</span>
-        <button id="lmp-close-sidebar" style="background: none; border: none; color: white; cursor: pointer; font-size: 16px;">&times;</button>
-      </div>
-      
-      <div class="lmp-sidebar-content" style="flex: 1; overflow-y: auto; padding: 15px;">
-        <div class="lmp-section" style="margin-bottom: 20px;">
-          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Herramientas</h3>
-          <div style="display: flex; flex-direction: column; gap: 10px;">
-            <button id="lmp-count-members-btn" class="lmp-btn" style="padding: 8px 12px; background-color: #4267B2; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 5px;">
-              <span style="font-size: 16px;">👥</span>
-              <span>Contar miembros</span>
-            </button>
-            <button id="lmp-interact-members-btn" class="lmp-btn" style="padding: 8px 12px; background-color: #4267B2; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 5px;">
-              <span style="font-size: 16px;">💬</span>
-              <span>Interactuar con miembros</span>
-            </button>
-          </div>
-        </div>
-        
-        <div class="lmp-section" style="margin-bottom: 20px;">
-          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Configuración de interacción</h3>
-          
-          <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label for="lmp-members-count" style="display: block; margin-bottom: 5px; font-weight: 500;">Número de miembros a interactuar:</label>
-            <input type="number" id="lmp-members-count" value="${this.settings.membersToInteract}" min="1" max="100" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Número máximo de miembros con los que interactuar en una sesión</small>
-          </div>
-          
-          <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label for="lmp-interaction-delay" style="display: block; margin-bottom: 5px; font-weight: 500;">Tiempo entre interacciones (ms):</label>
-            <input type="number" id="lmp-interaction-delay" value="${this.settings.interactionDelay}" min="1000" step="500" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Tiempo de espera en milisegundos entre cada interacción</small>
-          </div>
-          
-          <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label for="lmp-message-text" style="display: block; margin-bottom: 5px; font-weight: 500;">Mensaje a enviar:</label>
-            <textarea id="lmp-message-text" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; height: 80px; resize: vertical;">${this.settings.messageToSend}</textarea>
-            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Mensaje que se enviará a cada miembro</small>
-          </div>
-          
-          <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-              <input type="checkbox" id="lmp-auto-close-chat" ${this.settings.autoCloseChat ? 'checked' : ''} style="margin: 0;">
-              <span>Cerrar ventana de chat automáticamente</span>
-            </label>
-            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px; margin-left: 24px;">Si está marcado, se cerrará la ventana de chat después de enviar el mensaje</small>
-          </div>
-          
-          <button id="lmp-save-settings" class="lmp-btn" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
-            Guardar configuración
-          </button>
-        </div>
-        
-        <div class="lmp-section" style="margin-bottom: 20px;">
-          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Estadísticas</h3>
-          <div id="lmp-stats-container" style="padding: 10px; background-color: #f5f6f7; border-radius: 4px;">
-            <p><strong>Grupo actual:</strong> <span id="lmp-current-group-name">Cargando...</span></p>
-            <p><strong>Miembros totales:</strong> <span id="lmp-total-members">-</span></p>
-            <p><strong>Interacciones realizadas:</strong> <span id="lmp-interactions-count">0</span></p>
-          </div>
-        </div>
-      </div>
-    `;
-    
-    // Agregar al DOM
-    document.body.appendChild(this.container);
-    
-    // Configurar event listeners
-    this.setupEventListeners();
-    
-    // Obtener información del grupo actual
-    this.updateGroupInfo();
-  }
-  
-  // Configurar los event listeners de los elementos del sidebar
-  setupEventListeners() {
-    // Botón de cerrar
-    const closeBtn = this.container.querySelector('#lmp-close-sidebar');
-    if (closeBtn) {
-      const handler = () => this.hide();
-      closeBtn.addEventListener('click', handler);
-      this.addEventListenerRef(closeBtn, 'click', handler);
-    }
-    
-    // Botón de contar miembros
-    const countMembersBtn = this.container.querySelector('#lmp-count-members-btn');
-    if (countMembersBtn) {
-      const handler = () => this.countMembers();
-      countMembersBtn.addEventListener('click', handler);
-      this.addEventListenerRef(countMembersBtn, 'click', handler);
-    }
-    
-    // Botón de interactuar con miembros
-    const interactMembersBtn = this.container.querySelector('#lmp-interact-members-btn');
-    if (interactMembersBtn) {
-      const handler = () => this.interactWithMembers();
-      interactMembersBtn.addEventListener('click', handler);
-      this.addEventListenerRef(interactMembersBtn, 'click', handler);
-    }
-    
-    // Botón de guardar configuración
-    const saveSettingsBtn = this.container.querySelector('#lmp-save-settings');
-    if (saveSettingsBtn) {
-      const handler = () => this.updateSettings();
-      saveSettingsBtn.addEventListener('click', handler);
-      this.addEventListenerRef(saveSettingsBtn, 'click', handler);
-    }
-    
-    // Inputs de configuración (para actualizar en tiempo real)
-    const allInputs = this.container.querySelectorAll('input, textarea');
-    allInputs.forEach(input => {
-      const handler = () => this.updateSettingPreview(input);
-      input.addEventListener('input', handler);
-      this.addEventListenerRef(input, 'input', handler);
-    });
-  }
-  
-  // Agregar referencia de event listener para poder limpiarlos después
-  addEventListenerRef(element, type, handler) {
-    this.eventListeners.push({ element, type, handler });
-  }
-  
-  // Limpiar todos los event listeners para evitar memory leaks
-  clearEventListeners() {
-    this.eventListeners.forEach(({ element, type, handler }) => {
-      element.removeEventListener(type, handler);
-    });
-    this.eventListeners = [];
-  }
-  
-  // Actualizar configuraciones desde los inputs
-  updateSettings() {
+  // Cargar estadísticas de interacción
+  loadInteractionStats() {
     try {
-      // Obtener valores de los campos
-      const membersCount = parseInt(this.container.querySelector('#lmp-members-count').value, 10);
-      const interactionDelay = parseInt(this.container.querySelector('#lmp-interaction-delay').value, 10);
-      const messageText = this.container.querySelector('#lmp-message-text').value;
-      const autoCloseChat = this.container.querySelector('#lmp-auto-close-chat').checked;
-      
-      // Validar valores
-      if (isNaN(membersCount) || membersCount < 1) {
-        alert('Por favor, introduce un número válido de miembros a interactuar (mínimo 1)');
-        return false;
-      }
-      
-      if (isNaN(interactionDelay) || interactionDelay < 1000) {
-        alert('Por favor, introduce un tiempo de espera válido (mínimo 1000 ms)');
-        return false;
-      }
-      
-      // Actualizar configuraciones
-      this.settings.membersToInteract = membersCount;
-      this.settings.interactionDelay = interactionDelay;
-      this.settings.messageToSend = messageText;
-      this.settings.autoCloseChat = autoCloseChat;
-      
-      // Guardar configuraciones
-      this.saveSettings();
-      
-      // Mostrar mensaje de éxito
-      this.showToast('Configuración guardada correctamente');
-      
-      return true;
-    } catch (error) {
-      console.error('GroupSidebar: Error al actualizar configuraciones:', error);
-      return false;
-    }
-  }
-  
-  // Actualizar previsualización de configuraciones
-  updateSettingPreview(input) {
-    // No hacer nada por ahora, solo para futuras funcionalidades
-    // Podría usarse para mostrar una vista previa del mensaje, etc.
-  }
-  
-  // Función para contar miembros
-  countMembers() {
-    console.log('GroupSidebar: Contando miembros del grupo');
-    
-    if (window.leadManagerPro && window.leadManagerPro.groupMemberUI) {
-      // Inicializar UI de conteo de miembros
-      if (!window.leadManagerPro.groupMemberUI.container) {
-        window.leadManagerPro.groupMemberUI.init();
-      }
-      
-      // Mostrar UI
-      window.leadManagerPro.groupMemberUI.show();
-      
-      // Iniciar conteo
-      window.leadManagerPro.groupMemberUI.countMembers()
-        .then(result => {
-          if (result && result.totalCount) {
-            // Actualizar estadísticas
-            const totalMembersElement = this.container.querySelector('#lmp-total-members');
-            if (totalMembersElement) {
-              totalMembersElement.textContent = result.totalCount.toLocaleString();
-            }
-            
-            // Guardar en chrome.storage
-            chrome.storage.local.set({ 
-              'leadManagerCurrentGroupStats': {
-                totalMembers: result.totalCount,
-                lastCountDate: new Date().toISOString()
-              }
-            });
+      chrome.storage.local.get(['leadManagerInteractionStats'], (result) => {
+        if (result && result.leadManagerInteractionStats) {
+          const stats = result.leadManagerInteractionStats;
+          const counter = document.getElementById('lmp-interactions-count');
+          if (counter) {
+            counter.textContent = stats.totalInteractions || 0;
           }
-        })
-        .catch(error => {
-          console.error('GroupSidebar: Error al contar miembros:', error);
-        });
-    } else {
-      console.error('GroupSidebar: módulo groupMemberUI no disponible');
-      alert('Error: No se pudo iniciar el conteo de miembros. Módulo no disponible.');
-    }
-  }
-  
-  // Función para interactuar con miembros
-  interactWithMembers() {
-    console.log('GroupSidebar: Iniciando interacción con miembros');
-    
-    if (window.leadManagerPro && window.leadManagerPro.memberInteractionUI) {
-      // Abrir la interfaz de interacción con miembros
-      window.leadManagerPro.memberInteractionUI.show();
-      
-      // Actualizar configuraciones de interacción
-      if (window.leadManagerPro.memberInteraction) {
-        // Pasar la configuración actual al módulo de interacción
-        window.leadManagerPro.memberInteraction.messageToSend = this.settings.messageToSend;
-        window.leadManagerPro.memberInteraction.autoCloseChat = this.settings.autoCloseChat;
-        window.leadManagerPro.memberInteraction.interactionDelay = this.settings.interactionDelay;
-        window.leadManagerPro.memberInteraction.maxMembersToInteract = this.settings.membersToInteract;
-      }
-    } else {
-      console.error('GroupSidebar: módulo memberInteractionUI no disponible');
-      alert('Error: No se pudo iniciar la interacción con miembros. Módulo no disponible.');
-    }
-  }
-  
-  // Función para mostrar una notificación toast
-  showToast(message, isError = false) {
-    const toast = document.createElement('div');
-    toast.className = 'lmp-toast';
-    toast.textContent = message;
-    
-    // Estilos del toast
-    Object.assign(toast.style, {
-      position: 'fixed',
-      bottom: '20px',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      backgroundColor: isError ? '#f44336' : '#4CAF50',
-      color: 'white',
-      padding: '10px 20px',
-      borderRadius: '4px',
-      zIndex: '10000',
-      boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '14px'
-    });
-    
-    // Agregar al DOM
-    document.body.appendChild(toast);
-    
-    // Eliminar después de 3 segundos
-    setTimeout(() => {
-      if (toast.parentNode) {
-        document.body.removeChild(toast);
-      }
-    }, 3000);
-  }
-  
-  // Actualizar información del grupo actual
-  updateGroupInfo() {
-    try {
-      // Obtener nombre del grupo de la página
-      let groupName = '';
-      
-      // Intentar diferentes selectores para el nombre del grupo
-      const groupNameSelectors = [
-        'h1', 
-        'a[href*="/groups/"][role="link"]',
-        'span[dir="auto"]'
-      ];
-      
-      for (const selector of groupNameSelectors) {
-        const element = document.querySelector(selector);
-        if (element && element.textContent.trim()) {
-          groupName = element.textContent.trim();
-          break;
         }
-      }
-      
-      // Actualizar nombre del grupo en la UI
-      const groupNameElement = this.container.querySelector('#lmp-current-group-name');
-      if (groupNameElement) {
-        groupNameElement.textContent = groupName || 'Grupo no detectado';
-      }
-      
-      // Extraer ID del grupo de la URL
-      const groupId = this.extractGroupIdFromUrl();
-      
-      // Guardar información del grupo actual
-      if (groupId) {
-        const groupInfo = {
-          id: groupId,
-          name: groupName,
-          url: window.location.href,
-          lastVisited: new Date().toISOString()
-        };
+      });
+    } catch (error) {
+      console.error('GroupSidebar: Error al cargar estadísticas de interacción', error);
+    }
+  }
+
+  // Cargar estadísticas del grupo actual
+  loadGroupStats() {
+    if (!this.isInGroupPage() || !this.container) return;
+
+    const statsContent = this.container.querySelector('.lead-manager-group-stats-content');
+    if (!statsContent) return;
+
+    // Limpiar contenido anterior
+    statsContent.innerHTML = '<div style="text-align: center; padding: 10px;">Cargando información del grupo...</div>';
+
+    try {
+      // Extraer información del grupo usando MemberInteraction
+      if (window.leadManagerPro && window.leadManagerPro.memberInteraction) {
+        const groupInfo = window.leadManagerPro.memberInteraction.extractCurrentGroupInfo();
         
-        // Guardar en chrome.storage
-        chrome.storage.local.set({ 'leadManagerCurrentGroup': groupInfo });
-        console.log('GroupSidebar: Información del grupo guardada:', groupInfo);
+        if (groupInfo) {
+          // Formato para mostrar estadísticas
+          statsContent.innerHTML = `
+            <div style="margin-bottom: 10px">
+              <strong>Nombre:</strong> ${groupInfo.name || 'No disponible'}
+            </div>
+            <div style="margin-bottom: 10px">
+              <strong>Tipo:</strong> ${groupInfo.type === 'private' ? 'Privado' : 'Público'}
+            </div>
+            <div style="margin-bottom: 10px">
+              <strong>Miembros:</strong> ${groupInfo.members ? groupInfo.members.toLocaleString() : 'No disponible'}
+            </div>
+            <div style="margin-bottom: 10px">
+              <strong>URL:</strong> <a href="${groupInfo.url}" target="_blank" style="color: #4267B2; text-decoration: none;">${groupInfo.url.length > 30 ? groupInfo.url.substring(0, 30) + '...' : groupInfo.url}</a>
+            </div>
+          `;
+        } else {
+          statsContent.innerHTML = '<div style="text-align: center; padding: 10px;">No se pudo extraer información del grupo</div>';
+        }
+      } else {
+        statsContent.innerHTML = '<div style="text-align: center; padding: 10px;">Herramienta de extracción no disponible</div>';
       }
     } catch (error) {
-      console.error('GroupSidebar: Error al obtener información del grupo:', error);
+      console.error('GroupSidebar: Error al cargar estadísticas del grupo', error);
+      statsContent.innerHTML = '<div style="text-align: center; padding: 10px; color: red;">Error al cargar datos</div>';
     }
   }
-  
-  // Extraer ID del grupo a partir de la URL
-  extractGroupIdFromUrl() {
-    const url = window.location.href;
-    const match = url.match(/groups\/([^/?]+)/);
-    return match ? match[1] : '';
+
+  // Método para contar miembros
+  countMembers() {
+    // Verificar si estamos en una página de grupo
+    if (!this.isInGroupPage()) {
+      alert('Debes estar en una página de grupo para contar miembros');
+      return;
+    }
+
+    // Verificar si tenemos la funcionalidad de contar miembros
+    if (window.leadManagerPro && window.leadManagerPro.groupMemberFinder) {
+      if (window.location.href.includes('/members')) {
+        // Ya estamos en la página de miembros, iniciar conteo
+        window.leadManagerPro.groupMemberFinder.startCountingMembers();
+      } else {
+        // Redirigir a la página de miembros
+        const baseUrl = window.location.href.endsWith('/') ? window.location.href : window.location.href + '/';
+        window.location.href = baseUrl + 'members';
+      }
+    } else {
+      alert('La funcionalidad de contar miembros no está disponible');
+    }
+  }
+
+  // Método para abrir la interfaz de interacción
+  openInteractionUI() {
+    // Verificar si estamos en una página de grupo
+    if (!this.isInGroupPage()) {
+      alert('Debes estar en una página de grupo para interactuar con miembros');
+      return;
+    }
+
+    // Verificar si tenemos la funcionalidad de interacción
+    if (window.leadManagerPro && window.leadManagerPro.memberInteractionUI) {
+      // Ocultar el sidebar de grupo
+      this.hide();
+      
+      // Mostrar la interfaz de interacción
+      window.leadManagerPro.memberInteractionUI.show();
+    } else {
+      alert('La funcionalidad de interacción no está disponible');
+    }
+  }
+
+  // Observar cambios en la URL
+  observeUrlChanges() {
+    let lastUrl = location.href;
+    
+    // Crear un MutationObserver para detectar cambios en el DOM (que pueden indicar cambios de navegación)
+    const observer = new MutationObserver(() => {
+      if (location.href !== lastUrl) {
+        lastUrl = location.href;
+        this.onUrlChange();
+      }
+    });
+    
+    // Iniciar observación
+    observer.observe(document, { subtree: true, childList: true });
+    
+    // También escuchar el evento popstate
+    window.addEventListener('popstate', () => {
+      if (location.href !== lastUrl) {
+        lastUrl = location.href;
+        this.onUrlChange();
+      }
+    });
+  }
+
+  // Manejar cambios de URL
+  onUrlChange() {
+    // Si estamos en una página de grupo, mostrar el sidebar
+    if (this.isInGroupPage()) {
+      // Si no está inicializado, inicializar
+      if (!this.initializationComplete) {
+        this.init();
+      }
+      
+      // Si no existe el sidebar, crearlo
+      if (!this.container) {
+        this.createSidebar();
+      } else {
+        // Asegurar que sea visible en la UI
+        this.toggleButton.style.display = 'flex';
+      }
+    } else {
+      // Si no estamos en una página de grupo y el sidebar existe, ocultarlo
+      if (this.container) {
+        this.hide();
+        this.toggleButton.style.display = 'none';
+      }
+    }
   }
 }
 

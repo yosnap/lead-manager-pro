@@ -138,11 +138,11 @@ class GroupSearchOptionsUI {
     dayPostsInput.type = 'number';
     dayPostsInput.min = '0';
     dayPostsInput.value = options.minPostsDay;
-    dailyPostsInput.style.width = '100%';
-    dailyPostsInput.style.padding = '6px';
-    dailyPostsInput.style.marginBottom = '12px';
-    dailyPostsInput.style.borderRadius = '4px';
-    dailyPostsInput.style.border = '1px solid #CED0D4';
+    dayPostsInput.style.width = '100%';
+    dayPostsInput.style.padding = '6px';
+    dayPostsInput.style.marginBottom = '12px';
+    dayPostsInput.style.borderRadius = '4px';
+    dayPostsInput.style.border = '1px solid #CED0D4';
     
     // Agregar opciones de publicaciones al contenedor
     postsContainer.appendChild(yearPostsLabel);

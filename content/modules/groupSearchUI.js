@@ -356,6 +356,19 @@ class GroupSearchUI {
   processUpdate(data) {
     if (!data) return;
     
+    console.log('GroupSearchUI: Procesando actualización:', data);
+    
+    // Asegurarse de que el contenedor existe antes de actualizar la UI
+    if (!this.container) {
+      console.warn('GroupSearchUI: No hay contenedor para actualizar la UI');
+      return;
+    }
+    
+    // Mostrar la interfaz si no está visible
+    if (!this.isVisible) {
+      this.show();
+    }
+    
     // Actualizar progreso
     if (data.type === 'progress' && data.value !== undefined) {
       this.updateProgress(data.value);
@@ -373,6 +386,7 @@ class GroupSearchUI {
     
     // Búsqueda completada
     if (data.type === 'complete') {
+      console.log('GroupSearchUI: Búsqueda completada');
       this.updateProgress(100);
       this.updateStatus(data.message || `Búsqueda finalizada. Se encontraron ${data.groupsFound || 0} grupos.`);
       
@@ -382,6 +396,14 @@ class GroupSearchUI {
       
       if (pauseBtn) pauseBtn.disabled = true;
       if (stopBtn) stopBtn.disabled = true;
+      
+      // Notificar a los demás componentes que la búsqueda ha terminado
+      window.dispatchEvent(new CustomEvent('LEAD_MANAGER_SEARCH_COMPLETE', {
+        detail: {
+          groupsFound: data.groupsFound || 0,
+          groups: this.groups || []
+        }
+      }));
     }
   }
 }

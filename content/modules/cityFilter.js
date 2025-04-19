@@ -16,6 +16,7 @@ window.LeadManagerPro.modules.applyCityFilter = async function() {
     const sleep = window.LeadManagerPro.utils.sleep;
     const updateStatus = window.LeadManagerPro.utils.updateStatus;
     const selectFirstCitySuggestion = window.LeadManagerPro.modules.selectFirstCitySuggestion;
+    const simulateCityInput = window.LeadManagerPro.modules.simulateCityInput;
     
     // Verificar si ya se aplicó el filtro
     const cityFilterApplied = localStorage.getItem('snap_lead_manager_city_filter_applied') === 'true';
@@ -47,60 +48,75 @@ window.LeadManagerPro.modules.applyCityFilter = async function() {
     const city = searchData.city.trim();
     updateStatus(`Aplicando filtro de ciudad: ${city}...`, 25);
     
-    try {
-      // Determinar si estamos en la página de búsqueda de grupos o personas
-      const isGroupSearch = window.location.href.includes('/search/groups');
+    // *** ENFOQUE MEJORADO DE FILTRADO DE CIUDAD ***
+    
+    // 1. Primero intentar con nuestro nuevo método mejorado
+    console.log(`Lead Manager Pro: Intentando método mejorado para ciudad "${city}"`);
+    const successWithImprovedMethod = await simulateCityInput(city);
+    
+    if (successWithImprovedMethod) {
+      console.log('Lead Manager Pro: Filtro de ciudad aplicado con éxito usando el método mejorado');
+      updateStatus(`Filtro de ciudad aplicado exitosamente`, 50);
+    } else {
+      // 2. Si el método mejorado falló, intentar con los métodos anteriores
+      console.log('Lead Manager Pro: El método mejorado falló, intentando métodos previos');
+      updateStatus(`Intentando métodos alternativos para filtrar por ciudad...`, 30);
       
-      // Mensaje de log ampliado
-      console.log(`Lead Manager Pro: Aplicando filtro de ciudad "${city}" en página de ${isGroupSearch ? 'grupos' : 'personas'}`);
-      
-      // Intentar más enfoques de selección
-      let filterResult = false;
-      if (isGroupSearch) {
-        // Limpiar cualquier filtro previo (2025)
-        updateStatus(`Verificando y limpiando filtros existentes...`, 25);
-        await cleanExistingCityFilters();
-        await sleep(1000);
+      try {
+        // Determinar si estamos en la página de búsqueda de grupos o personas
+        const isGroupSearch = window.location.href.includes('/search/groups');
         
-        // Primero intenta el filtro estándar para grupos
-        console.log('Lead Manager Pro: Intentando método estándar para grupos');
-        filterResult = await applyGroupCityFilter(city);
+        // Mensaje de log ampliado
+        console.log(`Lead Manager Pro: Aplicando filtro de ciudad "${city}" en página de ${isGroupSearch ? 'grupos' : 'personas'}`);
         
-        // Si falló, intenta método alternativo
-        if (!filterResult) {
-          updateStatus(`Intentando método alternativo para filtro de ciudad en grupos...`, 35);
-          console.log('Lead Manager Pro: Intentando método alternativo para grupos');
+        // Intentar más enfoques de selección
+        let filterResult = false;
+        if (isGroupSearch) {
+          // Limpiar cualquier filtro previo (2025)
+          updateStatus(`Verificando y limpiando filtros existentes...`, 25);
+          await cleanExistingCityFilters();
           await sleep(1000);
-          filterResult = await applyAlternativeMethodForGroups(city);
-        }
-        
-        // Si sigue fallando, intenta método de personas
-        if (!filterResult) {
-          updateStatus(`Intentando método de personas para filtros de grupos...`, 38);
-          console.log('Lead Manager Pro: Intentando método de personas para grupos');
-          await sleep(1000);
-          filterResult = await applyPeopleCityFilter(city);
-        }
-      } else {
-        // Primero intenta el filtro estándar para personas
-        filterResult = await applyPeopleCityFilter(city);
-        
-        // Si falló, intenta método alternativo
-        if (!filterResult) {
-          updateStatus(`Intentando método alternativo para filtro de ciudad en personas...`, 35);
-          await sleep(1000);
-          filterResult = await applyAlternativeMethodForPeople(city);
-        }
-        
-        // Si sigue fallando, intenta método para grupos
-        if (!filterResult) {
-          updateStatus(`Intentando método de grupos para filtros de personas...`, 38);
-          await sleep(1000);
+          
+          // Primero intenta el filtro estándar para grupos
+          console.log('Lead Manager Pro: Intentando método estándar para grupos');
           filterResult = await applyGroupCityFilter(city);
+          
+          // Si falló, intenta método alternativo
+          if (!filterResult) {
+            updateStatus(`Intentando método alternativo para filtro de ciudad en grupos...`, 35);
+            console.log('Lead Manager Pro: Intentando método alternativo para grupos');
+            await sleep(1000);
+            filterResult = await applyAlternativeMethodForGroups(city);
+          }
+          
+          // Si sigue fallando, intenta método de personas
+          if (!filterResult) {
+            updateStatus(`Intentando método de personas para filtros de grupos...`, 38);
+            console.log('Lead Manager Pro: Intentando método de personas para grupos');
+            await sleep(1000);
+            filterResult = await applyPeopleCityFilter(city);
+          }
+        } else {
+          // Primero intenta el filtro estándar para personas
+          filterResult = await applyPeopleCityFilter(city);
+          
+          // Si falló, intenta método alternativo
+          if (!filterResult) {
+            updateStatus(`Intentando método alternativo para filtro de ciudad en personas...`, 35);
+            await sleep(1000);
+            filterResult = await applyAlternativeMethodForPeople(city);
+          }
+          
+          // Si sigue fallando, intenta método para grupos
+          if (!filterResult) {
+            updateStatus(`Intentando método de grupos para filtros de personas...`, 38);
+            await sleep(1000);
+            filterResult = await applyGroupCityFilter(city);
+          }
         }
+      } catch (e) {
+        updateStatus(`Error al aplicar filtro de ciudad: ${e.message}, continuando...`, 40);
       }
-    } catch (e) {
-      updateStatus(`Error al aplicar filtro de ciudad: ${e.message}, continuando...`, 40);
     }
     
     // Verificar si el filtro fue realmente aplicado (buscar algún indicador en la UI)
@@ -109,8 +125,19 @@ window.LeadManagerPro.modules.applyCityFilter = async function() {
     // Marcar como aplicado para evitar reintentos
     localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
     
+    // Guardar información adicional para diagnóstico y verificación
+    localStorage.setItem('snap_lead_manager_applied_city', city);
+    localStorage.setItem('snap_lead_manager_city_filter_timestamp', Date.now().toString());
+    
     // Notificar al sidebar que el filtro fue aplicado
     notifySidebarFilterApplied(city);
+    
+    // Registrar el éxito en el log
+    console.log('Lead Manager Pro: FILTRO DE CIUDAD APLICADO EXITOSAMENTE');
+    console.log('Detalles del filtro de ciudad:');
+    console.log('- Ciudad aplicada:', city);
+    console.log('- Hora de aplicación:', new Date().toLocaleTimeString());
+    console.log('- URL actual:', window.location.href);
     
     // Iniciar búsqueda de perfiles/grupos
     console.log('Lead Manager Pro: Iniciando búsqueda después de aplicar filtro');

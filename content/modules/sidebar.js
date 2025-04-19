@@ -98,6 +98,12 @@ function isGroupsFeedPage() {
 window.LeadManagerPro.modules.insertSidebar = function() {
   console.log('Lead Manager Pro: Insertando sidebar');
   
+  // Verificar si estamos en una página de grupo específica
+  if (isSpecificGroupPage()) {
+    console.log('Lead Manager Pro: En página de grupo, no se inserta el sidebar general');
+    return null;
+  }
+  
   // Verificar si ya existe el sidebar
   const existingSidebar = document.getElementById('snap-lead-manager-container');
   const existingToggle = document.getElementById('snap-lead-manager-toggle');

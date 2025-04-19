@@ -31,6 +31,7 @@
         "content/state.js",
         "content/modules/initializeDefaults.js",
         "content/modules/citySuggestions.js",
+        "content/modules/cityInputHelper.js",
         "content/modules/cityFilter.js",
         "content/modules/searchNavigation.js",
         "content/modules/profileExtractor.js",
@@ -48,6 +49,7 @@
         "content/modules/memberInteraction.js",
         "content/modules/memberInteractionUI.js",
         "content/modules/sidebar.js",
+        "content/modules/groupSidebar.js",
         "content/modules/errorHandler.js",
         "content/modules/emergency.js",
         "content/index.js"

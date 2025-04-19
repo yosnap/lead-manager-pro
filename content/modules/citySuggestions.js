@@ -17,12 +17,18 @@ window.LeadManagerPro.modules.selectFirstCitySuggestion = async function() {
     
     // Buscar lista de sugerencias usando selectores específicos para Facebook (2025)
     const suggestionSelectors = [
-      // Selector específico basado en el HTML proporcionado
+      // Selectores específicos para Facebook 2025
       'ul[aria-busy="false"][aria-label*="sugeridas"][role="listbox"]',
-      // Selector alternativo basado en el HTML proporcionado
       'ul[aria-busy="false"][role="listbox"]',
-      // Selector general para listas desplegables
-      'ul[role="listbox"]'
+      'ul[role="listbox"]',
+      // Selectores adicionales para otros formatos de listas desplegables
+      'div[role="listbox"]',
+      'div.x1y1aw1k ul',
+      // Selectores genéricos
+      'ul[aria-labelledby]',
+      'ul[aria-controls]',
+      // Selectores de último recurso
+      'div.xeuugli'
     ];
     
     let suggestionsList = null;

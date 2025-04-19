@@ -42,6 +42,23 @@ class GeneralOptionsUI {
     maxScrollsInput.style.borderRadius = '4px';
     maxScrollsInput.style.border = '1px solid #CED0D4';
     
+    // Crear campo para maxScrollsLimit
+    const maxScrollsLimitLabel = document.createElement('label');
+    maxScrollsLimitLabel.textContent = 'Scrolls máximos para mostrar resultados:';
+    maxScrollsLimitLabel.style.display = 'block';
+    maxScrollsLimitLabel.style.marginBottom = '4px';
+    maxScrollsLimitLabel.style.fontWeight = 'normal';
+    
+    const maxScrollsLimitInput = document.createElement('input');
+    maxScrollsLimitInput.type = 'number';
+    maxScrollsLimitInput.min = '1';
+    maxScrollsLimitInput.value = options.maxScrollsLimit || 50;
+    maxScrollsLimitInput.style.width = '100%';
+    maxScrollsLimitInput.style.padding = '6px';
+    maxScrollsLimitInput.style.marginBottom = '12px';
+    maxScrollsLimitInput.style.borderRadius = '4px';
+    maxScrollsLimitInput.style.border = '1px solid #CED0D4';
+    
     // Crear campo para maxResultsPerScroll
     const maxResultsLabel = document.createElement('label');
     maxResultsLabel.textContent = 'Resultados máximos a mostrar:';
@@ -98,6 +115,7 @@ class GeneralOptionsUI {
       const maxScrolls = parseInt(maxScrollsInput.value);
       const maxResults = parseInt(maxResultsInput.value);
       const scrollDelay = parseFloat(scrollDelayInput.value);
+      const maxScrollsLimit = parseInt(maxScrollsLimitInput.value);
       
       if (isNaN(maxScrolls) || maxScrolls < 1) {
         alert('Por favor, ingrese un número válido para Scrolls máximos');
@@ -114,11 +132,17 @@ class GeneralOptionsUI {
         return;
       }
       
+      if (isNaN(maxScrollsLimit) || maxScrollsLimit < 1) {
+        alert('Por favor, ingrese un número válido para Scrolls máximos para mostrar resultados');
+        return;
+      }
+      
       // Guardar opciones
       const success = this.generalOptions.saveOptions({
         maxScrolls: maxScrolls,
         maxResultsPerScroll: maxResults,
-        scrollDelay: scrollDelay
+        scrollDelay: scrollDelay,
+        maxScrollsLimit: maxScrollsLimit
       });
       
       if (success) {
@@ -147,6 +171,8 @@ class GeneralOptionsUI {
     // Ensamblar el formulario
     formContainer.appendChild(maxScrollsLabel);
     formContainer.appendChild(maxScrollsInput);
+    formContainer.appendChild(maxScrollsLimitLabel);
+    formContainer.appendChild(maxScrollsLimitInput);
     formContainer.appendChild(maxResultsLabel);
     formContainer.appendChild(maxResultsInput);
     formContainer.appendChild(scrollDelayLabel);
