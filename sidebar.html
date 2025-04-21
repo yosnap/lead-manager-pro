@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snap Lead Manager</title>
+  <link rel="stylesheet" href="css/sidebar.css">
+  <link rel="stylesheet" href="css/progress.css">
+</head>
+<body>
+  <div class="sidebar-container">
+    <header>
+      <h1>Snap Lead Manager</h1>
+      <div class="version">v1.0.0</div>
+    </header>
+    
+    <main>
+      <section class="search-section">
+        <h2>Búsqueda en Facebook</h2>
+        
+        <!-- Opciones generales -->
+        <div class="form-group">
+          <label for="search-type">Tipo de búsqueda</label>
+          <select id="search-type" class="search-select">
+            <option value="people" selected>Personas</option>
+            <option value="groups">Grupos</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="search-term">Término de búsqueda</label>
+          <input type="text" id="search-term" placeholder="Nombre, profesión, etc.">
+        </div>
+        <div class="form-group" id="city-filter-group">
+          <label for="search-city">Ciudad (opcional)</label>
+          <input type="text" id="search-city" placeholder="Ej: Madrid, Barcelona">
+        </div>
+        
+        <!-- Opciones avanzadas (colapsables) -->
+        <div class="collapsible-section">
+          <button class="collapsible-trigger">Configuración Avanzada</button>
+          <div class="collapsible-content">
+            <!-- Configuración general -->
+            <div class="settings-section">
+              <h3>Opciones Generales</h3>
+              <div class="form-group">
+                <label for="max-scrolls">Scrolls máximos</label>
+                <input type="number" id="max-scrolls" min="1" value="4" placeholder="Por defecto 4">
+                <small class="input-help">Cantidad máxima de desplazamientos para cargar resultados</small>
+              </div>
+              <div class="form-group">
+                <label for="scroll-delay">Tiempo entre scrolls (segundos)</label>
+                <input type="number" id="scroll-delay" min="1" step="0.5" value="2" placeholder="Por defecto 2 segundos">
+                <small class="input-help">Tiempo de espera entre cada desplazamiento</small>
+              </div>
+            </div>
+            
+            <!-- Opciones específicas para grupos -->
+            <div id="group-options" class="settings-section" style="display: none;">
+              <h3>Opciones para Grupos</h3>
+              <div class="form-group">
+                <label>Tipos de grupo</label>
+                <div class="checkbox-group">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="public-groups" checked>
+                    Públicos
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="private-groups" checked>
+                    Privados
+                  </label>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="min-users">Cantidad mínima de usuarios</label>
+                <input type="number" id="min-users" min="0" value="1000">
+                <small class="input-help">Número mínimo de miembros que debe tener el grupo</small>
+              </div>
+              
+              <div class="form-group">
+                <label>Cantidad mínima de publicaciones</label>
+                <div class="posts-filters">
+                  <div class="posts-filter-item">
+                    <label for="min-posts-year">Por año</label>
+                    <input type="number" id="min-posts-year" min="0" value="1000" placeholder="Mín. anual">
+                  </div>
+                  <div class="posts-filter-item">
+                    <label for="min-posts-month">Por mes</label>
+                    <input type="number" id="min-posts-month" min="0" value="100" placeholder="Mín. mensual">
+                  </div>
+                  <div class="posts-filter-item">
+                    <label for="min-posts-day">Por día</label>
+                    <input type="number" id="min-posts-day" min="0" value="5" placeholder="Mín. diaria">
+                  </div>
+                </div>
+                <div class="filter-info">
+                  <p>Se requiere el mínimo de usuarios <strong>Y</strong> al menos uno de los mínimos de publicaciones (año, mes o día). Si no se establece ningún mínimo de publicaciones, sólo se filtrará por la cantidad de usuarios.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Botones de acción para búsqueda -->
+        <div class="button-group">
+          <button id="search-button" class="btn">Buscar</button>
+          <button id="pause-button" class="btn btn-secondary">Pausar</button>
+          <button id="stop-button" class="btn btn-secondary">Detener</button>
+        </div>
+        
+        <!-- Botones para gestión de criterios -->
+        <div class="criteria-management">
+          <button id="clear-criteria" class="btn-link">Limpiar criterios</button>
+          <button id="save-criteria" class="btn-link">Guardar criterios</button>
+          <button id="cancel-edit" class="btn-link cancel-edit-button" style="display: none;">Cancelar edición</button>
+          <button id="manage-criteria" class="btn-link">Administrar guardados</button>
+        </div>
+        
+        <!-- Contenedor para mostrar información de búsqueda actual -->
+        <div id="current-search-info" class="current-search-info" style="display: none;"></div>
+      </section>
+      
+      <section class="status-section">
+        <h2>Estado</h2>
+        <div id="status-message" class="status">Listo para comenzar</div>
+        <div class="progress-container">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+        
+        <!-- Nuevo contenedor detallado para el estado de la búsqueda -->
+        <div id="search-status-container" class="status-container" style="display: none;">
+          <div class="status-header">
+            <div class="status-title">Detalles de la búsqueda</div>
+            <div id="progress-percentage">0%</div>
+          </div>
+          <div id="detailed-status-message" class="status-message">Esperando inicio de búsqueda...</div>
+          <div class="progress-bar-container">
+            <div id="detailed-progress-bar" class="progress-bar"></div>
+          </div>
+          <div class="progress-details">
+            <span id="current-operation">Inactivo</span>
+            <span id="elapsed-time">00:00</span>
+          </div>
+          
+          <!-- Registro de scrolls y hallazgos -->
+          <div id="scroll-log-container" class="scroll-log">
+            <!-- Las entradas de log se agregarán aquí dinámicamente -->
+          </div>
+        </div>
+      </section>
+      
+      <section class="results-section">
+        <h2>Resultados</h2>
+        <div id="results-summary" class="results-summary"></div>
+        <ul id="search-results" class="results-list"></ul>
+      </section>
+    </main>
+    
+    <!-- Modal para guardar criterios de búsqueda -->
+    <div id="save-criteria-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Guardar Criterios de Búsqueda</h3>
+          <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="criteria-name">Nombre para esta búsqueda</label>
+            <input type="text" id="criteria-name" placeholder="Ej: Búsqueda de grupos de marketing">
+          </div>
+          <div class="form-error" id="criteria-name-error"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="cancel-save" class="btn btn-secondary">Cancelar</button>
+          <button id="confirm-save" class="btn">Guardar</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Modal para administrar criterios guardados -->
+    <div id="manage-criteria-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Administrar Criterios Guardados</h3>
+          <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div id="saved-criteria-list" class="saved-criteria-list">
+            <!-- Los criterios guardados se insertarán aquí dinámicamente -->
+            <div class="empty-state">No hay criterios guardados</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" id="close-manage-criteria">Cerrar</button>
+        </div>
+      </div>
+    </div>
+    
+    <footer>
+      <p>Snap Lead Manager v1.0.0</p>
+      <div class="footer-buttons">
+        <button id="open-window-btn" class="toggle-btn">Abrir en ventana</button>
+      </div>
+    </footer>
+  </div>
+  
+  <script src="js/sidebar.js"></script>
+</body>
+</html>

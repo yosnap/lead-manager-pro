@@ -1,0 +1,135 @@
+/* Estilos para el sidebar inyectado */
+#snap-lead-manager-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 300px;
+  height: 100vh;
+  z-index: 9999;
+  display: flex;
+  transition: transform 0.3s ease;
+}
+
+#snap-lead-manager-overlay.collapsed {
+  transform: translateX(calc(100% - 20px));
+}
+
+#snap-lead-manager-handle {
+  position: absolute;
+  left: -20px;
+  top: 50%;
+  width: 20px;
+  height: 40px;
+  background-color: black;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px 0 0 4px;
+  font-size: 12px;
+  user-select: none;
+}
+
+#snap-lead-manager-iframe {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 300px;
+  height: 100vh;
+  z-index: 9999;
+  border: none;
+  box-shadow: -2px 0px 10px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+  background-color: white;
+}
+
+#snap-lead-manager-iframe.collapsed {
+  right: -290px;
+}
+
+#snap-lead-manager-toggle {
+  position: fixed;
+  top: 50%;
+  right: 300px;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 100px;
+  background-color: black;
+  z-index: 10000;
+  border: none;
+  border-radius: 5px 0 0 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  outline: none;
+  transition: right 0.3s ease;
+  box-shadow: -2px 0px 5px rgba(0, 0, 0, 0.1);
+}
+
+#snap-lead-manager-toggle.collapsed {
+  right: 10px;
+}
+
+#snap-lead-manager-toggle-icon {
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid white;
+  border-right: 2px solid white;
+  transform: rotate(45deg);
+  transition: transform 0.3s ease;
+}
+
+#snap-lead-manager-toggle.collapsed #snap-lead-manager-toggle-icon {
+  transform: rotate(-135deg);
+}
+
+/* Ajustes para que el sidebar sea más visible */
+#snap-lead-manager-iframe {
+  background-color: white;
+  border-left: 2px solid #000;
+}
+
+/* Estilos para contenido dentro del iframe */
+body.snap-lead-manager-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Animación para hacer parpadear el botón cuando hay actividad */
+@keyframes blink {
+  0% { background-color: black; }
+  50% { background-color: #444; }
+  100% { background-color: black; }
+}
+
+.snap-lead-manager-blink {
+  animation: blink 1s infinite;
+}
+
+/* Asegurar que el sidebar esté bien asegurado en el lado derecho */
+@media screen and (max-width: 600px) {
+  #snap-lead-manager-iframe {
+    width: 250px;
+  }
+  
+  #snap-lead-manager-iframe.collapsed {
+    right: -240px;
+  }
+}
+
+/* Ajuste del margen del contenido principal */
+body.snap-lead-manager-active {
+  margin-right: 300px !important;
+  transition: margin-right 0.3s ease;
+}
+
+body.snap-lead-manager-collapsed {
+  margin-right: 0 !important;
+}
