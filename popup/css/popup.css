@@ -1,0 +1,141 @@
+/* Estilos para el popup de Lead Manager Pro */
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  margin: 0;
+  padding: 0;
+  width: 300px;
+  background-color: #f0f2f5;
+}
+
+.popup-container {
+  padding: 0;
+}
+
+header {
+  background-color: #4267B2;
+  color: white;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.version {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+main {
+  padding: 16px;
+}
+
+.menu-item {
+  background-color: white;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.menu-item:hover {
+  background-color: #f5f6f7;
+}
+
+.menu-item-icon {
+  margin-right: 16px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4267B2;
+}
+
+.menu-item-text {
+  font-size: 16px;
+  color: #1c1e21;
+  font-weight: 500;
+}
+
+.badge {
+  background-color: #f0ad4e;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 8px;
+}
+
+footer {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: #65676b;
+}
+
+/* SVG Icons */
+.svg-icon {
+  fill: currentColor;
+}
+
+/* Mensaje flotante */
+.message {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 15px 20px;
+  background-color: #4CAF50;
+  color: white;
+  border-radius: 4px;
+  z-index: 1000;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  animation: fadeIn 0.3s, fadeOut 0.3s 2.7s;
+}
+
+.message.error {
+  background-color: #F44336;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translate(-50%, -60%); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; transform: translate(-50%, -50%); }
+  to { opacity: 0; transform: translate(-50%, -40%); }
+}
+
+#extract-members-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 16px;
+  background-color: #4267B2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+#extract-members-btn:hover {
+  background-color: #365899;
+}
+
+#group-actions {
+  margin-top: 10px;
+} 

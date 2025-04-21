@@ -11,13 +11,12 @@
   border-left: 1px solid #ddd;
   overflow: hidden;
   transition: transform 0.3s ease;
-  transform: translateX(100%); /* Por defecto oculto */
 }
 
 /* Estilos para el botón de toggle */
 #snap-lead-manager-toggle {
-  position: fixed; /* Cambiado a fixed para asegurar posición */
-  right: 0; /* Por defecto a la derecha */
+  position: absolute;
+  left: -30px;
   top: 50%;
   transform: translateY(-50%);
   background: #4267B2;
@@ -33,7 +32,6 @@
   font-weight: bold;
   box-shadow: -2px 0 5px rgba(0,0,0,0.2);
   z-index: 9999;
-  transition: right 0.3s ease;
 }
 
 /* Estilos para el iframe */
@@ -52,17 +50,9 @@
 /* Estado oculto */
 #snap-lead-manager-container.hidden {
   transform: translateX(100%);
-  display: none; /* Ocultar completamente */
 }
 
 /* Estado visible */
 #snap-lead-manager-container.visible {
-  transform: translateX(0) !important; /* Forzar visualización */
-  display: block !important; /* Asegurar que se muestre */
-}
-
-/* Ajusta el estilo del body cuando el sidebar está visible */
-body.snap-lead-manager-body-shift {
-  margin-right: 320px;
-  transition: margin-right 0.3s ease;
+  transform: translateX(0);
 }
