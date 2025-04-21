@@ -21,36 +21,54 @@ class MemberInteractionUI {
         <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
       </svg>`
     };
+    
+    // Selectores actualizados para identificar elementos en Facebook
     this.selectors = {
       sections: {
         admins: {
-          container: '.x1n2onr6.x1ja2u2z.x9f619.x78zum5.xdt5ytf.x2lah0s.x193iq5w.xx6bls6.x1jx94hy',
-          title: 'h2.xdj266r',
+          // Selectores más generales para mayor compatibilidad
+          container: 'div[role="main"] > div > div > div > div',
+          title: 'h2, h3',
           titleText: "Administradores y moderadores",
           userList: 'div[role="list"]',
-          userItem: 'div[data-visualcompletion="ignore-dynamic"][role="listitem"]',
-          userLink: 'a[href*="/groups/"][href*="/user/"][role="link"]'
+          userItem: 'div[role="listitem"]',
+          userLink: 'a[role="link"]'
         },
         common: {
-          container: '.x1n2onr6.x1ja2u2z.x9f619.x78zum5.xdt5ytf.x2lah0s.x193iq5w.xx6bls6.x1jx94hy',
-          title: 'h2.xdj266r',
+          container: 'div[role="main"] > div > div > div > div',
+          title: 'h2, h3',
           titleText: "Miembros con cosas en común",
           userList: 'div[role="list"]',
-          userItem: 'div[data-visualcompletion="ignore-dynamic"][role="listitem"]',
-          userLink: 'a[href*="/groups/"][href*="/user/"][role="link"]'
+          userItem: 'div[role="listitem"]',
+          userLink: 'a[role="link"]'
         },
         newMembers: {
-          container: '.x1n2onr6.x1ja2u2z.x9f619.x78zum5.xdt5ytf.x2lah0s.x193iq5w.xx6bls6.x1jx94hy',
-          title: 'h2.xdj266r',
+          container: 'div[role="main"] > div > div > div > div',
+          title: 'h2, h3',
           titleText: "Nuevos miembros del grupo",
           userList: 'div[role="list"]',
-          userItem: 'div[data-visualcompletion="ignore-dynamic"][role="listitem"]',
-          userLink: 'a[href*="/groups/"][href*="/user/"][role="link"]'
+          userItem: 'div[role="listitem"]',
+          userLink: 'a[role="link"]'
+        },
+        // Sección adicional para abarcar todas las listas de miembros
+        allMembers: {
+          container: 'div[role="main"] > div > div > div > div',
+          title: 'h2, h3',
+          titleText: "Miembros",
+          userList: 'div[role="list"]',
+          userItem: 'div[role="listitem"]',
+          userLink: 'a[role="link"]'
         }
       },
       navigation: {
         peopleTab: 'a[href*="/members"][role="link"]',
         activeTab: '[role="tab"][aria-selected="true"]'
+      },
+      // Selectores alternativos como respaldo
+      alternativeSelectors: {
+        userContainer: '.x1i10hfl, .x1qjc9v5, .xjbqb8w, .xjqpnuy, .xa49m3k, .xqeqjp1, .x2hbi6w, .x13fuv20, .xu3j5b3, .x1q0q8m5, .x26u7qi, .x972fbf, .xcfux6l, .x1qhh985, .xm0m39n, .x9f619, .x78zum5, .xdt5ytf, .x2lah0s, .xdj266r, .x11i5rnm, .xat24cr, .x1mh8g0r, .x889kno, .x1h6gzvc, .x1vd4hk0, .x12ulyr2',
+        userLink: 'a[href*="/user/"]',
+        userItem: 'div.x1n2onr6'
       }
     };
     
@@ -136,22 +154,85 @@ class MemberInteractionUI {
       return;
     }
 
-    // Configurar observer para cambios en el DOM
-    const observer = new MutationObserver(() => {
-      if (document.querySelector(this.selectors.sections.admins.title)) {
+    // Intentar añadir botones inicialmente
+    this.tryAddPlayButtons();
+
+    // Configurar un observer más específico para las secciones de miembros
+    this.observeDOM();
+    
+    // También programar verificaciones periódicas porque Facebook a veces carga dinámicamente
+    // sin disparar events de mutación detectables
+    this.schedulePeriodicCheck();
+  }
+  
+  observeDOM() {
+    // Observer para todo el documento con opciones específicas para mejor rendimiento
+    const mainObserver = new MutationObserver((mutations) => {
+      let shouldCheck = false;
+      
+      // Solo revisamos si hubo cambios relevantes
+      for (const mutation of mutations) {
+        // Si se añadieron nodos
+        if (mutation.addedNodes.length > 0) {
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType === 1) { // Elemento DOM
+              // Verificar si contiene encabezados o listas
+              if (node.querySelector && (
+                  node.querySelector('h1, h2, h3, h4') || 
+                  node.querySelector('[role="list"]')
+                )) {
+                shouldCheck = true;
+                break;
+              }
+            }
+          }
+        }
+        
+        // Si se modificaron atributos en elementos que podrían ser secciones
+        if (mutation.type === 'attributes' && mutation.target.nodeType === 1) {
+          const target = mutation.target;
+          if (target.querySelector && (
+              target.querySelector('h1, h2, h3, h4') || 
+              target.querySelector('[role="list"]')
+            )) {
+            shouldCheck = true;
+            break;
+          }
+        }
+        
+        if (shouldCheck) break;
+      }
+      
+      // Si detectamos cambios relevantes, intentamos añadir los botones
+      if (shouldCheck) {
+        console.log('Cambios relevantes en el DOM detectados, verificando botones Play');
         this.tryAddPlayButtons();
       }
     });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-
-    // Intentar añadir botones inicialmente
-      this.tryAddPlayButtons();
-    }
     
+    // Observar todo el documento, pero solo para cambios en la estructura y atributos
+    mainObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['role', 'class'] // Solo observar cambios en estos atributos
+    });
+    
+    console.log('Observer DOM configurado para detectar cambios en secciones de miembros');
+  }
+  
+  schedulePeriodicCheck() {
+    // Verificar cada 5 segundos por si acaso
+    this.periodicCheckInterval = setInterval(() => {
+      if (document.querySelector('h2, h3') && !document.querySelector('.lmp-play-button')) {
+        console.log('Verificación periódica: intentando añadir botones Play');
+        this.tryAddPlayButtons();
+      }
+    }, 5000);
+    
+    console.log('Verificación periódica configurada para botones Play');
+  }
+
   cleanupButtons() {
     const existingButtons = document.querySelectorAll('.lmp-play-button');
     existingButtons.forEach(button => button.remove());
@@ -240,13 +321,13 @@ class MemberInteractionUI {
     // Guardamos la referencia
     this.memberSelector = memberSelector;
     
-    // Añadimos el evento change con logs para depuración
+    // Añadimos el evento change para el selector de miembros
     memberSelector.addEventListener('change', async (e) => {
       const selectedType = e.target.value;
       console.log('Tipo seleccionado:', selectedType);
-      console.log('Selector completo:', this.selectors.sections[selectedType]?.container);
       
       try {
+        // Si no estamos en la sección de Personas, navegar primero
         if (!this.isInPeopleSection()) {
           await this.navigateToPeopleSection();
           return;
@@ -255,24 +336,91 @@ class MemberInteractionUI {
         // Remover highlight anterior
         this.removeHighlight();
         
-        // Mapear el valor del selector al tipo de sección correcto
-        let sectionType;
+        // Mapear el valor del selector al título de sección correspondiente
+        let sectionTitle = '';
+        let sectionType = '';
+        
         switch(selectedType) {
           case 'admins':
+            sectionTitle = 'Administradores y moderadores';
             sectionType = 'admins';
             break;
           case 'common':
+            sectionTitle = 'Miembros con cosas en común';
             sectionType = 'common';
             break;
           case 'new':
+            sectionTitle = 'Nuevos miembros del grupo';
             sectionType = 'newMembers';
             break;
+          case 'active':
+            sectionTitle = 'colaboradores del grupo';
+            sectionType = 'collaborators';
+            break;
+          case 'all':
           default:
-            return;
+            sectionTitle = 'Miembros';
+            sectionType = 'allMembers';
+            break;
         }
         
-        // Aplicar highlight según el tipo seleccionado
-        this.highlightSection(sectionType);
+        console.log('Buscando sección:', sectionTitle);
+        
+        // Buscar el encabezado de la sección
+        const headings = document.querySelectorAll('h1, h2, h3, h4');
+        let targetHeading = null;
+        let targetSection = null;
+        
+        for (const heading of headings) {
+          if (heading.textContent.toLowerCase().includes(sectionTitle.toLowerCase())) {
+            targetHeading = heading;
+            console.log('Encabezado encontrado:', heading.textContent);
+            break;
+          }
+        }
+        
+        if (targetHeading) {
+          // Buscar el contenedor de la sección (subir hasta encontrar un contenedor grande)
+          let container = targetHeading;
+          for (let i = 0; i < 5; i++) {
+            container = container.parentElement;
+            if (!container) break;
+            
+            // Verificar si el contenedor tiene una lista de miembros
+            if (container.querySelector('[role="list"]')) {
+              targetSection = container;
+              break;
+            }
+          }
+          
+          // Si encontramos una sección, resaltarla
+          if (targetSection) {
+            // Aplicar highlight a la sección encontrada
+            targetSection.style.backgroundColor = 'rgba(24, 119, 242, 0.1)';
+            targetSection.style.padding = '12px';
+            targetSection.style.borderRadius = '8px';
+            targetSection.style.transition = 'background-color 0.3s ease';
+            
+            // Guardar referencia a la sección resaltada
+            this.lastHighlightedSection = targetSection;
+            
+            // Hacer scroll a la sección
+            targetSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Actualizar el botón play correspondiente
+            const playButton = targetSection.querySelector('.lmp-play-button');
+            if (playButton) {
+              playButton.style.backgroundColor = '#1b74e4';
+              playButton.style.boxShadow = '0 0 0 3px rgba(24, 119, 242, 0.3)';
+            }
+            
+            console.log('Sección resaltada correctamente');
+          } else {
+            console.log('No se encontró el contenedor de la sección');
+          }
+        } else {
+          console.log('No se encontró la sección:', sectionTitle);
+        }
       } catch (error) {
         console.error('Error al cambiar selección:', error);
         e.target.value = '';
@@ -423,36 +571,36 @@ class MemberInteractionUI {
           return;
         }
 
-      // Obtener valores de configuración
-      const memberType = memberSelector.value;
+        // Obtener valores de configuración
+        const memberType = memberSelector.value;
         const delay = parseFloat(delayInput.value) * 1000;
-      const message = messageTextarea.value.trim();
-      const autoCloseChat = autoCloseChatCheckbox.checked;
-      const maxMembers = parseInt(maxMembersInput.value);
-      
-      // Validaciones
-      if (isNaN(delay) || delay < 1000) {
-        alert('Por favor, ingrese un tiempo de espera válido (mínimo 1 segundo)');
-        return;
-      }
-      
-      if (!message) {
-        alert('Por favor, ingrese un mensaje para enviar a los miembros');
-        return;
-      }
-      
-      if (isNaN(maxMembers) || maxMembers < 1) {
-        alert('Por favor, ingrese un número válido para el máximo de miembros');
-        return;
-      }
-      
+        const message = messageTextarea.value.trim();
+        const autoCloseChat = autoCloseChatCheckbox.checked;
+        const maxMembers = parseInt(maxMembersInput.value);
+        
+        // Validaciones
+        if (isNaN(delay) || delay < 1000) {
+          alert('Por favor, ingrese un tiempo de espera válido (mínimo 1 segundo)');
+          return;
+        }
+        
+        if (!message) {
+          alert('Por favor, ingrese un mensaje para enviar a los miembros');
+          return;
+        }
+        
+        if (isNaN(maxMembers) || maxMembers < 1) {
+          alert('Por favor, ingrese un número válido para el máximo de miembros');
+          return;
+        }
+        
         // Guardar configuración
         const settings = {
-            messageToSend: message,
-            autoCloseChat: autoCloseChat,
+          messageToSend: message,
+          autoCloseChat: autoCloseChat,
           interactionDelay: delay / 1000,
-            membersToInteract: maxMembers,
-            lastMemberType: memberType
+          maxMembers: maxMembers,
+          lastMemberType: memberType
         };
         
         await new Promise((resolve, reject) => {
@@ -468,52 +616,37 @@ class MemberInteractionUI {
           window.leadManagerPro.memberInteraction = this.memberInteraction;
         }
 
-        // Resaltar la sección correspondiente
-        this.highlightSection(memberType);
-
-        // Obtener los elementos de la sección resaltada
-        const memberElements = await this.getMemberElements(memberType);
-        
-        if (!memberElements || memberElements.length === 0) {
-          throw new Error('No se encontraron miembros en la sección seleccionada');
+        // Convertir del tipo de vista al tipo de sección
+        let sectionType;
+        switch (memberType) {
+          case 'admins':
+            sectionType = 'admins';
+            break;
+          case 'common':
+            sectionType = 'common';
+            break;
+          case 'new':
+            sectionType = 'newMembers';
+            break;
+          case 'all':
+          case 'active':
+          default:
+            sectionType = 'allMembers';
+            break;
         }
 
         // Inicializar el módulo de interacción
-      this.memberInteraction.messageToSend = message;
-      this.memberInteraction.autoCloseChat = autoCloseChat;
-      this.memberInteraction.maxMembersToInteract = maxMembers;
+        this.memberInteraction.messageToSend = message;
+        this.memberInteraction.autoCloseChat = autoCloseChat;
+        this.memberInteraction.maxMembersToInteract = maxMembers;
         
         // Actualizar estado y UI
         this.isInteracting = true;
         startButton.style.backgroundColor = '#dc3545';
         startButton.textContent = 'Detener Interacción';
-        
-        // Actualizar botón Play de la sección correspondiente
-        const sectionTitle = document.querySelector(`h2:contains("${this.selectors.sections[memberType].titleText}")`);
-        if (sectionTitle) {
-          const playButton = sectionTitle.parentElement.querySelector('.lmp-play-button');
-          if (playButton) {
-            playButton.innerHTML = this.icons.pause;
-            playButton.style.backgroundColor = '#dc3545';
-          }
-        }
 
-        // Inicializar y comenzar la interacción
-      this.memberInteraction.init(memberElements, { delay });
-        await this.memberInteraction.startInteraction((progress) => {
-          this.updateProgress(progress);
-          if (progress.type === 'complete') {
-            this.isInteracting = false;
-            startButton.style.backgroundColor = '#4267B2';
-            startButton.textContent = 'Iniciar Interacción';
-            
-            // Restaurar botón Play
-            if (playButton) {
-              playButton.innerHTML = this.icons.play;
-              playButton.style.backgroundColor = '#1b74e4';
-            }
-          }
-        });
+        // Iniciar la interacción con la sección correspondiente
+        this.startInteraction(sectionType);
 
       } catch (error) {
         console.error('Error al iniciar la interacción:', error);
@@ -679,35 +812,294 @@ class MemberInteractionUI {
   }
   
   // Iniciar la interacción con miembros
-  async startInteraction() {
+  startInteraction(sectionType) {
+    console.log(`Iniciando interacción con sección: ${sectionType}`);
+    
+    // Si ya hay una interacción en curso, detenerla
     if (this.isInteracting) {
-      console.log('MemberInteractionUI: Ya hay una interacción en progreso');
-      return;
+      this.stopInteraction();
     }
     
     this.isInteracting = true;
+    this.processedMembers = 0;
+    this.totalMembers = 0;
     
-      // Actualizar UI
-      this.startButton.style.display = 'none';
-      this.stopButton.style.display = 'block';
-    this.statusText.textContent = 'Iniciando interacción con miembros...';
-    
-    // Limpiar barra de progreso
-    const progressFill = this.progressBar.querySelector('.lead-manager-interaction-progress-fill');
-    if (progressFill) {
-      progressFill.style.width = '0%';
+    // Buscar la sección correspondiente
+    const sectionInfo = this.selectors.sections[sectionType];
+    if (!sectionInfo) {
+      console.error(`Tipo de sección no válido: ${sectionType}`);
+      return;
     }
     
-    try {
-      // Iniciar la interacción con callback para actualizar progreso
-      await this.memberInteraction.startInteraction(this.updateProgress.bind(this));
-    } catch (error) {
-      console.error('MemberInteractionUI: Error durante la interacción', error);
-      this.statusText.textContent = 'Error: ' + error.message;
-      this.statusText.style.color = 'red';
-    } finally {
-      this.finishInteraction();
+    // Buscar primero por el título de la sección
+    let targetSection = null;
+    const headings = document.querySelectorAll('h1, h2, h3, h4');
+    
+    // Mapear el tipo de sección a un texto de título para buscar
+    let titleText = '';
+    switch(sectionType) {
+      case 'admins':
+        titleText = 'Administradores y moderadores';
+        break;
+      case 'common':
+        titleText = 'Miembros con cosas en común';
+        break;
+      case 'newMembers':
+        titleText = 'Nuevos miembros del grupo';
+        break;
+      case 'collaborators':
+        titleText = 'colaboradores del grupo';
+        break;
+      case 'allMembers':
+      default:
+        titleText = 'Miembros';
+        break;
     }
+    
+    // Buscar el encabezado que coincide con el título
+    let targetHeading = null;
+    for (const heading of headings) {
+      if (heading.textContent.toLowerCase().includes(titleText.toLowerCase())) {
+        targetHeading = heading;
+        break;
+      }
+    }
+    
+    // Si encontramos el encabezado, buscar la sección contenedora
+    if (targetHeading) {
+      // Buscar el contenedor de la sección (subir hasta encontrar un contenedor con lista)
+      let container = targetHeading;
+      for (let i = 0; i < 5; i++) {
+        container = container.parentElement;
+        if (!container) break;
+        
+        // Verificar si el contenedor tiene una lista de miembros
+        if (container.querySelector('[role="list"]')) {
+          targetSection = container;
+          break;
+        }
+      }
+    }
+    
+    if (!targetSection) {
+      console.log(`No se encontró la sección: ${titleText}`);
+      this.showError(`No se encontró la sección: ${titleText}`);
+      this.isInteracting = false;
+      return;
+    }
+    
+    // Una vez encontrada la sección, iniciar la interacción
+    this.startInteractionWithSection(sectionType, targetSection);
+  }
+  
+  // Método para iniciar interacción con una sección específica
+  startInteractionWithSection(sectionType, sectionContainer) {
+    console.log(`Iniciando interacción con sección específica: ${sectionType}`);
+    
+    // Si ya hay una interacción en curso, detenerla
+    if (this.isInteracting) {
+      this.stopInteraction();
+    }
+    
+    this.isInteracting = true;
+    this.processedMembers = 0;
+    this.totalMembers = 0;
+    
+    // Obtener los elementos de miembros de la sección proporcionada
+    const memberList = sectionContainer.querySelector('[role="list"]');
+    if (!memberList) {
+      console.error('No se encontró la lista de miembros en la sección');
+      this.showError('No se encontró la lista de miembros en la sección');
+      this.isInteracting = false;
+      return;
+    }
+    
+    // Usar selectores específicos o genéricos para encontrar los items de miembros
+    let memberItems = memberList.querySelectorAll('[role="listitem"]');
+    
+    // Si no encontramos items con ese selector, intentar con alternativas
+    if (!memberItems || memberItems.length === 0) {
+      memberItems = memberList.querySelectorAll('div > a[href*="/user/"], div > a[href*="/profile.php"]');
+      
+      // Si aún no encontramos, buscar cualquier enlace que podría ser un perfil
+      if (!memberItems || memberItems.length === 0) {
+        const allLinks = memberList.querySelectorAll('a');
+        memberItems = Array.from(allLinks).filter(link => {
+          const href = link.getAttribute('href');
+          return href && (href.includes('/user/') || href.includes('/profile.php') || 
+                         !href.includes('/groups/') && !href.includes('/pages/'));
+        });
+      }
+    }
+    
+    this.totalMembers = memberItems.length;
+    console.log(`Encontrados ${this.totalMembers} miembros en la sección`);
+    
+    if (this.totalMembers === 0) {
+      console.error('No se encontraron miembros en la sección');
+      this.showError('No se encontraron miembros en la sección');
+      this.isInteracting = false;
+      return;
+    }
+    
+    // Crear panel de control para mostrar progreso
+    this.createControlPanel(sectionType);
+    
+    // Procesar cada miembro con un intervalo para no sobrecargar el DOM
+    memberItems.forEach((memberItem, index) => {
+      setTimeout(() => {
+        this.addInteractionButtons(memberItem, index);
+        this.processedMembers++;
+        this.updateProgressBar();
+      }, index * 100); // 100ms entre cada miembro
+    });
+    
+    // Actualizar botón de reproducción
+    this.updatePlayButton(sectionType, true);
+  }
+  
+  addInteractionButtons(memberItem, index) {
+    // Verificar si ya se ha añadido un botón de interacción
+    if (memberItem.querySelector('.lmp-member-interaction-button')) {
+      console.log(`El elemento #${index} ya tiene botones de interacción`);
+      this.processedMembers++;
+      this.updateProgressBar();
+      return;
+    }
+    
+    // Buscar el enlace al perfil del miembro
+    const profileLink = memberItem.querySelector('a');
+    if (!profileLink) {
+      console.log(`No se encontró enlace de perfil para el elemento #${index}`);
+      this.processedMembers++;
+      this.updateProgressBar();
+      return;
+    }
+    
+    // Extraer el ID del miembro del enlace del perfil
+    const href = profileLink.getAttribute('href');
+    if (!href) {
+      console.log(`No se encontró href en el enlace de perfil para el elemento #${index}`);
+      this.processedMembers++;
+      this.updateProgressBar();
+      return;
+    }
+    
+    // Intentar obtener el ID del miembro
+    const memberId = this.extractMemberId(href);
+    if (!memberId) {
+      console.log(`No se pudo extraer ID del miembro del href: ${href}`);
+      this.processedMembers++;
+      this.updateProgressBar();
+      return;
+    }
+    
+    // Buscar avatar/imagen para determinar dónde posicionar los botones
+    const avatarImg = memberItem.querySelector('img');
+    
+    // Crear contenedor para los botones
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'lmp-member-interaction-buttons';
+    buttonContainer.style.cssText = `
+      display: flex;
+      align-items: center;
+      margin-left: 10px;
+    `;
+    
+    // Añadir botones de interacción
+    const interactionTypes = ['message', 'friend', 'profile'];
+    interactionTypes.forEach(type => {
+      const button = document.createElement('button');
+      button.className = `lmp-member-interaction-button lmp-${type}-button`;
+      button.setAttribute('data-member-id', memberId);
+      button.setAttribute('data-member-action', type);
+      
+      // Establecer estilo e ícono según el tipo
+      let iconClass, buttonLabel;
+      switch (type) {
+        case 'message':
+          iconClass = 'fas fa-comment';
+          buttonLabel = 'Mensaje';
+          break;
+        case 'friend':
+          iconClass = 'fas fa-user-plus';
+          buttonLabel = 'Agregar';
+          break;
+        case 'profile':
+          iconClass = 'fas fa-user';
+          buttonLabel = 'Perfil';
+          break;
+      }
+      
+      button.innerHTML = `<i class="${iconClass}"></i>`;
+      button.title = buttonLabel;
+      
+      button.style.cssText = `
+        background-color: #1877f2;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        margin-right: 5px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+      `;
+      
+      button.addEventListener('mouseover', () => {
+        button.style.backgroundColor = '#166fe5';
+      });
+      
+      button.addEventListener('mouseout', () => {
+        button.style.backgroundColor = '#1877f2';
+      });
+      
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.handleInteractionButtonClick(button);
+      });
+      
+      buttonContainer.appendChild(button);
+    });
+    
+    // Determinar dónde insertar los botones
+    if (avatarImg) {
+      // Buscar el contenedor del avatar
+      let avatarContainer = avatarImg;
+      while (avatarContainer && avatarContainer !== memberItem) {
+        if (avatarContainer.style.display === 'flex' || 
+            window.getComputedStyle(avatarContainer).display === 'flex') {
+          break;
+        }
+        avatarContainer = avatarContainer.parentElement;
+      }
+      
+      // Si encontramos un contenedor flex, insertar después del avatar
+      if (avatarContainer && avatarContainer !== memberItem) {
+        avatarContainer.appendChild(buttonContainer);
+      } else {
+        // Si no, crear un nuevo contenedor flex
+        const flexContainer = document.createElement('div');
+        flexContainer.style.cssText = `
+          display: flex;
+          align-items: center;
+        `;
+        
+        avatarImg.parentNode.insertBefore(flexContainer, avatarImg.nextSibling);
+        flexContainer.appendChild(buttonContainer);
+      }
+    } else {
+      // Si no hay avatar, simplemente añadir al final del elemento
+      memberItem.appendChild(buttonContainer);
+    }
+    
+    this.processedMembers++;
+    this.updateProgressBar();
+    console.log(`Añadidos botones de interacción al miembro #${index} con ID: ${memberId}`);
   }
   
   // Detener la interacción
@@ -1044,45 +1436,154 @@ class MemberInteractionUI {
           return;
         }
 
-        // Obtener la configuración guardada
+        // Obtener la configuración guardada para los mensajes
         const config = await this.getStoredConfig();
-        console.log('Configuración cargada:', config);
+        console.log('Configuración cargada para interacción:', config);
 
-        // Resaltar la sección correspondiente
-        this.highlightSection(sectionType);
-        
-        // Obtener los elementos de la sección
-        const memberElements = await this.getMemberElements(sectionType);
-        
-        if (!memberElements || memberElements.length === 0) {
-          throw new Error('No se encontraron miembros en esta sección');
-        }
-
-        // Asegurar que memberInteraction esté inicializado
-        if (!this.memberInteraction) {
-          this.memberInteraction = window.leadManagerPro.memberInteraction || new MemberInteraction();
-          window.leadManagerPro.memberInteraction = this.memberInteraction;
+        // Encontrar la sección que contiene este botón
+        let sectionHeading = button.closest('div').querySelector('h1, h2, h3, h4');
+        if (!sectionHeading) {
+          console.error('No se encontró el encabezado de la sección');
+          throw new Error('No se pudo encontrar la sección');
         }
         
-        // Inicializar el módulo de interacción
-        this.memberInteraction.messageToSend = config.messageToSend;
-        this.memberInteraction.autoCloseChat = config.autoCloseChat;
-        this.memberInteraction.maxMembersToInteract = config.maxMembers;
+        console.log('Iniciando interacción con sección:', sectionHeading.textContent);
         
-        // Actualizar estado y UI
-        this.isInteracting = true;
+        // Cambiar estado del botón
         button.innerHTML = this.icons.pause;
         button.style.backgroundColor = '#dc3545';
         
-        // Inicializar y comenzar la interacción
-        this.memberInteraction.init(memberElements, { delay: config.delay || 2000 });
-        await this.memberInteraction.startInteraction((progress) => {
-          if (progress.type === 'complete') {
-            this.isInteracting = false;
-            button.innerHTML = this.icons.play;
-            button.style.backgroundColor = '#1b74e4';
+        // Encontrar el contenedor principal de la sección
+        let sectionContainer = sectionHeading.parentElement;
+        while (sectionContainer && !sectionContainer.querySelector('[role="list"]')) {
+          sectionContainer = sectionContainer.parentElement;
+          if (!sectionContainer) break;
+        }
+        
+        if (!sectionContainer) {
+          throw new Error('No se pudo encontrar la lista de miembros');
+        }
+        
+        // Encontrar la lista de miembros
+        const memberList = sectionContainer.querySelector('[role="list"]');
+        if (!memberList) {
+          throw new Error('No se encontró la lista de miembros');
+        }
+        
+        // Encontrar todos los elementos de miembro
+        const memberItems = memberList.querySelectorAll('[role="listitem"]');
+        if (!memberItems || memberItems.length === 0) {
+          throw new Error('No se encontraron miembros en esta sección');
+        }
+        
+        console.log(`Encontrados ${memberItems.length} miembros para interactuar`);
+        
+        // Iniciar interacción con miembros
+        this.isInteracting = true;
+        
+        // Configurar MemberInteraction
+        if (!window.leadManagerPro.memberInteraction) {
+          window.leadManagerPro.memberInteraction = new MemberInteraction();
+        }
+        
+        const memberInteraction = window.leadManagerPro.memberInteraction;
+        memberInteraction.messageToSend = config.messageToSend || 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!';
+        memberInteraction.autoCloseChat = config.autoCloseChat !== undefined ? config.autoCloseChat : true;
+        memberInteraction.interactionDelay = config.delay || 2000;
+        memberInteraction.maxMembersToInteract = config.maxMembers || 10;
+        
+        // Crear panel de control
+        this.createControlPanel(sectionType);
+        this.totalMembers = memberItems.length;
+        this.processedMembers = 0;
+        
+        // Procesar cada miembro
+        let processedCount = 0;
+        for (let i = 0; i < memberItems.length; i++) {
+          if (processedCount >= memberInteraction.maxMembersToInteract) {
+            console.log(`Alcanzado el máximo de ${memberInteraction.maxMembersToInteract} miembros a interactuar`);
+            break;
           }
-        });
+          
+          const memberItem = memberItems[i];
+          
+          // Encontrar enlace al perfil
+          const profileLink = memberItem.querySelector('a[href*="/user/"], a[href*="/profile.php"]');
+          if (!profileLink) continue;
+          
+          // Extraer ID del miembro
+          const memberId = this.extractMemberId(profileLink.href);
+          if (!memberId) continue;
+          
+          // Actualizar progreso
+          this.processedMembers++;
+          this.updateProgressBar();
+          
+          // Simular clic en el perfil para abrir mensaje
+          setTimeout(async () => {
+            try {
+              console.log(`Procesando miembro #${i+1}: ${memberId}`);
+              
+              // Intentar abrir perfil y mensaje
+              profileLink.click();
+              
+              // Esperar a que se abra el modal
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              
+              // Buscar botón de mensaje
+              const messageButton = document.querySelector('[role="dialog"] button:has-text("Mensaje"), [role="dialog"] button:contains("Mensaje")');
+              if (messageButton) {
+                messageButton.click();
+                
+                // Esperar a que se abra el chat
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Buscar área de texto e insertar mensaje
+                const textArea = document.querySelector('[role="textbox"][contenteditable="true"]');
+                if (textArea) {
+                  textArea.textContent = memberInteraction.messageToSend;
+                  textArea.dispatchEvent(new Event('input', { bubbles: true }));
+                  
+                  // Buscar y hacer clic en botón enviar
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                  const sendButton = Array.from(document.querySelectorAll('div[role="button"]')).find(btn => 
+                    btn.textContent.includes('Enviar')
+                  );
+                  
+                  if (sendButton) {
+                    sendButton.click();
+                    console.log(`Mensaje enviado a miembro #${i+1}`);
+                    processedCount++;
+                    
+                    // Cerrar chat si está configurado
+                    if (memberInteraction.autoCloseChat) {
+                      await new Promise(resolve => setTimeout(resolve, 1000));
+                      const closeButton = document.querySelector('[role="dialog"] [aria-label="Cerrar"]');
+                      if (closeButton) closeButton.click();
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(`Error al interactuar con miembro #${i+1}:`, error);
+            }
+          }, i * memberInteraction.interactionDelay);
+        }
+        
+        // Finalizar cuando termine
+        setTimeout(() => {
+          this.isInteracting = false;
+          button.innerHTML = this.icons.play;
+          button.style.backgroundColor = '#1b74e4';
+          
+          // Actualizar el panel de control
+          if (this.progressInfo) {
+            this.progressInfo.textContent = `¡Completado! Se procesaron ${processedCount} miembros`;
+            this.progressInfo.style.color = '#00a400';
+          }
+          
+          console.log(`Interacción finalizada. Procesados ${processedCount} miembros`);
+        }, (memberInteraction.maxMembersToInteract * memberInteraction.interactionDelay) + 2000);
         
       } catch (error) {
         console.error('Error al iniciar la interacción:', error);
@@ -1097,57 +1598,92 @@ class MemberInteractionUI {
   }
 
   tryAddPlayButtons() {
-    // Buscar títulos para todas las secciones
-    const titleElements = document.querySelectorAll(this.selectors.sections.admins.title + ', ' + this.selectors.sections.common.title + ', ' + this.selectors.sections.newMembers.title);
+    console.log('Intentando añadir botones de interacción a las secciones de miembros');
     
-    titleElements.forEach((titleElement) => {
-      // Verificar si el título corresponde a alguna de las secciones
-      const isAdminSection = titleElement.textContent.includes(this.selectors.sections.admins.titleText);
-      const isCommonSection = titleElement.textContent.includes(this.selectors.sections.common.titleText);
-      const isNewMembersSection = titleElement.textContent.includes(this.selectors.sections.newMembers.titleText);
+    // Objetos que contienen información de las secciones
+    const sectionDefinitions = [
+      {
+        titleText: "Administradores y moderadores",
+        sectionType: "admins"
+      },
+      {
+        titleText: "colaboradores del grupo",
+        sectionType: "collaborators"
+      },
+      {
+        titleText: "Miembros con cosas en común",
+        sectionType: "common"
+      },
+      {
+        titleText: "Nuevos miembros del grupo",
+        sectionType: "newMembers"
+      },
+      {
+        titleText: "Miembros",
+        sectionType: "allMembers"
+      }
+    ];
+    
+    // Buscar todos los encabezados que podrían ser títulos de secciones
+    const headings = document.querySelectorAll('h1, h2, h3, h4');
+    console.log(`Encontrados ${headings.length} encabezados posibles`);
+    
+    // Para cada encabezado, verificar si corresponde a una de nuestras secciones
+    headings.forEach(heading => {
+      const headingText = heading.textContent.trim().toLowerCase();
+      console.log(`Analizando encabezado: "${headingText}"`);
       
-      if (!isAdminSection && !isCommonSection && !isNewMembersSection) {
-        return;
+      // Buscar qué sección coincide con este encabezado
+      for (const sectionDef of sectionDefinitions) {
+        if (headingText.includes(sectionDef.titleText.toLowerCase())) {
+          console.log(`Encabezado coincide con sección: ${sectionDef.sectionType}`);
+          
+          // Verificar si ya existe un botón play para este encabezado
+          let parentElement = heading.parentElement;
+          if (parentElement.querySelector('.lmp-play-button')) {
+            console.log(`Ya existe un botón para la sección: ${sectionDef.sectionType}`);
+            continue;
+          }
+          
+          // Si el encabezado ya está en un contenedor flex, no creamos uno nuevo
+          let flexContainer = null;
+          
+          // Verificar si el encabezado está dentro de un contenedor flex
+          if (window.getComputedStyle(parentElement).display === 'flex') {
+            flexContainer = parentElement;
+            console.log('Usando contenedor flex existente');
+          } else {
+            // Crear un nuevo contenedor flex
+            flexContainer = document.createElement('div');
+            flexContainer.style.cssText = `
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              width: 100%;
+              margin-bottom: 10px;
+            `;
+            
+            // Insertar el contenedor antes del encabezado
+            heading.parentNode.insertBefore(flexContainer, heading);
+            
+            // Mover el encabezado dentro del contenedor flex
+            flexContainer.appendChild(heading);
+            console.log('Creado nuevo contenedor flex');
+          }
+          
+          // Crear y añadir el botón play
+          const playButton = this.createPlayButton(sectionDef.sectionType);
+          flexContainer.appendChild(playButton);
+          console.log(`Botón Play añadido a la sección: ${sectionDef.sectionType}`);
+          
+          break; // Ya encontramos una coincidencia para este encabezado
+        }
       }
-
-      // Verificar si ya existe un botón para este título
-      const existingButton = titleElement.parentElement.querySelector('.lmp-play-button');
-      if (existingButton) {
-        return;
-      }
-
-      // Determinar el tipo de sección
-      let sectionType = 'admins'; // valor por defecto
-      if (isCommonSection) {
-        sectionType = 'common';
-      } else if (isNewMembersSection) {
-        sectionType = 'newMembers';
-      }
-      const sectionConfig = this.selectors.sections[sectionType];
-      const sectionContainer = titleElement.closest(sectionConfig.container);
-      
-      if (!sectionContainer) {
-        return;
-      }
-
-      const button = this.createPlayButton(sectionType);
-      
-      // Crear contenedor flex para el título y el botón
-      const container = document.createElement('div');
-      container.style.cssText = `
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        width: 100%;
-      `;
-
-      // Reemplazar el título con el nuevo contenedor
-      titleElement.parentNode.insertBefore(container, titleElement);
-      container.appendChild(titleElement);
-      container.appendChild(button);
-
-      console.log(`Botón Play añadido a la sección de ${isAdminSection ? 'administradores' : isCommonSection ? 'miembros con cosas en común' : 'nuevos miembros del grupo'}`);
     });
+    
+    // Verificar si se han añadido botones
+    const addedButtons = document.querySelectorAll('.lmp-play-button');
+    console.log(`Total de botones Play añadidos: ${addedButtons.length}`);
   }
 
   updatePlayButton(sectionType, isPlaying) {
@@ -1243,6 +1779,261 @@ class MemberInteractionUI {
     
     // La página se recargará, y el init() restaurará la visibilidad
     return true;
+  }
+
+  // Extraer ID de miembro de una URL de perfil
+  extractMemberId(url) {
+    // Patrones comunes para URLs de perfiles
+    const patterns = [
+      /\/profile\.php\?id=(\d+)/,     // formato profile.php?id=123456789
+      /\/user\/(\d+)/,                // formato /user/123456789
+      /\/([a-zA-Z0-9.]+)(?:\?|$)/     // formato /username o /usuario.nombre
+    ];
+    
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+    
+    // Si todo falla, usar la URL completa como identificador único
+    return encodeURIComponent(url);
+  }
+  
+  createControlPanel(sectionType) {
+    // Eliminar panel existente si hay uno
+    const existingPanel = document.querySelector('.lmp-control-panel');
+    if (existingPanel) {
+      existingPanel.remove();
+    }
+    
+    // Crear panel de control
+    const controlPanel = document.createElement('div');
+    controlPanel.className = 'lmp-control-panel';
+    controlPanel.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #fff;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+      padding: 15px;
+      border-radius: 8px;
+      z-index: 9999;
+      width: 300px;
+    `;
+    
+    // Añadir título
+    const title = document.createElement('h3');
+    title.textContent = `Interacción: ${this.getSectionName(sectionType)}`;
+    title.style.cssText = `
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      color: #1877f2;
+    `;
+    controlPanel.appendChild(title);
+    
+    // Añadir barra de progreso
+    const progressContainer = document.createElement('div');
+    progressContainer.style.cssText = `
+      background-color: #f0f2f5;
+      border-radius: 4px;
+      height: 10px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    `;
+    
+    const progressBar = document.createElement('div');
+    progressBar.className = 'lmp-progress-bar';
+    progressBar.style.cssText = `
+      background-color: #1877f2;
+      height: 100%;
+      width: 0%;
+      transition: width 0.3s ease;
+    `;
+    progressContainer.appendChild(progressBar);
+    controlPanel.appendChild(progressContainer);
+    
+    // Añadir información de progreso
+    const progressInfo = document.createElement('div');
+    progressInfo.className = 'lmp-progress-info';
+    progressInfo.textContent = `Procesando 0 de ${this.totalMembers} miembros`;
+    progressInfo.style.cssText = `
+      font-size: 14px;
+      margin-bottom: 15px;
+    `;
+    controlPanel.appendChild(progressInfo);
+    
+    // Añadir botón para cancelar
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancelar';
+    cancelButton.style.cssText = `
+      background-color: #e4e6eb;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-weight: 500;
+      cursor: pointer;
+      font-size: 14px;
+    `;
+    cancelButton.addEventListener('click', () => {
+      controlPanel.remove();
+    });
+    controlPanel.appendChild(cancelButton);
+    
+    // Guardar referencias
+    this.controlPanel = controlPanel;
+    this.progressBar = progressBar;
+    this.progressInfo = progressInfo;
+    
+    // Añadir al DOM
+    document.body.appendChild(controlPanel);
+  }
+  
+  updateProgressBar() {
+    if (!this.progressBar || !this.progressInfo) return;
+    
+    const percentage = Math.round((this.processedMembers / this.totalMembers) * 100);
+    this.progressBar.style.width = `${percentage}%`;
+    this.progressInfo.textContent = `Procesando ${this.processedMembers} de ${this.totalMembers} miembros`;
+    
+    // Si completamos todos, mostrar mensaje
+    if (this.processedMembers >= this.totalMembers) {
+      this.progressInfo.textContent = `¡Completado! Se procesaron ${this.totalMembers} miembros`;
+      this.progressInfo.style.color = '#00a400';
+    }
+  }
+  
+  getSectionName(sectionType) {
+    switch (sectionType) {
+      case 'admins': return 'Administradores';
+      case 'common': return 'Miembros con cosas en común';
+      case 'newMembers': return 'Nuevos miembros';
+      case 'allMembers': return 'Todos los miembros';
+      default: return 'Sección desconocida';
+    }
+  }
+  
+  handleInteractionButtonClick(button) {
+    const memberId = button.getAttribute('data-member-id');
+    const action = button.getAttribute('data-member-action');
+    
+    console.log(`Botón ${action} clickeado para miembro ID: ${memberId}`);
+    
+    // Cambiar el color del botón para indicar que se ha clickeado
+    const originalColor = button.style.backgroundColor;
+    button.style.backgroundColor = '#00a400';
+    
+    // Ejecutar acción según el tipo de botón
+    switch (action) {
+      case 'message':
+        // Obtener el mensaje predefinido
+        this.getStoredConfig().then(config => {
+          this.openMessageDialog(memberId, config.messageToSend);
+          
+          // Restaurar el color original después de un tiempo
+          setTimeout(() => {
+            button.style.backgroundColor = originalColor;
+          }, 2000);
+        });
+        break;
+      case 'friend':
+        this.sendFriendRequest(memberId);
+        // Restaurar el color original después de un tiempo
+        setTimeout(() => {
+          button.style.backgroundColor = originalColor;
+        }, 2000);
+        break;
+      case 'profile':
+        this.openProfilePage(memberId);
+        // Restaurar el color original después de un tiempo
+        setTimeout(() => {
+          button.style.backgroundColor = originalColor;
+        }, 2000);
+        break;
+    }
+  }
+  
+  openMessageDialog(memberId, message) {
+    console.log(`Abriendo diálogo de mensaje para miembro ID: ${memberId}`);
+    
+    // Si estamos en un grupo, usar el método correspondiente
+    if (window.location.href.includes('/groups/')) {
+      // Intentar primero abrir el chat desde el perfil en la misma página
+      const memberItem = document.querySelector(`[data-member-id="${memberId}"]`).closest('[role="listitem"]');
+      if (memberItem) {
+        // Buscar el enlace de perfil dentro del elemento
+        const profileLink = memberItem.querySelector('a[href*="/user/"], a[href*="/profile.php"]');
+        if (profileLink) {
+          // Simular clic en el enlace para abrir el modal de perfil
+          profileLink.click();
+          
+          // Esperar a que se abra el modal
+          setTimeout(() => {
+            // Buscar el botón de mensaje en el modal
+            const messageButton = document.querySelector('[role="dialog"] button:has-text("Mensaje")');
+            if (messageButton) {
+              messageButton.click();
+              
+              // Esperar a que se abra el chat
+              setTimeout(() => {
+                // Buscar el área de texto e insertar el mensaje
+                const textArea = document.querySelector('[role="textbox"][contenteditable="true"]');
+                if (textArea) {
+                  // Insertar el mensaje en el área de texto
+                  textArea.textContent = message;
+                  
+                  // Disparar evento de input para activar el botón de enviar
+                  textArea.dispatchEvent(new Event('input', { bubbles: true }));
+                  
+                  // Buscar y hacer clic en el botón de enviar
+                  setTimeout(() => {
+                    const sendButton = Array.from(document.querySelectorAll('div[role="button"]'))
+                      .find(btn => btn.textContent.includes('Enviar'));
+                    if (sendButton) {
+                      sendButton.click();
+                      
+                      // Si está habilitado el cierre automático, cerramos la ventana
+                      if (this.memberInteraction && this.memberInteraction.autoCloseChat) {
+                        setTimeout(() => {
+                          const closeButton = document.querySelector('[role="dialog"] [aria-label="Cerrar"]');
+                          if (closeButton) closeButton.click();
+                        }, 1500);
+                      }
+                    }
+                  }, 500);
+                }
+              }, 1000);
+            }
+          }, 1000);
+          return;
+        }
+      }
+      
+      // Si no podemos usar el método anterior, abrir en nueva pestaña
+      window.open(`/messages/t/${memberId}`, '_blank');
+    } else {
+      // Si no estamos en un grupo, abrir el chat en una nueva pestaña
+      window.open(`/messages/t/${memberId}`, '_blank');
+    }
+  }
+  
+  sendFriendRequest(memberId) {
+    console.log(`Enviando solicitud de amistad a miembro ID: ${memberId}`);
+    // Aquí implementarías la lógica para enviar solicitud de amistad
+    // Esto podría requerir simular clicks en botones existentes o usar API
+  }
+  
+  openProfilePage(memberId) {
+    console.log(`Abriendo perfil de miembro ID: ${memberId}`);
+    // Abrir el perfil en una nueva pestaña
+    if (memberId.includes('http') || memberId.startsWith('/')) {
+      window.open(decodeURIComponent(memberId), '_blank');
+    } else if (memberId.match(/^\d+$/)) {
+      window.open(`/profile.php?id=${memberId}`, '_blank');
+    } else {
+      window.open(`/${memberId}`, '_blank');
+    }
   }
 }
 

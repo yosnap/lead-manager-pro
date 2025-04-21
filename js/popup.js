@@ -1,26 +1,12 @@
 document.addEventListener('DOMContentLoaded', function() {
-  // Variables para los elementos del DOM
-  const openSidebarButton = document.getElementById('open-sidebar-btn');
-  const resetSidebarButton = document.getElementById('reset-sidebar-btn');
-  const extractMembersButton = document.createElement('button');
-  extractMembersButton.id = 'extract-members-btn';
-  extractMembersButton.className = 'btn btn-primary';
-  extractMembersButton.textContent = 'Extraer miembros del grupo';
-  
-  // Verificar si estamos en una página de grupo de Facebook
-  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-    const activeTab = tabs[0];
-    
-    if (activeTab.url.includes('facebook.com/groups/') && !activeTab.url.includes('/groups/feed')) {
-      // Estamos en una página de grupo, mostrar el botón de extracción de miembros
-      const footer = document.querySelector('footer');
-      if (footer) {
-        footer.insertBefore(extractMembersButton, resetSidebarButton);
-      }
-    }
-  });
-  
-  // Función para mostrar un mensaje genérico
+  // Referencias a elementos del menú
+  const accountSettingsOption = document.getElementById('account-settings');
+  const searchSaveOption = document.getElementById('search-save');
+  const interactOption = document.getElementById('interact');
+  const reportsStatsOption = document.getElementById('reports-stats');
+  const contactSupportOption = document.getElementById('contact-support');
+
+  // Función para mostrar mensajes
   function showMessage(message, type = 'info') {
     const messageElement = document.createElement('div');
     messageElement.classList.add('message');
@@ -39,82 +25,142 @@ document.addEventListener('DOMContentLoaded', function() {
     
     document.body.appendChild(messageElement);
     
-    // Eliminar el mensaje después de 3 segundos
+    // Eliminar el mensaje después de 2 segundos
     setTimeout(() => {
       messageElement.remove();
-    }, 3000);
+    }, 2000);
   }
-  
-  // Abrir el panel lateral de búsqueda
-  openSidebarButton.addEventListener('click', function() {
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-      const activeTab = tabs[0];
-      
-      // Verificar si la URL es de Facebook
-      if (activeTab.url.includes('facebook.com')) {
-        // Enviar mensaje para abrir el sidebar sin configuraciones específicas
-        chrome.tabs.sendMessage(activeTab.id, {
-          action: 'openSidebar'
-        });
-        window.close();
-      } else {
-        showMessage('Esta extensión solo funciona en Facebook', 'error');
-      }
-    });
-  });
-  
-  // Botón para extraer miembros del grupo
-  extractMembersButton.addEventListener('click', function() {
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-      const activeTab = tabs[0];
-      
-      // Verificar si la URL es de un grupo de Facebook
-      if (activeTab.url.includes('facebook.com/groups/') && !activeTab.url.includes('/groups/feed')) {
-        // Enviar mensaje para iniciar extracción de miembros
-        chrome.tabs.sendMessage(activeTab.id, {
-          action: 'startGroupMemberExtraction'
-        }, function(response) {
-          if (response && response.success) {
-            showMessage('Iniciando extracción de miembros...', 'info');
-          } else {
-            showMessage('Error al iniciar la extracción: ' + (response?.error || 'Desconocido'), 'error');
-          }
-        });
-        window.close();
-      } else {
-        showMessage('Esta funcionalidad solo está disponible en páginas de grupos de Facebook', 'error');
-      }
-    });
-  });
-  
-  // Restablecer el panel (útil si el panel se pierde)
-  if (resetSidebarButton) {
-    resetSidebarButton.addEventListener('click', function() {
+
+  // Opción de Ajustes de cuenta
+  if (accountSettingsOption) {
+    accountSettingsOption.addEventListener('click', function() {
       chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-        const activeTab = tabs[0];
-        
-        // Verificar si la URL es de Facebook
-        if (activeTab.url.includes('facebook.com')) {
-          // Enviar mensaje para reinicializar completamente el sidebar
-          chrome.tabs.sendMessage(activeTab.id, {
-            action: 'resetSidebar',
-            forceReset: true
-          });
-          
-          // Eliminar indicador de sidebar oculto
-          localStorage.removeItem('snap_lead_manager_sidebar_hidden');
-          
-          showMessage('Panel restablecido. Recargando página...', 'info');
-          
-          // Recargar la página después de un breve retraso
-          setTimeout(() => {
-            chrome.tabs.reload(activeTab.id);
-            window.close();
-          }, 1500);
+        // Verificar que estamos en Facebook
+        if (tabs[0].url.includes('facebook.com')) {
+          // Por ahora, se podría mostrar un mensaje
+          showMessage('Funcionalidad de ajustes en desarrollo');
         } else {
           showMessage('Esta extensión solo funciona en Facebook', 'error');
         }
       });
+    });
+  }
+
+  // Opción de Buscar y guardar (abre el sidebar)
+  if (searchSaveOption) {
+    searchSaveOption.addEventListener('click', function() {
+      console.log('Clic en "Buscar y guardar"');
+      
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        console.log('Tab activa:', tabs[0].url);
+        
+        // Verificar que estamos en Facebook
+        if (tabs[0].url.includes('facebook.com')) {
+          console.log('Estamos en Facebook, enviando mensaje openSidebar');
+          
+          // Enviar mensaje para abrir el sidebar
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'openSidebar',
+            timestamp: new Date().toISOString()
+          }, function(response) {
+            console.log('Respuesta recibida del content script:', response);
+            
+            // Incluso si no hay respuesta, continuamos
+            if (chrome.runtime.lastError) {
+              console.error('Error en comunicación con content script:', chrome.runtime.lastError);
+              showMessage('Error de comunicación. Recargando...', 'error');
+              
+              // Intentar recargar la página después de un error
+              setTimeout(() => {
+                chrome.tabs.reload(tabs[0].id);
+              }, 1500);
+            }
+          });
+          
+          // Mostrar mensaje de confirmación al usuario
+          showMessage('Abriendo panel de búsqueda...', 'info');
+          
+          // Cerrar el popup después de un breve retraso
+          setTimeout(() => {
+            window.close();
+          }, 1000);
+        } else {
+          showMessage('Esta extensión solo funciona en Facebook', 'error');
+        }
+      });
+    });
+  }
+
+  // Opción de Interactuar (muestra la interfaz de interacción con miembros)
+  if (interactOption) {
+    interactOption.addEventListener('click', function() {
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        const currentUrl = tabs[0].url;
+        
+        // Verificar si estamos en una página de grupo específica
+        const isInGroupPage = currentUrl.includes('facebook.com/groups/') && 
+                              !currentUrl.includes('/groups/feed') &&
+                              !currentUrl.includes('/blocked') &&
+                              !currentUrl.includes('/events');
+        
+        if (isInGroupPage) {
+          // Si estamos en un grupo, mostrar la interfaz de interacción
+          console.log('Estamos en una página de grupo, mostrando interfaz de interacción');
+          
+          // Enviar mensaje para mostrar la interfaz
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'showMemberInteraction',
+            timestamp: new Date().toISOString()
+          }, function(response) {
+            console.log('Respuesta de mostrar interacción:', response);
+            
+            // Manejar posibles errores
+            if (chrome.runtime.lastError) {
+              console.error('Error al comunicarse con la página:', chrome.runtime.lastError);
+              
+              // Navegar a la sección de miembros si hay un error
+              const currentURL = tabs[0].url;
+              const membersURL = currentURL.endsWith('/') 
+                ? currentURL + 'members'
+                : currentURL + '/members';
+              
+              chrome.tabs.update(tabs[0].id, {url: membersURL});
+            }
+          });
+          
+          showMessage('Mostrando opciones de interacción...', 'info');
+        } else if (currentUrl.includes('facebook.com')) {
+          // Si estamos en Facebook pero no en un grupo, ir a la página de grupos
+          console.log('No estamos en un grupo, navegando a la página de grupos');
+          chrome.tabs.update(tabs[0].id, {
+            url: 'https://www.facebook.com/groups/feed/'
+          });
+          
+          showMessage('Navegando a tus grupos...', 'info');
+        } else {
+          // Si no estamos en Facebook
+          showMessage('Esta extensión solo funciona en Facebook', 'error');
+        }
+        
+        // Cerrar el popup después de un breve retraso
+        setTimeout(() => {
+          window.close();
+        }, 1000);
+      });
+    });
+  }
+
+  // Opción de Informes y estadísticas (en construcción)
+  if (reportsStatsOption) {
+    reportsStatsOption.addEventListener('click', function() {
+      showMessage('Funcionalidad en construcción', 'info');
+    });
+  }
+
+  // Opción de Contacto y Soporte (en construcción)
+  if (contactSupportOption) {
+    contactSupportOption.addEventListener('click', function() {
+      showMessage('Funcionalidad en construcción', 'info');
     });
   }
 });
