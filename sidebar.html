@@ -6,6 +6,11 @@
   <title>Snap Lead Manager</title>
   <link rel="stylesheet" href="css/sidebar.css">
   <link rel="stylesheet" href="css/progress.css">
+  <link rel="stylesheet" href="css/n8n-integration.css">
+  
+  <!-- Cargar directamente los scripts de n8n -->
+  <script src="content/modules/n8nIntegration.js"></script>
+  <script src="content/modules/n8nIntegrationUI.js"></script>
 </head>
 <body>
   <div class="sidebar-container">
@@ -15,144 +20,214 @@
     </header>
     
     <main>
-      <section class="search-section">
-        <h2>Búsqueda en Facebook</h2>
-        
-        <!-- Opciones generales -->
-        <div class="form-group">
-          <label for="search-type">Tipo de búsqueda</label>
-          <select id="search-type" class="search-select">
-            <option value="people" selected>Personas</option>
-            <option value="groups">Grupos</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="search-term">Término de búsqueda</label>
-          <input type="text" id="search-term" placeholder="Nombre, profesión, etc.">
-        </div>
-        <div class="form-group" id="city-filter-group">
-          <label for="search-city">Ciudad (opcional)</label>
-          <input type="text" id="search-city" placeholder="Ej: Madrid, Barcelona">
-        </div>
-        
-        <!-- Opciones avanzadas (colapsables) -->
-        <div class="collapsible-section">
-          <button class="collapsible-trigger">Configuración Avanzada</button>
-          <div class="collapsible-content">
-            <!-- Configuración general -->
-            <div class="settings-section">
-              <h3>Opciones Generales</h3>
-              <div class="form-group">
-                <label for="max-scrolls">Scrolls máximos</label>
-                <input type="number" id="max-scrolls" min="1" value="4" placeholder="Por defecto 4">
-                <small class="input-help">Cantidad máxima de desplazamientos para cargar resultados</small>
-              </div>
-              <div class="form-group">
-                <label for="scroll-delay">Tiempo entre scrolls (segundos)</label>
-                <input type="number" id="scroll-delay" min="1" step="0.5" value="2" placeholder="Por defecto 2 segundos">
-                <small class="input-help">Tiempo de espera entre cada desplazamiento</small>
-              </div>
-            </div>
-            
-            <!-- Opciones específicas para grupos -->
-            <div id="group-options" class="settings-section" style="display: none;">
-              <h3>Opciones para Grupos</h3>
-              <div class="form-group">
-                <label>Tipos de grupo</label>
-                <div class="checkbox-group">
-                  <label class="checkbox-label">
-                    <input type="checkbox" id="public-groups" checked>
-                    Públicos
-                  </label>
-                  <label class="checkbox-label">
-                    <input type="checkbox" id="private-groups" checked>
-                    Privados
-                  </label>
-                </div>
-              </div>
-              <div class="form-group">
-                <label for="min-users">Cantidad mínima de usuarios</label>
-                <input type="number" id="min-users" min="0" value="1000">
-                <small class="input-help">Número mínimo de miembros que debe tener el grupo</small>
-              </div>
-              
-              <div class="form-group">
-                <label>Cantidad mínima de publicaciones</label>
-                <div class="posts-filters">
-                  <div class="posts-filter-item">
-                    <label for="min-posts-year">Por año</label>
-                    <input type="number" id="min-posts-year" min="0" value="1000" placeholder="Mín. anual">
-                  </div>
-                  <div class="posts-filter-item">
-                    <label for="min-posts-month">Por mes</label>
-                    <input type="number" id="min-posts-month" min="0" value="100" placeholder="Mín. mensual">
-                  </div>
-                  <div class="posts-filter-item">
-                    <label for="min-posts-day">Por día</label>
-                    <input type="number" id="min-posts-day" min="0" value="5" placeholder="Mín. diaria">
-                  </div>
-                </div>
-                <div class="filter-info">
-                  <p>Se requiere el mínimo de usuarios <strong>Y</strong> al menos uno de los mínimos de publicaciones (año, mes o día). Si no se establece ningún mínimo de publicaciones, sólo se filtrará por la cantidad de usuarios.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Botones de acción para búsqueda -->
-        <div class="button-group">
-          <button id="search-button" class="btn">Buscar</button>
-          <button id="pause-button" class="btn btn-secondary">Pausar</button>
-          <button id="stop-button" class="btn btn-secondary">Detener</button>
-        </div>
-        
-        <!-- Botones para gestión de criterios -->
-        <div class="criteria-management">
-          <button id="clear-criteria" class="btn-link">Limpiar criterios</button>
-          <button id="save-criteria" class="btn-link">Guardar criterios</button>
-          <button id="cancel-edit" class="btn-link cancel-edit-button" style="display: none;">Cancelar edición</button>
-          <button id="manage-criteria" class="btn-link">Administrar guardados</button>
-        </div>
-        
-        <!-- Contenedor para mostrar información de búsqueda actual -->
-        <div id="current-search-info" class="current-search-info" style="display: none;"></div>
-      </section>
+      <!-- Tabs para navegar entre secciones -->
+      <div class="sidebar-tabs">
+        <button class="tab-button active" data-tab="search-tab">Búsqueda</button>
+        <button class="tab-button" data-tab="results-tab">Resultados</button>
+        <button class="tab-button" data-tab="n8n-tab">Integración</button>
+        <button class="tab-button" data-tab="settings-tab">Configuración</button>
+      </div>
       
-      <section class="status-section">
-        <h2>Estado</h2>
-        <div id="status-message" class="status">Listo para comenzar</div>
-        <div class="progress-container">
-          <div id="progress-bar" class="progress-bar"></div>
-        </div>
-        
-        <!-- Nuevo contenedor detallado para el estado de la búsqueda -->
-        <div id="search-status-container" class="status-container" style="display: none;">
-          <div class="status-header">
-            <div class="status-title">Detalles de la búsqueda</div>
-            <div id="progress-percentage">0%</div>
+      <!-- Tab de búsqueda -->
+      <div class="tab-content active" id="search-tab">
+        <section class="search-section">
+          <h2>Búsqueda en Facebook</h2>
+          
+          <!-- Opciones generales -->
+          <div class="form-group">
+            <label for="search-type">Tipo de búsqueda</label>
+            <select id="search-type" class="search-select">
+              <option value="people" selected>Personas</option>
+              <option value="groups">Grupos</option>
+            </select>
           </div>
-          <div id="detailed-status-message" class="status-message">Esperando inicio de búsqueda...</div>
-          <div class="progress-bar-container">
-            <div id="detailed-progress-bar" class="progress-bar"></div>
+          <div class="form-group">
+            <label for="search-term">Término de búsqueda</label>
+            <input type="text" id="search-term" placeholder="Nombre, profesión, etc.">
           </div>
-          <div class="progress-details">
-            <span id="current-operation">Inactivo</span>
-            <span id="elapsed-time">00:00</span>
+          <div class="form-group" id="city-filter-group">
+            <label for="search-city">Ciudad (opcional)</label>
+            <input type="text" id="search-city" placeholder="Ej: Madrid, Barcelona">
           </div>
           
-          <!-- Registro de scrolls y hallazgos -->
-          <div id="scroll-log-container" class="scroll-log">
-            <!-- Las entradas de log se agregarán aquí dinámicamente -->
+          <!-- Opciones avanzadas (colapsables) -->
+          <div class="collapsible-section">
+            <button class="collapsible-trigger">Configuración Avanzada</button>
+            <div class="collapsible-content">
+              <!-- Configuración general -->
+              <div class="settings-section">
+                <h3>Opciones Generales</h3>
+                <div class="form-group">
+                  <label for="max-scrolls">Scrolls máximos</label>
+                  <input type="number" id="max-scrolls" min="1" value="4" placeholder="Por defecto 4">
+                  <small class="input-help">Cantidad máxima de desplazamientos para cargar resultados</small>
+                </div>
+                <div class="form-group">
+                  <label for="scroll-delay">Tiempo entre scrolls (segundos)</label>
+                  <input type="number" id="scroll-delay" min="1" step="0.5" value="2" placeholder="Por defecto 2 segundos">
+                  <small class="input-help">Tiempo de espera entre cada desplazamiento</small>
+                </div>
+              </div>
+              
+              <!-- Opciones específicas para grupos -->
+              <div id="group-options" class="settings-section" style="display: none;">
+                <h3>Opciones para Grupos</h3>
+                <div class="form-group">
+                  <label>Tipos de grupo</label>
+                  <div class="checkbox-group">
+                    <label class="checkbox-label">
+                      <input type="checkbox" id="public-groups" checked>
+                      Públicos
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" id="private-groups" checked>
+                      Privados
+                    </label>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="min-users">Cantidad mínima de usuarios</label>
+                  <input type="number" id="min-users" min="0" value="1000">
+                  <small class="input-help">Número mínimo de miembros que debe tener el grupo</small>
+                </div>
+                
+                <div class="form-group">
+                  <label>Cantidad mínima de publicaciones</label>
+                  <div class="posts-filters">
+                    <div class="posts-filter-item">
+                      <label for="min-posts-year">Por año</label>
+                      <input type="number" id="min-posts-year" min="0" value="1000" placeholder="Mín. anual">
+                    </div>
+                    <div class="posts-filter-item">
+                      <label for="min-posts-month">Por mes</label>
+                      <input type="number" id="min-posts-month" min="0" value="100" placeholder="Mín. mensual">
+                    </div>
+                    <div class="posts-filter-item">
+                      <label for="min-posts-day">Por día</label>
+                      <input type="number" id="min-posts-day" min="0" value="5" placeholder="Mín. diaria">
+                    </div>
+                  </div>
+                  <div class="filter-info">
+                    <p>Se requiere el mínimo de usuarios <strong>Y</strong> al menos uno de los mínimos de publicaciones (año, mes o día). Si no se establece ningún mínimo de publicaciones, sólo se filtrará por la cantidad de usuarios.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
+          
+          <!-- Botones de acción para búsqueda -->
+          <div class="button-group">
+            <button id="search-button" class="btn">Buscar</button>
+            <button id="pause-button" class="btn btn-secondary">Pausar</button>
+            <button id="stop-button" class="btn btn-secondary">Detener</button>
+          </div>
+          
+          <!-- Botones para gestión de criterios -->
+          <div class="criteria-management">
+            <button id="clear-criteria" class="btn-link">Limpiar criterios</button>
+            <button id="save-criteria" class="btn-link">Guardar criterios</button>
+            <button id="cancel-edit" class="btn-link cancel-edit-button" style="display: none;">Cancelar edición</button>
+            <button id="manage-criteria" class="btn-link">Administrar guardados</button>
+          </div>
+          
+          <!-- Contenedor para mostrar información de búsqueda actual -->
+          <div id="current-search-info" class="current-search-info" style="display: none;"></div>
+        </section>
+        
+        <section class="status-section">
+          <h2>Estado</h2>
+          <div id="status-message" class="status">Listo para comenzar</div>
+          <div class="progress-container">
+            <div id="progress-bar" class="progress-bar"></div>
+          </div>
+          
+          <!-- Nuevo contenedor detallado para el estado de la búsqueda -->
+          <div id="search-status-container" class="status-container" style="display: none;">
+            <div class="status-header">
+              <div class="status-title">Detalles de la búsqueda</div>
+              <div id="progress-percentage">0%</div>
+            </div>
+            <div id="detailed-status-message" class="status-message">Esperando inicio de búsqueda...</div>
+            <div class="progress-bar-container">
+              <div id="detailed-progress-bar" class="progress-bar"></div>
+            </div>
+            <div class="progress-details">
+              <span id="current-operation">Inactivo</span>
+              <span id="elapsed-time">00:00</span>
+            </div>
+            
+            <!-- Registro de scrolls y hallazgos -->
+            <div id="scroll-log-container" class="scroll-log">
+              <!-- Las entradas de log se agregarán aquí dinámicamente -->
+            </div>
+          </div>
+        </section>
+      </div>
       
-      <section class="results-section">
-        <h2>Resultados</h2>
-        <div id="results-summary" class="results-summary"></div>
-        <ul id="search-results" class="results-list"></ul>
-      </section>
+      <!-- Tab de resultados -->
+      <div class="tab-content" id="results-tab">
+        <section class="results-section">
+          <h2>Resultados</h2>
+          <div id="results-summary" class="results-summary"></div>
+          <ul id="search-results" class="results-list"></ul>
+        </section>
+      </div>
+      
+      <!-- Tab de integración con n8n -->
+      <div class="tab-content" id="n8n-tab">
+        <section class="n8n-integration-section">
+          <h2>Integración con n8n</h2>
+          <div id="n8n-integration-container">
+            <!-- El contenido será generado por n8nIntegrationUI -->
+            <div class="loading-indicator">Cargando configuración...</div>
+          </div>
+          
+          <div class="n8n-help-section">
+            <h3>¿Qué es n8n?</h3>
+            <p>n8n es una herramienta de automatización de flujos de trabajo que te permite conectar diferentes servicios y automatizar tareas. Con esta integración, puedes enviar tus resultados de búsqueda a n8n para procesarlos y utilizarlos en otros servicios.</p>
+            
+            <h3>¿Cómo configurar?</h3>
+            <p>Para configurar la integración con n8n:</p>
+            <ol>
+              <li>Configura un webhook en tu instancia de n8n</li>
+              <li>Copia la URL del webhook en el campo correspondiente</li>
+              <li>Genera una API key y agrégala a la configuración</li>
+              <li>Opcional: Activa el almacenamiento local de datos</li>
+            </ol>
+            
+            <p>Una vez configurada la integración, los resultados de tus búsquedas se enviarán automáticamente a n8n para su procesamiento.</p>
+          </div>
+        </section>
+      </div>
+      
+      <!-- Tab de configuración -->
+      <div class="tab-content" id="settings-tab">
+        <section class="settings-global-section">
+          <h2>Configuración Global</h2>
+          
+          <!-- Aquí irían todas las opciones de configuración global -->
+          <div class="form-group">
+            <label for="global-max-scrolls">Scrolls máximos (global)</label>
+            <input type="number" id="global-max-scrolls" min="1" value="4">
+          </div>
+          
+          <div class="form-group">
+            <label for="global-scroll-delay">Tiempo entre scrolls (segundos)</label>
+            <input type="number" id="global-scroll-delay" min="1" step="0.5" value="2">
+          </div>
+          
+          <div class="form-group checkbox-row">
+            <label for="auto-sync-enabled">
+              <input type="checkbox" id="auto-sync-enabled">
+              Sincronización automática
+            </label>
+          </div>
+          
+          <div class="form-group">
+            <button id="save-global-config" class="btn">Guardar Configuración</button>
+          </div>
+        </section>
+      </div>
     </main>
     
     <!-- Modal para guardar criterios de búsqueda -->

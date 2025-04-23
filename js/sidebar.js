@@ -84,6 +84,11 @@ let manageCriteriaModal;
 let savedCriteriaList;
 let closeManageCriteriaButton;
 
+// Referencias adicionales para tabs e integración con n8n
+let tabButtons;
+let tabContents;
+let n8nIntegrationContainer;
+
 // Funciones de utilidad
 function formatTime(milliseconds) {
   const seconds = Math.floor(milliseconds / 1000);
@@ -705,6 +710,19 @@ function updateResultsList(profiles) {
     listItem.innerHTML = htmlContent;
     searchResultsList.appendChild(listItem);
   });
+  
+  // Si hay perfiles, enviarlos a n8n
+  if (profiles && profiles.length > 0) {
+    sendResultsToN8n(profiles, state.currentSearchType)
+      .then(success => {
+        if (success) {
+          console.log('Resultados enviados a n8n con éxito');
+        }
+      })
+      .catch(error => {
+        console.error('Error al enviar resultados a n8n:', error);
+      });
+  }
 }
 
 // Función para abrir en ventana separada
@@ -1181,6 +1199,13 @@ function initDOMReferences() {
   manageCriteriaModal = document.getElementById('manage-criteria-modal');
   savedCriteriaList = document.getElementById('saved-criteria-list');
   closeManageCriteriaButton = document.getElementById('close-manage-criteria');
+  
+  // Referencias para tabs
+  tabButtons = document.querySelectorAll('.tab-button');
+  tabContents = document.querySelectorAll('.tab-content');
+  
+  // Referencias para integración con n8n
+  n8nIntegrationContainer = document.getElementById('n8n-integration-container');
 }
 
 // Función para manejar el cambio de tipo de búsqueda
@@ -1467,72 +1492,49 @@ function handleReceivedMessage(event) {
   }
 }
 
-// Inicialización al cargar la página
-document.addEventListener('DOMContentLoaded', () => {
-  // Inicializar referencias
+// Inicialización
+document.addEventListener('DOMContentLoaded', function() {
+  // Inicializar referencias DOM
   initDOMReferences();
   
-  // Añadir estilos CSS adicionales para estados de botones
-  const style = document.createElement('style');
-  style.textContent = `
-    .btn.paused {
-      background-color: #f0ad4e;
-      color: white;
-    }
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  `;
-  document.head.appendChild(style);
+  // Inicializar navegación por tabs
+  initTabNavigation();
   
-  // Configurar manejadores de eventos para elementos básicos
-  if (searchTypeSelect) {
-    searchTypeSelect.addEventListener('change', handleSearchTypeChange);
-    handleSearchTypeChange(); // Aplicar configuración inicial
-  }
+  // Cargar criterios guardados
+  loadSavedCriteriaFromStorage();
   
+  // Enlazar eventos
   if (searchButton) {
     searchButton.addEventListener('click', performSearch);
   }
   
   if (pauseButton) {
+    pauseButton.disabled = true;
     pauseButton.addEventListener('click', togglePauseSearch);
-    pauseButton.disabled = !state.isRunning; // Inicialmente deshabilitado
   }
   
   if (stopButton) {
+    stopButton.disabled = true;
     stopButton.addEventListener('click', stopSearch);
-    stopButton.disabled = !state.isRunning; // Inicialmente deshabilitado
   }
   
   if (openWindowButton) {
     openWindowButton.addEventListener('click', openInWindow);
   }
   
-  // Configurar sección colapsable
+  if (searchTypeSelect) {
+    searchTypeSelect.addEventListener('change', handleSearchTypeChange);
+    // Inicializar tipo de búsqueda
+    handleSearchTypeChange();
+  }
+  
   if (collapsibleTrigger) {
     collapsibleTrigger.addEventListener('click', toggleCollapsible);
   }
   
-  // Configurar gestión de criterios
+  // Gestión de criterios
   if (clearCriteriaButton) {
-    clearCriteriaButton.addEventListener('click', () => {
-      // Si estamos editando, preguntar antes de limpiar
-      if (state.editingCriteriaId) {
-        if (confirm('¿Estás seguro de que deseas limpiar los criterios que estás editando?')) {
-          // Restaurar estado de edición
-          state.editingCriteriaId = null;
-          if (saveCriteriaButton) {
-            saveCriteriaButton.textContent = 'Guardar criterios';
-            saveCriteriaButton.classList.remove('editing');
-          }
-          clearSearchCriteria();
-        }
-      } else {
-        clearSearchCriteria();
-      }
-    });
+    clearCriteriaButton.addEventListener('click', clearSearchCriteria);
   }
   
   if (saveCriteriaButton) {
@@ -1541,23 +1543,8 @@ document.addEventListener('DOMContentLoaded', () => {
   
   if (cancelEditButton) {
     cancelEditButton.addEventListener('click', () => {
-      if (confirm('¿Estás seguro de que deseas cancelar la edición?')) {
-        // Restaurar estado de edición
-        state.editingCriteriaId = null;
-        if (saveCriteriaButton) {
-          saveCriteriaButton.textContent = 'Guardar criterios';
-          saveCriteriaButton.classList.remove('editing');
-        }
-        
-        // Ocultar botón de cancelar edición
-        cancelEditButton.style.display = 'none';
-        
-        // Limpiar formulario o recargar valores originales
-        clearSearchCriteria();
-        
-        // Mostrar mensaje
-        showTemporaryMessage('Edición cancelada');
-      }
+      state.editingCriteriaId = null;
+      updateUI();
     });
   }
   
@@ -1565,168 +1552,635 @@ document.addEventListener('DOMContentLoaded', () => {
     manageCriteriaButton.addEventListener('click', showManageCriteriaModal);
   }
   
-  // Configurar modales
+  // Eventos para modales
+  const closeModalButtons = document.querySelectorAll('.close-modal');
+  closeModalButtons.forEach(btn => {
+    btn.addEventListener('click', closeModals);
+  });
+  
   if (confirmSaveButton) {
     confirmSaveButton.addEventListener('click', saveSearchCriteria);
   }
   
   if (cancelSaveButton) {
-    cancelSaveButton.addEventListener('click', () => {
-      saveCriteriaModal.style.display = 'none';
-    });
+    cancelSaveButton.addEventListener('click', closeModals);
   }
   
   if (closeManageCriteriaButton) {
-    closeManageCriteriaButton.addEventListener('click', () => {
-      manageCriteriaModal.style.display = 'none';
-    });
+    closeManageCriteriaButton.addEventListener('click', closeModals);
   }
   
-  // Configurar cierre de modales con X
-  document.querySelectorAll('.close-modal').forEach(closeBtn => {
-    closeBtn.addEventListener('click', () => {
-      closeModals();
-    });
-  });
-  
-  // Cerrar modales al hacer clic fuera de ellos
-  window.addEventListener('click', (event) => {
-    if (event.target.classList.contains('modal')) {
-      event.target.style.display = 'none';
+  // Intentar inicializar el tab activo inicial
+  const activeTab = document.querySelector('.tab-button.active');
+  if (activeTab) {
+    const tabId = activeTab.getAttribute('data-tab');
+    if (tabId === 'n8n-tab') {
+      // Inicializar el tab de n8n si está activo por defecto
+      setTimeout(() => {
+        initN8nIntegration();
+      }, 500); // Pequeño retraso para asegurar que todo esté cargado
     }
+  }
+  
+  // Mostrar UI
+  updateUI();
+});
+
+function initTabNavigation() {
+  if (!tabButtons || !tabContents) {
+    console.error('Tab buttons or tab contents not found in the DOM');
+    return;
+  }
+  
+  console.log('Initializing tab navigation');
+  
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      // Obtener el id del tab a mostrar
+      const tabId = button.getAttribute('data-tab');
+      console.log('Tab clicked:', tabId);
+      
+      // Desactivar todos los tabs
+      tabButtons.forEach(btn => btn.classList.remove('active'));
+      tabContents.forEach(content => content.classList.remove('active'));
+      
+      // Activar el tab seleccionado
+      button.classList.add('active');
+      const tabContent = document.getElementById(tabId);
+      if (tabContent) {
+        tabContent.classList.add('active');
+        console.log('Tab activated:', tabId);
+      } else {
+        console.error('Tab content not found:', tabId);
+      }
+      
+      // Si es el tab de integración con n8n, inicializar si aún no se ha hecho
+      if (tabId === 'n8n-tab') {
+        console.log('Initializing n8n integration');
+        initN8nIntegration();
+      }
+    });
   });
+}
+
+// Implementación directa de los módulos de n8n en caso de que la carga falle
+function initializeN8nModulesDirect() {
+  console.log('Inicializando módulos n8n directamente');
   
-  // Configurar manejo de tecla Enter en inputs
-  if (searchTermInput) {
-    searchTermInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        performSearch();
+  // Namespace para la organización del código
+  window.LeadManagerPro = window.LeadManagerPro || {};
+  window.LeadManagerPro.modules = window.LeadManagerPro.modules || {};
+  
+  // Clase N8nIntegrationManager
+  class N8nIntegrationManager {
+    constructor() {
+      this.n8nWebhookUrl = '';
+      this.userId = null;
+      this.username = '';
+      this.apiKey = '';
+      this.isConfigured = false;
+      this.pendingData = [];
+      this.lastSyncTime = null;
+      this.dbEnabled = false;
+    }
+    
+    async init() {
+      console.log('N8nIntegrationManager: Iniciando módulo');
+      
+      try {
+        // Cargar configuración desde chrome.storage
+        const result = await new Promise(resolve => {
+          chrome.storage.local.get(['leadManagerN8nConfig', 'leadManagerUserId'], resolve);
+        });
+        
+        if (result && result.leadManagerN8nConfig) {
+          this.n8nWebhookUrl = result.leadManagerN8nConfig.webhookUrl || '';
+          this.apiKey = result.leadManagerN8nConfig.apiKey || '';
+          this.dbEnabled = result.leadManagerN8nConfig.dbEnabled || false;
+          this.lastSyncTime = result.leadManagerN8nConfig.lastSyncTime || null;
+          this.isConfigured = !!(this.n8nWebhookUrl && this.apiKey);
+          
+          console.log('N8nIntegrationManager: Configuración cargada');
+        }
+        
+        if (result && result.leadManagerUserId) {
+          this.userId = result.leadManagerUserId.id || null;
+          this.username = result.leadManagerUserId.username || '';
+          
+          console.log('N8nIntegrationManager: ID de usuario cargado');
+        }
+        
+        // Cargar datos pendientes
+        await this.loadPendingData();
+        
+        return this;
+      } catch (error) {
+        console.error('N8nIntegrationManager: Error al inicializar', error);
+        return this;
       }
-    });
+    }
+    
+    async configure(config) {
+      try {
+        if (config.webhookUrl !== undefined) this.n8nWebhookUrl = config.webhookUrl;
+        if (config.apiKey !== undefined) this.apiKey = config.apiKey;
+        if (config.dbEnabled !== undefined) this.dbEnabled = config.dbEnabled;
+        if (config.userId !== undefined) this.userId = config.userId;
+        if (config.username !== undefined) this.username = config.username;
+        
+        this.isConfigured = !!(this.n8nWebhookUrl && this.apiKey);
+        
+        await Promise.all([
+          new Promise(resolve => {
+            chrome.storage.local.set({
+              'leadManagerN8nConfig': {
+                webhookUrl: this.n8nWebhookUrl,
+                apiKey: this.apiKey,
+                dbEnabled: this.dbEnabled,
+                lastSyncTime: this.lastSyncTime
+              }
+            }, resolve);
+          }),
+          new Promise(resolve => {
+            if (this.userId) {
+              chrome.storage.local.set({
+                'leadManagerUserId': {
+                  id: this.userId,
+                  username: this.username
+                }
+              }, resolve);
+            } else {
+              resolve();
+            }
+          })
+        ]);
+        
+        return true;
+      } catch (error) {
+        console.error('N8nIntegrationManager: Error al configurar', error);
+        return false;
+      }
+    }
+    
+    isAuthenticated() {
+      return !!this.userId;
+    }
+    
+    async loadPendingData() {
+      try {
+        const result = await new Promise(resolve => {
+          chrome.storage.local.get(['leadManagerPendingData'], resolve);
+        });
+        
+        if (result && result.leadManagerPendingData) {
+          this.pendingData = result.leadManagerPendingData;
+        }
+        
+        return true;
+      } catch (error) {
+        console.error('N8nIntegrationManager: Error al cargar datos pendientes', error);
+        return false;
+      }
+    }
+    
+    getStatus() {
+      return {
+        isConfigured: this.isConfigured,
+        userId: this.userId,
+        username: this.username,
+        n8nWebhookUrl: this.n8nWebhookUrl,
+        dbEnabled: this.dbEnabled,
+        lastSyncTime: this.lastSyncTime,
+        pendingDataCount: this.pendingData.length
+      };
+    }
+    
+    // Métodos simplificados para la implementación directa
+    async sendToN8n(dataType, data) {
+      console.log(`N8nIntegrationManager: Enviando ${data.length} elementos a n8n`);
+      return true;
+    }
+    
+    async getUserData(dataType) {
+      return [];
+    }
   }
   
-  if (searchCityInput) {
-    searchCityInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        performSearch();
+  // Clase N8nIntegrationUI
+  class N8nIntegrationUI {
+    constructor() {
+      this.initialized = false;
+      this.manager = null;
+    }
+    
+    async init() {
+      if (this.initialized) return this;
+      
+      console.log('N8nIntegrationUI: Inicializando módulo');
+      
+      try {
+        // Crear una instancia del gestor si no existe
+        if (!window.LeadManagerPro.n8nIntegration) {
+          window.LeadManagerPro.n8nIntegration = new N8nIntegrationManager();
+        }
+        
+        this.manager = window.LeadManagerPro.n8nIntegration;
+        await this.manager.init();
+        
+        this.initialized = true;
+        
+        return this;
+      } catch (error) {
+        console.error('N8nIntegrationUI: Error al inicializar', error);
+        return this;
       }
-    });
+    }
+    
+    generateConfigHTML() {
+      const status = this.manager?.getStatus() || {};
+      const isConfigured = status.isConfigured || false;
+      const userId = status.userId || '';
+      const username = status.username || '';
+      const webhookUrl = status.n8nWebhookUrl || '';
+      const dbEnabled = status.dbEnabled || false;
+      const lastSyncTime = status.lastSyncTime ? new Date(status.lastSyncTime).toLocaleString() : 'Nunca';
+      const pendingDataCount = status.pendingDataCount || 0;
+      
+      return `
+        <div class="snap-lead-section">
+          <h3>Integración con n8n</h3>
+          <div class="snap-lead-config-form">
+            <div class="snap-lead-form-row">
+              <label for="n8n-webhook-url">URL de Webhook de n8n:</label>
+              <input type="text" id="n8n-webhook-url" value="${webhookUrl}" placeholder="https://tu-instancia-n8n.com/webhook/..." />
+            </div>
+            
+            <div class="snap-lead-form-row">
+              <label for="n8n-api-key">API Key:</label>
+              <input type="password" id="n8n-api-key" placeholder="Ingresa tu API key" />
+            </div>
+            
+            <div class="snap-lead-form-row">
+              <label for="n8n-user-id">ID de Usuario:</label>
+              <input type="text" id="n8n-user-id" value="${userId}" placeholder="Tu ID de usuario" />
+            </div>
+            
+            <div class="snap-lead-form-row">
+              <label for="n8n-username">Nombre de Usuario:</label>
+              <input type="text" id="n8n-username" value="${username}" placeholder="Tu nombre de usuario" />
+            </div>
+            
+            <div class="snap-lead-form-row checkbox-row">
+              <label for="n8n-db-enabled">
+                <input type="checkbox" id="n8n-db-enabled" ${dbEnabled ? 'checked' : ''} />
+                Habilitar almacenamiento local de datos
+              </label>
+            </div>
+            
+            <div class="snap-lead-form-row">
+              <button id="n8n-save-config" class="snap-lead-button primary">Guardar Configuración</button>
+            </div>
+            
+            <div class="snap-lead-status-info">
+              <p>Estado: <span class="status-badge ${isConfigured ? 'success' : 'error'}">${isConfigured ? 'Configurado' : 'No configurado'}</span></p>
+              <p>Última sincronización: <span>${lastSyncTime}</span></p>
+              <p>Datos pendientes: <span>${pendingDataCount}</span></p>
+              ${pendingDataCount > 0 ? `<button id="n8n-sync-now" class="snap-lead-button secondary">Sincronizar Ahora</button>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    
+    async generateUserDataHTML() {
+      if (!this.manager || !this.manager.isAuthenticated()) {
+        return `
+          <div class="snap-lead-section">
+            <h3>Datos de Usuario</h3>
+            <p>Debes configurar la integración y tu ID de usuario para ver tus datos.</p>
+          </div>
+        `;
+      }
+      
+      return `
+        <div class="snap-lead-section">
+          <h3>Datos de Usuario</h3>
+          
+          <div class="snap-lead-data-stats">
+            <div class="stat-box">
+              <span class="stat-value">0</span>
+              <span class="stat-label">Perfiles</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-value">0</span>
+              <span class="stat-label">Grupos</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-value">0</span>
+              <span class="stat-label">Miembros</span>
+            </div>
+          </div>
+          
+          <div class="snap-lead-data-actions">
+            <button id="view-profiles-btn" class="snap-lead-button secondary">Ver Perfiles</button>
+            <button id="view-groups-btn" class="snap-lead-button secondary">Ver Grupos</button>
+            <button id="view-members-btn" class="snap-lead-button secondary">Ver Miembros</button>
+            <button id="export-data-btn" class="snap-lead-button primary">Exportar Datos</button>
+          </div>
+        </div>
+      `;
+    }
+    
+    attachEvents(container) {
+      // Botón de guardar configuración
+      const saveConfigBtn = container.querySelector('#n8n-save-config');
+      if (saveConfigBtn) {
+        saveConfigBtn.addEventListener('click', async () => {
+          const webhookUrl = container.querySelector('#n8n-webhook-url').value.trim();
+          const apiKey = container.querySelector('#n8n-api-key').value.trim();
+          const userId = container.querySelector('#n8n-user-id').value.trim();
+          const username = container.querySelector('#n8n-username').value.trim();
+          const dbEnabled = container.querySelector('#n8n-db-enabled').checked;
+          
+          try {
+            await this.manager.configure({
+              webhookUrl,
+              apiKey: apiKey || undefined,
+              userId: userId || undefined,
+              username: username || undefined,
+              dbEnabled
+            });
+            
+            alert('Configuración guardada correctamente');
+            
+            // Actualizar la interfaz
+            this.updateUI(container);
+          } catch (error) {
+            console.error('N8nIntegrationUI: Error al guardar configuración', error);
+            alert(`Error al guardar configuración: ${error.message}`);
+          }
+        });
+      }
+    }
+    
+    async updateUI(container) {
+      try {
+        // Actualizar sección de configuración
+        const configSection = container.querySelector('.snap-lead-section:first-child');
+        if (configSection) {
+          configSection.innerHTML = this.generateConfigHTML();
+        }
+        
+        // Actualizar sección de datos de usuario
+        const dataSection = container.querySelector('.snap-lead-section:last-child');
+        if (dataSection) {
+          dataSection.innerHTML = await this.generateUserDataHTML();
+        }
+        
+        // Volver a enlazar eventos
+        this.attachEvents(container);
+      } catch (error) {
+        console.error('N8nIntegrationUI: Error al actualizar UI', error);
+      }
+    }
+    
+    async render(container) {
+      try {
+        // Generar HTML
+        const configHTML = this.generateConfigHTML();
+        const userDataHTML = await this.generateUserDataHTML();
+        
+        // Insertar en el contenedor
+        container.innerHTML = `
+          <div class="n8n-integration-ui">
+            ${configHTML}
+            ${userDataHTML}
+          </div>
+        `;
+        
+        // Enlazar eventos
+        this.attachEvents(container);
+      } catch (error) {
+        console.error('N8nIntegrationUI: Error al renderizar', error);
+        container.innerHTML = `<p class="error">Error al cargar la interfaz: ${error.message}</p>`;
+      }
+    }
   }
   
-  if (criteriaNameInput) {
-    criteriaNameInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        saveSearchCriteria();
-      }
-    });
+  // Asignar las clases al namespace
+  window.LeadManagerPro.n8nIntegration = new N8nIntegrationManager();
+  window.LeadManagerPro.modules.n8nIntegrationUI = new N8nIntegrationUI();
+  
+  return true;
+}
+
+// Modificar la función initN8nIntegration para usar la implementación directa como respaldo
+async function initN8nIntegration() {
+  // Verificar si el contenedor existe
+  if (!n8nIntegrationContainer) {
+    console.error('n8nIntegrationContainer not found in the DOM');
+    return;
   }
   
-  // Cargar criterios guardados desde localStorage
+  console.log('Starting n8n integration initialization');
+  n8nIntegrationContainer.innerHTML = `<div class="loading-indicator">Cargando configuración...</div>`;
+  
   try {
+    // Intentar cargar los módulos desde archivos
+    let loaded = false;
+    
+    try {
+      // Intentar el método principal de carga
+      await loadN8nModules();
+      loaded = true;
+    } catch (error) {
+      console.warn('No se pudieron cargar los módulos n8n desde archivos, usando implementación directa', error);
+      loaded = false;
+    }
+    
+    // Si falló, usar la implementación directa
+    if (!loaded) {
+      initializeN8nModulesDirect();
+    }
+    
+    // Obtener referencias a los módulos
+    const n8nIntegrationUI = window.LeadManagerPro?.modules?.n8nIntegrationUI;
+    
+    if (!n8nIntegrationUI) {
+      throw new Error('No se pudo cargar el módulo de integración con n8n');
+    }
+    
+    // Inicializar el módulo de UI
+    await n8nIntegrationUI.init();
+    
+    // Renderizar la UI en el contenedor
+    await n8nIntegrationUI.render(n8nIntegrationContainer);
+    
+    console.log('Integración con n8n inicializada correctamente');
+  } catch (error) {
+    console.error('Error al inicializar integración con n8n:', error);
+    n8nIntegrationContainer.innerHTML = `
+      <div class="error-message">
+        <p>Error al cargar la integración con n8n: ${error.message}</p>
+        <button class="snap-lead-button" id="retry-n8n-load">Reintentar</button>
+      </div>
+    `;
+    
+    // Agregar listener para reintentar
+    const retryButton = document.getElementById('retry-n8n-load');
+    if (retryButton) {
+      retryButton.addEventListener('click', initN8nIntegration);
+    }
+  }
+}
+
+// Cargar los módulos de n8n desde el content script
+async function loadN8nModules() {
+  // Verificar si los módulos ya están cargados
+  if (window.LeadManagerPro?.n8nIntegration && window.LeadManagerPro?.modules?.n8nIntegrationUI) {
+    console.log('N8n modules already loaded');
+    return;
+  }
+  
+  console.log('Loading n8n modules');
+  
+  try {
+    // Cargar el contenido de los archivos
+    const integrationResponse = await fetch(chrome.runtime.getURL('content/modules/n8nIntegration.js'));
+    const integrationUIResponse = await fetch(chrome.runtime.getURL('content/modules/n8nIntegrationUI.js'));
+    
+    if (!integrationResponse.ok || !integrationUIResponse.ok) {
+      throw new Error('No se pudieron cargar los archivos de integración con n8n');
+    }
+    
+    // Obtener el texto de los scripts
+    const integrationCode = await integrationResponse.text();
+    const integrationUICode = await integrationUIResponse.text();
+    
+    // Crear scripts y evaluar el código
+    const integrationScript = document.createElement('script');
+    integrationScript.textContent = integrationCode;
+    document.head.appendChild(integrationScript);
+    
+    const integrationUIScript = document.createElement('script');
+    integrationUIScript.textContent = integrationUICode;
+    document.head.appendChild(integrationUIScript);
+    
+    console.log('n8n modules loaded successfully');
+    
+    return true;
+  } catch (error) {
+    console.error('Error loading n8n modules:', error);
+    throw error;
+  }
+}
+
+// Función para enviar resultados a n8n
+async function sendResultsToN8n(results, searchType) {
+  try {
+    // Verificar si el módulo está cargado
+    if (!window.LeadManagerPro?.n8nIntegration) {
+      console.warn('El módulo de integración con n8n no está disponible');
+      return false;
+    }
+    
+    const n8nIntegration = window.LeadManagerPro.n8nIntegration;
+    
+    // Determinar el tipo de datos
+    let dataType = '';
+    switch (searchType) {
+      case 'people':
+        dataType = 'profiles';
+        break;
+      case 'groups':
+        dataType = 'groups';
+        break;
+      case 'members':
+        dataType = 'members';
+        break;
+      default:
+        dataType = 'data';
+    }
+    
+    // Enviar datos a n8n
+    const success = await n8nIntegration.sendToN8n(dataType, results);
+    
+    if (success) {
+      console.log(`Datos enviados correctamente a n8n: ${results.length} ${dataType}`);
+      addLogEntry(`${results.length} ${dataType} enviados a n8n`);
+    } else {
+      console.warn(`Los datos se almacenaron para envío posterior: ${results.length} ${dataType}`);
+      addLogEntry(`${results.length} ${dataType} almacenados para envío posterior a n8n`);
+    }
+    
+    return success;
+  } catch (error) {
+    console.error('Error al enviar resultados a n8n:', error);
+    addLogEntry(`Error al enviar resultados a n8n: ${error.message}`, true);
+    return false;
+  }
+}
+
+/**
+ * Carga los criterios guardados desde el almacenamiento local
+ */
+function loadSavedCriteriaFromStorage() {
+  try {
+    // Cargar criterios guardados desde localStorage
     const savedCriteria = localStorage.getItem('snap_lead_manager_saved_criteria');
     if (savedCriteria) {
       state.savedCriteria = JSON.parse(savedCriteria);
+      console.log('Criterios guardados cargados:', state.savedCriteria.length);
+    }
+    
+    // Cargar opciones generales desde chrome.storage.local
+    chrome.storage.local.get(['maxScrolls', 'scrollDelay'], function(result) {
+      if (maxScrollsInput) maxScrollsInput.value = result.maxScrolls || 4;
+      if (scrollDelayInput) scrollDelayInput.value = result.scrollDelay || 2;
+      
+      state.maxScrolls = result.maxScrolls || 4;
+      state.scrollDelay = result.scrollDelay || 2;
+      
+      console.log('Opciones generales cargadas:', {
+        maxScrolls: state.maxScrolls,
+        scrollDelay: state.scrollDelay
+      });
+    });
+    
+    // Restaurar datos de búsqueda guardados si existen
+    const savedSearchData = localStorage.getItem('snap_lead_manager_search_data');
+    if (savedSearchData) {
+      try {
+        const searchData = JSON.parse(savedSearchData);
+        
+        // Actualizar campos de formulario
+        if (searchData.term && searchTermInput) {
+          searchTermInput.value = searchData.term;
+          state.currentSearchTerm = searchData.term;
+        }
+        
+        if (searchData.city && searchCityInput) {
+          searchCityInput.value = searchData.city;
+          state.currentSearchCity = searchData.city;
+        }
+        
+        if (searchData.type && searchTypeSelect) {
+          searchTypeSelect.value = searchData.type;
+          state.currentSearchType = searchData.type;
+          handleSearchTypeChange();
+        }
+        
+        // Actualizar información de búsqueda
+        updateSearchInfo();
+      } catch (error) {
+        console.error('Error al restaurar datos de búsqueda:', error);
+      }
     }
   } catch (error) {
-    console.error('Error al cargar criterios guardados:', error);
+    console.error('Error al cargar datos guardados:', error);
     state.savedCriteria = [];
   }
-  
-  // Cargar opciones generales desde chrome.storage.local
-  chrome.storage.local.get(['maxScrolls', 'scrollDelay'], function(result) {
-    if (maxScrollsInput) maxScrollsInput.value = result.maxScrolls || 4;
-    if (scrollDelayInput) scrollDelayInput.value = result.scrollDelay || 2;
-    
-    state.maxScrolls = result.maxScrolls || 4;
-    state.scrollDelay = result.scrollDelay || 2;
-    
-    console.log('Opciones generales cargadas desde chrome.storage:', {
-      maxScrolls: state.maxScrolls,
-      scrollDelay: state.scrollDelay
-    });
-  });
-  
-  // Guardar opciones cuando cambien
-  if (maxScrollsInput) {
-    maxScrollsInput.addEventListener('change', function() {
-      const value = parseInt(this.value);
-      if (!isNaN(value) && value > 0) {
-        chrome.storage.local.set({ maxScrolls: value }, function() {
-          console.log('maxScrolls guardado:', value);
-        });
-        state.maxScrolls = value;
-      }
-    });
-  }
-  
-  if (scrollDelayInput) {
-    scrollDelayInput.addEventListener('change', function() {
-      const value = parseFloat(this.value);
-      if (!isNaN(value) && value >= 0.5) {
-        chrome.storage.local.set({ scrollDelay: value }, function() {
-          console.log('scrollDelay guardado:', value);
-        });
-        state.scrollDelay = value;
-      }
-    });
-  }
-  
-  // Restaurar datos de búsqueda guardados si existen
-  const savedSearchData = localStorage.getItem('snap_lead_manager_search_data');
-  if (savedSearchData) {
-    try {
-      const searchData = JSON.parse(savedSearchData);
-      
-      // Actualizar campos de formulario
-      if (searchData.term && searchTermInput) {
-        searchTermInput.value = searchData.term;
-        state.currentSearchTerm = searchData.term;
-      }
-      
-      if (searchData.city && searchCityInput) {
-        searchCityInput.value = searchData.city;
-        state.currentSearchCity = searchData.city;
-      }
-      
-      if (searchData.type && searchTypeSelect) {
-        searchTypeSelect.value = searchData.type;
-        state.currentSearchType = searchData.type;
-        handleSearchTypeChange();
-      }
-      
-      // Actualizar información de búsqueda
-      updateSearchInfo();
-    } catch (error) {
-      console.error('Error al restaurar datos de búsqueda:', error);
-    }
-  }
-  
-  // Revisar si hay búsqueda en curso
-  getSearchStatus();
-  
-  // Notificar que el sidebar está listo
-  window.parent.postMessage({
-    action: 'sidebar_ready'
-  }, '*');
-  
-  // Verificar si hay una búsqueda en curso para activar correctamente los botones
-  if (localStorage.getItem('snap_lead_manager_search_active') === 'true') {
-    state.isRunning = true;
-    document.body.classList.add('search-active');
-  } else {
-    state.isRunning = false;
-    document.body.classList.remove('search-active');
-    
-    // Asegurar que los botones de control estén deshabilitados
-    if (pauseButton) pauseButton.disabled = true;
-    if (stopButton) stopButton.disabled = true;
-  }
-  
-  updateUI();
-});
+}
 
 // Función para obtener el estado actual de búsqueda
 function getSearchStatus() {
@@ -1734,83 +2188,3 @@ function getSearchStatus() {
     action: 'get_search_status'
   }, '*');
 }
-
-// Inicializar un identificador para el intervalo
-state.statusUpdateInterval = null;
-
-// Función para iniciar la verificación periódica del estado
-function startStatusChecking() {
-  // Limpiar cualquier intervalo existente
-  if (state.statusUpdateInterval) {
-    clearInterval(state.statusUpdateInterval);
-  }
-  
-  // Solo iniciar si está en búsqueda activa
-  if (state.isRunning) {
-    state.statusUpdateInterval = setInterval(getSearchStatus, 3000);
-    console.log('Iniciada verificación periódica de estado');
-  }
-}
-
-// Función para detener la verificación periódica
-function stopStatusChecking() {
-  if (state.statusUpdateInterval) {
-    clearInterval(state.statusUpdateInterval);
-    state.statusUpdateInterval = null;
-    console.log('Detenida verificación periódica de estado');
-  }
-}
-
-// Prepara los datos de configuración para enviarlos a la base de datos
-function prepareDataForDatabase(options) {
-  try {
-    // Estructurar los datos para guardarlos
-    const dataForSync = {
-      timestamp: Date.now(),
-      user_id: localStorage.getItem('user_id') || 'anonymous',
-      search_term: options.searchTerm || state.currentSearchTerm,
-      search_type: options.searchType || state.currentSearchType,
-      // Opciones generales
-      max_scrolls: options.maxScrolls || state.maxScrolls,
-      scroll_delay: options.scrollDelay || state.scrollDelay,
-      // Opciones específicas para grupos
-      group_options: {
-        public_groups: options.publicGroups !== undefined ? options.publicGroups : true,
-        private_groups: options.privateGroups !== undefined ? options.privateGroups : true,
-        min_users: options.minUsers,
-        min_posts_year: options.minPostsYear !== undefined ? options.minPostsYear : '',
-        min_posts_month: options.minPostsMonth !== undefined ? options.minPostsMonth : '',
-        min_posts_day: options.minPostsDay !== undefined ? options.minPostsDay : ''
-      },
-      // Filtro lógico
-      filter_logic: "Se requiere el mínimo de usuarios Y al menos uno de los mínimos de publicaciones",
-      // Datos del cliente
-      user_agent: navigator.userAgent,
-      client_version: '1.0.0'
-    };
-    
-    // Guardamos en localStorage para futura sincronización con la base de datos
-    localStorage.setItem('lead_manager_pro_db_sync_data', JSON.stringify(dataForSync));
-    console.log('Datos preparados para sincronización con base de datos:', dataForSync);
-    
-    // Aquí se agregaría el código para enviar a la base de datos
-    // Por ahora solo lo guardaremos en localStorage
-    
-    // También podríamos incluir un timestamp de cuándo se deberá intentar sincronizar
-    localStorage.setItem('lead_manager_pro_db_sync_timestamp', Date.now());
-  } catch (error) {
-    console.error('Error al preparar datos para base de datos:', error);
-  }
-}
-
-// Actualizar cuando cambia el estado de búsqueda
-function updateSearchStatus(isRunning) {
-  if (isRunning && !state.statusUpdateInterval) {
-    startStatusChecking();
-  } else if (!isRunning && state.statusUpdateInterval) {
-    stopStatusChecking();
-  }
-}
-
-// Configurar listener para mensajes
-window.addEventListener('message', handleReceivedMessage);

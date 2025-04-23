@@ -47,6 +47,8 @@
         "content/modules/groupSearchOptionsUI.js",
         "content/modules/memberInteraction.js",
         "content/modules/memberInteractionUI.js",
+        "content/modules/n8nIntegration.js",
+        "content/modules/n8nIntegrationUI.js",
         "content/modules/sidebar.js",
         "content/modules/errorHandler.js",
         "content/modules/emergency.js",
@@ -57,7 +59,14 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["sidebar.html", "js/*", "css/*", "icons/*"],
+      "resources": [
+        "sidebar.html", 
+        "js/*", 
+        "css/*", 
+        "icons/*", 
+        "content/modules/n8nIntegration.js",
+        "content/modules/n8nIntegrationUI.js"
+      ],
       "matches": ["https://*.facebook.com/*"]
     }
   ],
