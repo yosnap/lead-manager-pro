@@ -107,13 +107,30 @@ document.addEventListener('DOMContentLoaded', function() {
       isOnFacebook((isFacebook, activeTab) => {
         if (isFacebook) {
           // Ya estamos en Facebook, abrimos directamente el sidebar
+          console.log('Enviando mensaje para abrir el sidebar');
+          
+          // Establecer un timeout para mostrar un mensaje en caso de que no haya respuesta
+          const timeoutId = setTimeout(() => {
+            console.log('No se recibió respuesta, asumiendo que el sidebar se abrió correctamente');
+            window.close();
+          }, 1000);
+          
           chrome.tabs.sendMessage(activeTab.id, {
             action: 'openSidebar'
           }, function(response) {
-            // Si hay un error o no hay respuesta
-            if (!response || response.error) {
-              console.error('Error al abrir el sidebar:', response?.error || 'No hay respuesta');
+            // Limpiar el timeout ya que obtuvimos respuesta
+            clearTimeout(timeoutId);
+            
+            // Incluso si hay error o no hay respuesta, cerrar el popup
+            // Esto es porque en algunos casos Chrome puede desconectar la respuesta
+            // pero el comando sí se ejecutó correctamente
+            if (!response) {
+              console.log('No se recibió respuesta, pero asumiremos que el sidebar se abrió');
+            } else if (response.error) {
+              console.error('Error al abrir el sidebar:', response.error);
               showMessage('Error al abrir el panel lateral', 'error');
+            } else {
+              console.log('Sidebar abierto correctamente');
             }
             window.close();
           });
@@ -131,16 +148,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Esperar un momento adicional para asegurar que la interfaz esté lista
                 setTimeout(() => {
                   // Intentar abrir el sidebar
+                  console.log('Enviando mensaje para abrir el sidebar después de navegar');
+                  
+                  // Establecer un timeout para mostrar un mensaje en caso de que no haya respuesta
+                  const timeoutId = setTimeout(() => {
+                    console.log('No se recibió respuesta después de navegar, asumiendo que el sidebar se abrió correctamente');
+                    window.close();
+                  }, 1500);
+                  
                   chrome.tabs.sendMessage(tabId, {
                     action: 'openSidebar'
                   }, function(response) {
-                    // Si hay un error o no hay respuesta, mostrar mensaje
-                    if (!response || response.error) {
-                      console.error('Error al abrir el sidebar después de navegar:', response?.error || 'No hay respuesta');
+                    // Limpiar el timeout ya que obtuvimos respuesta
+                    clearTimeout(timeoutId);
+                    
+                    // Manejar errores pero cerrar el popup de todas formas
+                    if (!response) {
+                      console.log('No se recibió respuesta después de navegar, pero asumiremos que el sidebar se abrió');
+                    } else if (response.error) {
+                      console.error('Error al abrir el sidebar después de navegar:', response.error);
                       showMessage('Error al abrir el panel lateral', 'error');
+                    } else {
+                      console.log('Sidebar abierto correctamente después de navegar');
                     }
+                    window.close();
                   });
-                }, 1500); // Esperar 1.5 segundos adicionales
+                }, 2000); // Incrementamos el tiempo de espera a 2 segundos para asegurar que todo cargue
                 
                 window.close();
               }

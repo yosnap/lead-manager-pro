@@ -89,6 +89,9 @@ let tabButtons;
 let tabContents;
 let n8nIntegrationContainer;
 
+// Variables para el control de la verificación de estado
+let statusCheckingInterval = null;
+
 // Funciones de utilidad
 function formatTime(milliseconds) {
   const seconds = Math.floor(milliseconds / 1000);
@@ -468,7 +471,10 @@ function performSearch() {
     
     // Limpiar cualquier estado de búsqueda previo
     localStorage.removeItem('snap_lead_manager_force_reload');
-    localStorage.removeItem('snap_lead_manager_search_url');
+    
+    // Forzar recarga estableciendo una URL de búsqueda específica
+    const currentUrl = window.location.href;
+    localStorage.setItem('snap_lead_manager_search_url', currentUrl);
     
     // Guardar en localStorage para que el content script pueda acceder
     // Asegurarse de que los valores numéricos sean tratados correctamente
@@ -516,41 +522,39 @@ function performSearch() {
     // Registrar la acción en la consola para depuración
     console.log('Iniciando búsqueda con datos:', searchData);
     
-    // Enviar mensaje a la página para iniciar búsqueda
-    window.parent.postMessage({
-      action: 'find_profiles',
-      searchData: searchData
-    }, '*');
+    // Marcar que estamos comenzando una búsqueda
+    localStorage.setItem('snap_lead_manager_search_active', 'true');
+    localStorage.setItem('snap_lead_manager_force_reload', 'true');
     
-    // Actualizar estado
+    // Actualizar estado antes de recargar
     state.isRunning = true;
     state.isPaused = false;
     state.searchStartTime = Date.now();
     state.profiles = []; // Limpiar resultados anteriores
     
-    // Guardar indicador de búsqueda activa
-    localStorage.setItem('snap_lead_manager_search_active', 'true');
-    
-    // Limpiar los resultados previos
-    if (searchResultsList) {
-      searchResultsList.innerHTML = '';
-    }
-    if (resultsSummary) {
-      resultsSummary.innerHTML = '';
-    }
-    
+    // Actualizar UI rápidamente antes de recargar
     updateStatus(`Iniciando búsqueda de ${searchType === 'people' ? 'personas' : 'grupos'}: ${searchTerm}`, 5);
-    updateUI();
     
-    // Iniciar verificación del estado
-    startStatusChecking();
+    // Enviar mensaje a la página para que se prepare para la búsqueda
+    window.parent.postMessage({
+      action: 'prepare_for_search',
+      searchData: searchData
+    }, '*');
     
-    addLogEntry(`Búsqueda iniciada: ${searchTerm}${searchCity ? ` en ${searchCity}` : ''}`);
+    // Mostrar mensaje de que vamos a recargar
+    addLogEntry('Recargando página para iniciar búsqueda...');
     
+    // SIEMPRE recargar la página para garantizar que la búsqueda se inicie correctamente
+    setTimeout(() => {
+      // Recargar la página actual para iniciar la búsqueda con un estado limpio
+      window.parent.location.reload();
+    }, 300);
+    
+    return true;
   } catch (error) {
     console.error('Error al iniciar búsqueda:', error);
-    showError(`Error al iniciar búsqueda: ${error.message}`);
-    addLogEntry(`Error al iniciar búsqueda: ${error.message}`, true);
+    showError(`Error: ${error.message}`);
+    return false;
   }
 }
 
@@ -663,7 +667,12 @@ function stopSearch() {
 
 // Función para actualizar la lista de resultados
 function updateResultsList(profiles) {
-  if (!searchResultsList) return;
+  if (!searchResultsList) {
+    console.error('searchResultsList no está definido');
+    return;
+  }
+  
+  console.log('updateResultsList: Actualizando con', profiles?.length || 0, 'perfiles/grupos');
   
   // Limpiar lista actual
   searchResultsList.innerHTML = '';
@@ -674,35 +683,64 @@ function updateResultsList(profiles) {
     noResults.className = 'no-results';
     noResults.textContent = 'No se encontraron resultados';
     searchResultsList.appendChild(noResults);
+    console.log('No hay resultados para mostrar');
     return;
   }
+  
+  console.log('Empezando a procesar resultados para UI:', profiles.length, 'items');
   
   // Agregar cada perfil a la lista
   profiles.forEach((profile, index) => {
     const listItem = document.createElement('li');
     listItem.className = 'result-item';
     
-    // Determinar el tipo de resultado (persona o grupo)
-    const isPerson = !profile.groupUrl;
+    // Intentar determinar si es un grupo o una persona
+    // Los grupos generalmente tienen propiedades como 'members', 'type', 'groupUrl' o 'url'
+    const isGroup = profile.members !== undefined || 
+                    profile.membersCount !== undefined ||
+                    profile.type !== undefined || 
+                    profile.groupType !== undefined ||
+                    profile.groupUrl !== undefined || 
+                    (profile.url && profile.url.includes('/groups/'));
+    
+    console.log(`Procesando item ${index}: ${profile.name} (${isGroup ? 'Grupo' : 'Persona'})`);
+    
+    // Obtener URL del perfil/grupo
+    const url = profile.url || profile.groupUrl || profile.profileUrl || '';
     
     // Crear contenido del item
     let htmlContent = `
       <div class="result-header">
         <span class="result-name">${profile.name || 'Sin nombre'}</span>
-        <span class="result-link">Ver</span>
+        ${url ? `<a href="${url}" target="_blank" class="result-link">Ver</a>` : '<span class="result-link disabled">Ver</span>'}
       </div>
       <div class="result-info">
     `;
     
     // Agregar información adicional según el tipo
-    if (isPerson) {
+    if (!isGroup) {
+      // Para perfiles de personas
       if (profile.location) htmlContent += `<div>📍 ${profile.location}</div>`;
       if (profile.occupation) htmlContent += `<div>💼 ${profile.occupation}</div>`;
     } else {
-      if (profile.type) htmlContent += `<div>🔒 ${profile.type}</div>`;
-      if (profile.members) htmlContent += `<div>👥 ${profile.members} miembros</div>`;
-      if (profile.postsMonth) htmlContent += `<div>📊 ${profile.postsMonth} publicaciones al mes</div>`;
-      if (profile.postsDay) htmlContent += `<div>📊 ${profile.postsDay} publicaciones al día</div>`;
+      // Para grupos
+      const groupType = profile.groupType || profile.type || '';
+      const members = profile.members || profile.membersCount || '';
+      const frequency = profile.frequency || '';
+      
+      if (groupType) htmlContent += `<div>🔒 ${groupType.toLowerCase().includes('público') || groupType.toLowerCase().includes('public') ? 'Público' : 'Privado'}</div>`;
+      if (members) htmlContent += `<div>👥 ${typeof members === 'number' ? members.toLocaleString() : members}</div>`;
+      if (frequency) htmlContent += `<div>📊 ${frequency}</div>`;
+      
+      // Fecha de extracción si está disponible
+      if (profile.extractedAt) {
+        try {
+          const date = new Date(profile.extractedAt);
+          htmlContent += `<div>🕒 Extraído: ${date.toLocaleDateString()} ${date.toLocaleTimeString()}</div>`;
+        } catch (e) {
+          console.error('Error al formatear fecha:', e);
+        }
+      }
     }
     
     htmlContent += `</div>`;
@@ -711,12 +749,29 @@ function updateResultsList(profiles) {
     searchResultsList.appendChild(listItem);
   });
   
+  // Mostrar un resumen de resultados
+  if (resultsSummary) {
+    resultsSummary.innerHTML = `<p>Se ${profiles.length === 1 ? 'ha encontrado' : 'han encontrado'} <strong>${profiles.length}</strong> ${state.currentSearchType === 'people' ? 'perfiles' : 'grupos'} que cumplen con tus criterios.</p>`;
+    resultsSummary.style.display = 'block';
+  }
+  
+  console.log('Lista de resultados actualizada con éxito. Total:', profiles.length);
+  
+  // Asegurar que el contenedor de resultados sea visible
+  const resultsContainer = document.querySelector('.tab-content[data-tab="resultados"]');
+  if (resultsContainer) {
+    resultsContainer.style.display = 'block';
+    console.log('Contenedor de resultados hecho visible');
+  }
+  
   // Si hay perfiles, enviarlos a n8n
   if (profiles && profiles.length > 0) {
+    console.log('Preparando envío a n8n...');
     sendResultsToN8n(profiles, state.currentSearchType)
       .then(success => {
         if (success) {
           console.log('Resultados enviados a n8n con éxito');
+          addLogEntry(`${profiles.length} resultados enviados a n8n con éxito`);
         }
       })
       .catch(error => {
@@ -1170,6 +1225,27 @@ function initDOMReferences() {
   scrollLogContainer = document.getElementById('scroll-log-container');
   resultsSummary = document.getElementById('results-summary');
   
+  // Si no existe el elemento resultsSummary, crearlo
+  if (!resultsSummary) {
+    console.log('Creando elemento resultsSummary');
+    resultsSummary = document.createElement('div');
+    resultsSummary.id = 'results-summary';
+    resultsSummary.className = 'results-summary';
+    resultsSummary.style.margin = '10px 0';
+    resultsSummary.style.padding = '10px';
+    resultsSummary.style.backgroundColor = '#f0f8ff';
+    resultsSummary.style.borderRadius = '4px';
+    resultsSummary.style.display = 'none';
+    
+    // Insertarlo antes de la lista de resultados
+    if (searchResultsList && searchResultsList.parentNode) {
+      searchResultsList.parentNode.insertBefore(resultsSummary, searchResultsList);
+    } else if (document.body) {
+      // Si no se puede insertar en el lugar adecuado, agregarlo al body
+      document.body.appendChild(resultsSummary);
+    }
+  }
+  
   // Configuración avanzada
   collapsibleTrigger = document.querySelector('.collapsible-trigger');
   collapsibleContent = document.querySelector('.collapsible-content');
@@ -1293,6 +1369,11 @@ function handleReceivedMessage(event) {
           localStorage.setItem('snap_lead_manager_search_active', 'false');
           document.body.classList.remove('search-active');
           updateUI();
+          
+          // Cambiar a la pestaña de Resultados
+          if (tabButtons && tabButtons.length > 1) {
+            tabButtons[1].click(); // El índice 1 debería ser la pestaña de Resultados
+          }
         }
       }
       break;
@@ -1320,10 +1401,55 @@ function handleReceivedMessage(event) {
     // Nueva acción para manejar resultados enviados con 'found_results'
     case 'found_results':
       if (message.results) {
-        console.log('Recibido found_results:', message.results);
+        console.log('Recibido found_results:', message.results.length, 'grupos');
+        
+        // Primero actualizar el estado
         state.profiles = message.results;
         state.foundCount = message.results.length;
+        state.isRunning = false;
+        state.isPaused = false;
+        localStorage.setItem('snap_lead_manager_search_active', 'false');
+        
+        // Detener cualquier intervalo de actualización
+        stopStatusChecking();
+        
+        // Actualizar la UI con el estado final
+        updateStatus(message.message || `Se encontraron ${state.profiles.length} grupos`, 100);
+        
+        // Actualizar la lista de resultados
+        console.log('Actualizando lista de resultados con', state.profiles.length, 'grupos');
         updateResultsList(state.profiles);
+        
+        // Mostrar mensaje de resumen
+        if (resultsSummary) {
+          console.log('Actualizando resumen de resultados');
+          resultsSummary.innerHTML = `<p>Se encontraron <strong>${state.profiles.length}</strong> grupos que cumplen con tus criterios.</p>`;
+          resultsSummary.style.display = 'block';
+        }
+        
+        // Agregar entrada en el log
+        addLogEntry(message.message || `Búsqueda completada. Se encontraron ${state.profiles.length} grupos.`);
+        
+        // Actualizar la UI completa
+        document.body.classList.remove('search-active');
+        updateUI();
+        
+        // Cambiar a la pestaña de Resultados
+        if (tabButtons && tabButtons.length > 1) {
+          tabButtons[1].click(); // El índice 1 debería ser la pestaña de Resultados
+        }
+        
+        // Intentar enviar los resultados a n8n si está disponible
+        sendResultsToN8n(state.profiles, state.currentSearchType)
+          .then(success => {
+            if (success) {
+              console.log('Resultados enviados a n8n con éxito');
+              addLogEntry(`${state.profiles.length} resultados enviados a n8n con éxito`);
+            }
+          })
+          .catch(error => {
+            console.error('Error al enviar resultados a n8n:', error);
+          });
       }
       break;
     
@@ -2187,4 +2313,56 @@ function getSearchStatus() {
   window.parent.postMessage({
     action: 'get_search_status'
   }, '*');
+}
+
+// Función para preparar datos para la base de datos
+function prepareDataForDatabase(groupOptionsForSync) {
+  try {
+    // Guardar en localStorage para sincronización posterior
+    localStorage.setItem('snap_lead_manager_pending_sync_data', JSON.stringify(groupOptionsForSync));
+    console.log('Datos preparados para sincronización con base de datos:', groupOptionsForSync);
+  } catch (error) {
+    console.error('Error al preparar datos para base de datos:', error);
+  }
+}
+
+// Función para iniciar la verificación periódica del estado de búsqueda
+function startStatusChecking() {
+  // Detener cualquier intervalo existente primero
+  stopStatusChecking();
+  
+  // Iniciar un nuevo intervalo para verificar el estado cada 2 segundos
+  statusCheckingInterval = setInterval(() => {
+    // Obtener el estado actual de la búsqueda
+    const status = getSearchStatus();
+    
+    // Actualizar la UI con el estado actual
+    if (status) {
+      updateStatus(status.message || 'Buscando...', status.progress || 0);
+      
+      // Actualizar la operación actual si está disponible
+      if (currentOperation && status.operation) {
+        currentOperation.textContent = status.operation;
+      }
+      
+      // Si la búsqueda ha terminado, detener la verificación
+      if (status.isFinished) {
+        stopStatusChecking();
+        // Restablecer UI
+        state.isRunning = false;
+        updateUI();
+      }
+    }
+  }, 2000); // Verificar cada 2 segundos
+  
+  console.log('Iniciada verificación periódica del estado de búsqueda');
+}
+
+// Función para detener la verificación de estado
+function stopStatusChecking() {
+  if (statusCheckingInterval) {
+    clearInterval(statusCheckingInterval);
+    statusCheckingInterval = null;
+    console.log('Detenida verificación periódica del estado de búsqueda');
+  }
 }

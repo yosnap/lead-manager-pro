@@ -414,6 +414,38 @@ function setupChromeMessagesListener() {
       sendResponse({ success: true, message: 'Acción de restablecimiento iniciada' });
       return true;
     }
+    
+    // Manejador para abrir el sidebar (desde popup.js)
+    if (message.action === 'openSidebar') {
+      console.log('Lead Manager Pro: Recibida solicitud para abrir el sidebar');
+      
+      // Verificar si el sidebar existe
+      const sidebarContainer = document.getElementById('snap-lead-manager-container');
+      if (sidebarContainer) {
+        // Mostrar el sidebar existente
+        sidebarContainer.classList.add('visible');
+        const toggleButton = document.getElementById('snap-lead-manager-toggle');
+        if (toggleButton) {
+          toggleButton.innerHTML = '►';
+          toggleButton.style.right = '320px';
+          toggleButton.setAttribute('title', 'Ocultar Lead Manager');
+        }
+        localStorage.setItem('snap_lead_manager_sidebar_hidden', 'false');
+      } else {
+        // Si no existe el sidebar, crearlo
+        if (window.LeadManagerPro && window.LeadManagerPro.modules && window.LeadManagerPro.modules.insertSidebar) {
+          window.LeadManagerPro.modules.insertSidebar();
+        } else {
+          console.error('No se puede abrir el sidebar: módulos no disponibles');
+          sendResponse({ success: false, error: 'Módulos del sidebar no disponibles' });
+          return true;
+        }
+      }
+      
+      sendResponse({ success: true });
+      return true;
+    }
+    
     console.log('Lead Manager Pro: Mensaje recibido desde background', message);
     
     if (message.action === 'apply_city_filter') {

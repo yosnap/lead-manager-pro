@@ -320,6 +320,10 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
   } catch (error) {
     console.error("Error al asegurar visibilidad del botón toggle:", error);
   }
+  
+  // Verificar si hay una búsqueda activa pendiente tras recargar la página
+  checkPendingSearchAfterReload();
+  
   // Escuchar mensajes del iframe del sidebar
   window.addEventListener('message', (event) => {
     // Verificar que el mensaje tiene datos
@@ -335,6 +339,9 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
     // Manejadores para diferentes acciones
     if (message.action === 'sidebar_ready') {
       console.log('Lead Manager Pro: Sidebar listo para recibir mensajes');
+      
+      // Verificar si hay búsqueda pendiente después de recarga
+      checkPendingSearchAfterReload();
       
       // Verificar si tenemos los módulos de opciones nuevos
       if (window.leadManagerPro && window.leadManagerPro.generalOptionsUI) {
@@ -395,6 +402,12 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
           sendMessageToSidebar('search_error', { error: error.message });
         }
       }
+    }
+    
+    else if (message.action === 'prepare_for_search') {
+      // Guardar datos para iniciar búsqueda después de recargar
+      localStorage.setItem('snap_lead_manager_force_reload', 'true');
+      console.log('Lead Manager Pro: Preparando para búsqueda después de recarga');
     }
     
     else if (message.action === 'apply_city_filter') {
@@ -680,7 +693,174 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
       });
     }
   });
+  
+  // Manejar evento de carga de página para verificar búsqueda pendiente
+  window.addEventListener('load', () => {
+    checkPendingSearchAfterReload();
+  });
 };
+
+/**
+ * Verifica si hay una búsqueda pendiente después de recargar la página
+ * y la inicia si es necesario
+ */
+function checkPendingSearchAfterReload() {
+  try {
+    // Verificar si hay una búsqueda pendiente
+    const forceReload = localStorage.getItem('snap_lead_manager_force_reload') === 'true';
+    const searchActive = localStorage.getItem('snap_lead_manager_search_active') === 'true';
+    
+    console.log('Lead Manager Pro: Verificando búsqueda pendiente - forceReload:', forceReload, 'searchActive:', searchActive);
+    
+    if (forceReload && searchActive) {
+      console.log('Lead Manager Pro: Detectada búsqueda pendiente después de recarga');
+      
+      // Obtener datos de búsqueda
+      const searchDataJson = localStorage.getItem('snap_lead_manager_search_data');
+      if (searchDataJson) {
+        try {
+          const searchData = JSON.parse(searchDataJson);
+          console.log('Lead Manager Pro: Recuperados datos de búsqueda:', searchData);
+          
+          // Limpiar flag de recarga forzada para evitar bucles
+          localStorage.removeItem('snap_lead_manager_force_reload');
+          
+          // Si el módulo de navegación está disponible, iniciar búsqueda
+          if (window.LeadManagerPro.state && window.LeadManagerPro.state.searchState && 
+              window.LeadManagerPro.modules.navigateToSearchPage && 
+              window.LeadManagerPro.modules.findProfiles) {
+            
+            console.log('Lead Manager Pro: Iniciando búsqueda pendiente...');
+            
+            // Preparar el estado de búsqueda
+            window.LeadManagerPro.state.searchState.searchType = searchData.type || 'people';
+            window.LeadManagerPro.state.searchState.searchTerm = searchData.term || '';
+            window.LeadManagerPro.state.searchState.city = searchData.city || '';
+            window.LeadManagerPro.state.searchState.isSearching = true;
+            window.LeadManagerPro.state.searchState.pauseSearch = false;
+            
+            // Actualizar opciones desde searchData
+            if (window.LeadManagerPro.state.options) {
+              // Opciones generales
+              window.LeadManagerPro.state.options.maxScrolls = searchData.maxScrolls || 4;
+              window.LeadManagerPro.state.options.scrollDelay = searchData.scrollDelay || 2;
+              
+              // Opciones de grupo si corresponde
+              if (searchData.groupOptions) {
+                window.LeadManagerPro.state.options.groupPublic = searchData.groupOptions.publicGroups;
+                window.LeadManagerPro.state.options.groupPrivate = searchData.groupOptions.privateGroups;
+                window.LeadManagerPro.state.options.minUsers = searchData.groupOptions.minUsers;
+                window.LeadManagerPro.state.options.minPostsYear = searchData.groupOptions.minPostsYear;
+                window.LeadManagerPro.state.options.minPostsMonth = searchData.groupOptions.minPostsMonth;
+                window.LeadManagerPro.state.options.minPostsDay = searchData.groupOptions.minPostsDay;
+              }
+            }
+            
+            // Notificar al sidebar que la búsqueda ha iniciado
+            const iframe = document.getElementById('snap-lead-manager-iframe');
+            if (iframe && iframe.contentWindow) {
+              // Enviar mensaje de estado de búsqueda al sidebar
+              iframe.contentWindow.postMessage({
+                action: 'search_status',
+                status: {
+                  isSearching: true,
+                  pauseSearch: false,
+                  currentPage: 1,
+                  totalPages: 1,
+                  searchType: searchData.type || 'people',
+                  searchTerm: searchData.term || '',
+                  city: searchData.city || ''
+                }
+              }, '*');
+              
+              // También enviar configuración de búsqueda
+              iframe.contentWindow.postMessage({
+                action: 'configure_search',
+                config: {
+                  type: searchData.type || 'people',
+                  term: searchData.term || '',
+                  city: searchData.city || '',
+                  autoStart: false
+                }
+              }, '*');
+            }
+            
+            // Intentar iniciar la búsqueda en la página actual
+            setTimeout(() => {
+              console.log('Lead Manager Pro: Ejecutando navegación a página de búsqueda...');
+              // Primero navegar a la página de búsqueda
+              window.LeadManagerPro.modules.navigateToSearchPage(window.LeadManagerPro.state.searchState)
+                .then(() => {
+                  console.log('Lead Manager Pro: Navegación completada, iniciando extracción...');
+                  // Luego iniciar la búsqueda/extracción
+                  return window.LeadManagerPro.modules.findProfiles();
+                })
+                .catch(error => {
+                  console.error('Error al iniciar búsqueda después de recarga:', error);
+                  sendMessageToSidebar('search_error', { error: error.message });
+                });
+            }, 1000); // Pequeño retraso para asegurar que todo esté listo
+          } else {
+            console.error('Estado de búsqueda o funciones de navegación/búsqueda no disponibles');
+          }
+        } catch (error) {
+          console.error('Error al procesar datos de búsqueda guardados:', error);
+        }
+      }
+    } else if (searchActive) {
+      // Si la búsqueda está activa pero no es por recarga, buscar resultados existentes
+      checkExistingSearchResults();
+    }
+  } catch (error) {
+    console.error('Error al verificar búsqueda pendiente:', error);
+  }
+}
+
+/**
+ * Verifica si hay resultados existentes de una búsqueda activa
+ * y los envía al sidebar
+ */
+function checkExistingSearchResults() {
+  try {
+    if (window.LeadManagerPro.state && 
+        window.LeadManagerPro.state.searchState && 
+        window.LeadManagerPro.state.searchState.foundProfiles && 
+        window.LeadManagerPro.state.searchState.foundProfiles.length > 0) {
+      
+      console.log('Lead Manager Pro: Encontrados resultados existentes, enviando al sidebar');
+      
+      const results = window.LeadManagerPro.state.searchState.foundProfiles;
+      const searchType = window.LeadManagerPro.state.searchState.searchType || 'people';
+      const entityType = searchType === 'people' ? 'perfiles' : 'grupos';
+      
+      // Enviar resultados al sidebar
+      const iframe = document.getElementById('snap-lead-manager-iframe');
+      if (iframe && iframe.contentWindow) {
+        // Enviar resultados
+        iframe.contentWindow.postMessage({
+          action: 'search_result',
+          result: {
+            success: true,
+            profiles: results,
+            results: results,
+            count: results.length,
+            message: `Se encontraron ${results.length} ${entityType}.`
+          }
+        }, '*');
+        
+        // También enviar mensaje explícito de búsqueda completada
+        iframe.contentWindow.postMessage({
+          action: 'found_results',
+          results: results,
+          message: `Búsqueda completada. Se encontraron ${results.length} ${entityType}.`,
+          searchType: searchType
+        }, '*');
+      }
+    }
+  } catch (error) {
+    console.error('Error al verificar resultados existentes:', error);
+  }
+}
 
 /**
  * Función auxiliar para enviar mensajes al sidebar de manera consistente

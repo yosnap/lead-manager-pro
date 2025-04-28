@@ -430,6 +430,7 @@ class GroupFinder {
       }, true);
     });
     
+    // Notificar al callback con el resultado final
     if (this.progressCallback) {
       this.progressCallback({
         type: 'complete',
@@ -460,11 +461,71 @@ class GroupFinder {
       };
       
       localStorage.setItem('snap_lead_manager_last_search_stats', JSON.stringify(searchStats));
+      
+      // Enviar resultados al sidebar
+      this.sendResultsToSidebar();
     } catch (e) {
       console.error('GroupFinder: Error al guardar datos:', e);
     }
     
     return this.groups;
+  }
+  
+  // Nuevo método para enviar resultados al sidebar
+  sendResultsToSidebar() {
+    console.log('GroupFinder: Enviando resultados al sidebar...');
+    
+    // Intentar enviar resultados directamente al iframe del sidebar
+    const iframe = document.getElementById('snap-lead-manager-iframe');
+    if (iframe && iframe.contentWindow) {
+      console.log(`GroupFinder: Enviando ${this.groups.length} grupos al sidebar`);
+      
+      // Enviar los grupos encontrados al sidebar
+      iframe.contentWindow.postMessage({
+        action: 'found_results',
+        results: this.groups,
+        success: true,
+        message: `Se encontraron ${this.groups.length} grupos.`
+      }, '*');
+      
+      // Enviar también una notificación de búsqueda completada
+      iframe.contentWindow.postMessage({
+        action: 'search_complete',
+        success: true,
+        result: {
+          success: true,
+          profiles: this.groups,
+          results: this.groups,
+          message: `Búsqueda completada. Se encontraron ${this.groups.length} grupos.`
+        }
+      }, '*');
+      
+      // Enviar actualización de estado final
+      iframe.contentWindow.postMessage({
+        action: 'status_update',
+        status: `Búsqueda completada. Se encontraron ${this.groups.length} grupos.`,
+        progress: 100
+      }, '*');
+      
+      return true;
+    } else {
+      console.error('GroupFinder: No se pudo encontrar el sidebar para enviar resultados');
+      
+      // Intentar usar la función global si está disponible
+      if (typeof sendMessageToSidebar === 'function') {
+        sendMessageToSidebar('search_result', {
+          result: {
+            success: true,
+            profiles: this.groups,
+            results: this.groups,
+            message: `Búsqueda completada. Se encontraron ${this.groups.length} grupos.`
+          }
+        });
+        return true;
+      }
+      
+      return false;
+    }
   }
 
   // Extraer ID del grupo del elemento DOM

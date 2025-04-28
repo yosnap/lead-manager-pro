@@ -396,12 +396,19 @@ window.LeadManagerPro.modules.extractProfilesFromPage = async function(searchSta
             message: 'No se encontraron resultados para esta búsqueda.'
           }
         }, '*');
+        
+        // Enviar mensaje explícito de búsqueda completada
+        iframe.contentWindow.postMessage({
+          action: 'search_complete',
+          message: 'Búsqueda completada. No se encontraron resultados.'
+        }, '*');
       }
     } else {
       // Si se encontraron resultados, asegurarse de que el sidebar sea notificado inmediatamente
       console.log(`Lead Manager Pro: Enviando ${extractedResults.length} resultados al sidebar`);
       const iframe = document.getElementById('snap-lead-manager-iframe');
       if (iframe && iframe.contentWindow) {
+        // Enviar resultados
         iframe.contentWindow.postMessage({
           action: 'search_result',
           result: {
@@ -412,6 +419,17 @@ window.LeadManagerPro.modules.extractProfilesFromPage = async function(searchSta
             message: `Se encontraron ${extractedResults.length} ${countType}.`
           }
         }, '*');
+        
+        // También enviar mensaje explícito de búsqueda completada
+        console.log(`Lead Manager Pro: Enviando mensaje de búsqueda completada al sidebar con ${extractedResults.length} resultados`);
+        iframe.contentWindow.postMessage({
+          action: 'found_results',
+          results: extractedResults,
+          message: `Búsqueda completada. Se encontraron ${extractedResults.length} ${countType}.`,
+          searchType: searchState.searchType
+        }, '*');
+      } else {
+        console.error('Lead Manager Pro: No se pudo encontrar el iframe del sidebar para enviar resultados');
       }
     }
     
