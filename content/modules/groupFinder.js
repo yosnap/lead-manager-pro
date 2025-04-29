@@ -5,7 +5,6 @@
 class GroupFinder {
   constructor() {
     this.options = null;
-    this.isSearching = false;
     this.groups = [];
     this.scrollCount = 0;
     this.maxScrolls = 50;
@@ -13,14 +12,25 @@ class GroupFinder {
     this.observer = null;
     this.progressCallback = null;
     this._scrollTimeout = null;
+    this.noChangeCount = 0;
   }
 
   // Inicializar con opciones
   init(options, progressCallback = null) {
-    console.log("INITIALIZING GROUP FINDER SCROLL OPTIONS");
+    console.log("INITIALIZING GROUP FINDER WITH OPTIONS:", options);
     
     this.options = options || {};
     this.progressCallback = (typeof progressCallback === 'function') ? progressCallback : null;
+    
+    // Reiniciar estado global
+    window.LeadManagerPro.state.resetSearchState();
+    window.LeadManagerPro.state.updateSearchState({
+      searchType: 'groups',
+      currentOperation: 'Inicializando búsqueda de grupos...'
+    });
+    
+    this.groups = [];
+    this.scrollCount = 0;
     
     // Leer configuración desde chrome.storage.local
     return new Promise((resolve) => {
@@ -37,21 +47,19 @@ class GroupFinder {
         console.log('GroupFinder: Leyendo opciones desde chrome.storage.local:', result);
         
         // Establecer valores de scroll
-        this.maxScrolls = result.maxScrolls ? Number(result.maxScrolls) : 4; // Default a 4
+        this.maxScrolls = result.maxScrolls ? Number(result.maxScrolls) : 4;
         this.scrollTimeout = result.scrollDelay ? Number(result.scrollDelay) * 1000 : 2000;
         
-        console.log('GroupFinder: Configuración de scroll establecida:', {
-          maxScrolls: this.maxScrolls,
-          scrollTimeout: this.scrollTimeout
-        });
-        
         // Opciones de grupos
-        this.options.publicGroups = result.groupPublic !== undefined ? result.groupPublic : true;
-        this.options.privateGroups = result.groupPrivate !== undefined ? result.groupPrivate : true;
-        this.options.minUsers = result.minUsers ? parseInt(result.minUsers) : 0;
-        this.options.minPostsYear = result.minPostsYear || '';
-        this.options.minPostsMonth = result.minPostsMonth || '';
-        this.options.minPostsDay = result.minPostsDay || '';
+        this.options = {
+          ...this.options,
+          publicGroups: result.groupPublic !== undefined ? result.groupPublic : true,
+          privateGroups: result.groupPrivate !== undefined ? result.groupPrivate : true,
+          minUsers: result.minUsers ? parseInt(result.minUsers) : 0,
+          minPostsYear: result.minPostsYear || '',
+          minPostsMonth: result.minPostsMonth || '',
+          minPostsDay: result.minPostsDay || ''
+        };
         
         console.log('GroupFinder: Configuración final:', {
           scroll: {
@@ -67,47 +75,50 @@ class GroupFinder {
   }
 
   // Iniciar la búsqueda de grupos
-  startSearch() {
-    if (this.isSearching) {
-      console.log('GroupFinder: Ya hay una búsqueda en progreso');
-      return false;
+  async startSearch() {
+    try {
+      console.log('GroupFinder: Iniciando búsqueda');
+      
+      // Resetear estado
+      this.scrollCount = 0;
+      this.noChangeCount = 0;
+      this.groups = [];
+      
+      // Actualizar estado global
+      window.LeadManagerPro.state.updateSearchState({
+        isSearching: true,
+        searchType: 'groups',
+        currentOperation: 'Iniciando búsqueda de grupos...',
+        progress: 0,
+        foundGroups: [],
+        errors: []
+      });
+
+      // Configurar observer
+      this.setupObserver();
+
+      // Iniciar scroll
+      this.scrollAndCollect();
+
+    } catch (error) {
+      console.error('GroupFinder: Error al iniciar búsqueda:', error);
+      window.LeadManagerPro.state.updateSearchState({
+        errors: [error.message],
+        isSearching: false
+      });
     }
-    
-    this.isSearching = true;
-    this.groups = [];
-    this.scrollCount = 0;
-    
-    console.log('GroupFinder: Iniciando búsqueda de grupos');
-    
-    // Iniciar el observador para detectar nuevos grupos
-    this.setupObserver();
-    
-    // Comenzar el scrolling
-    this.scrollAndCollect();
-    
-    return true;
   }
 
   // Detener la búsqueda
   stopSearch() {
     console.log('GroupFinder: Deteniendo búsqueda manualmente');
-    this.isSearching = false;
     
-    if (this.observer) {
-      this.observer.disconnect();
-      this.observer = null;
-    }
+    window.LeadManagerPro.state.updateSearchState({
+      isSearching: false,
+      currentOperation: 'Búsqueda detenida manualmente'
+    });
 
-    // Detener cualquier scroll programado
-    if (this._scrollTimeout) {
-      clearTimeout(this._scrollTimeout);
-      this._scrollTimeout = null;
-    }
-    
-    // Llamar a finishSearch para asegurar limpieza completa
     this.finishSearch();
-    
-    return this.groups;
   }
 
   // Configurar MutationObserver para detectar nuevos grupos cargados en la página
@@ -115,99 +126,75 @@ class GroupFinder {
     if (this.observer) {
       this.observer.disconnect();
     }
-    
+
+    // Crear nuevo observador
     this.observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          // Procesar los grupos añadidos
-          setTimeout(() => this.collectVisibleGroups(), 500);
-        }
-      }
+      if (!window.LeadManagerPro.state.searchState.isSearching) return;
+      
+      this.collectVisibleGroups();
     });
-    
-    // Observar cambios en el contenedor principal de resultados
-    // Ajustar selector según la estructura de Facebook
-    const targetNode = document.querySelector('div[role="main"]');
-    if (targetNode) {
-      this.observer.observe(targetNode, { childList: true, subtree: true });
-    } else {
-      console.warn('GroupFinder: No se encontró el contenedor principal para observar');
-    }
+
+    // Configurar observador
+    const config = { childList: true, subtree: true };
+    this.observer.observe(document.body, config);
   }
 
   // Realizar scroll y recolectar grupos
-  scrollAndCollect() {
-    // Verificación inmediata del estado
-    if (!this.isSearching) {
-      console.log('GroupFinder: Búsqueda no está activa');
-      this.finishSearch();
-      return;
-    }
-
-    if (this.scrollCount >= this.maxScrolls) {
-      console.log(`GroupFinder: Alcanzado máximo de scrolls (${this.maxScrolls})`);
-      this.finishSearch();
-      return;
-    }
-
-    const heightBeforeScroll = document.documentElement.scrollHeight;
-    const groupsBeforeScroll = this.groups.length;
-    
-    this.collectVisibleGroups();
-    
-    const groupsAfterScroll = this.groups.length;
-
-    // Verificar si se encontraron nuevos grupos
-    if (this.scrollCount > 3 && groupsBeforeScroll === groupsAfterScroll) {
-      console.log('GroupFinder: No se encontraron nuevos grupos después de 3 scrolls');
-      this.finishSearch();
-      return;
-    }
-
-    // Solo continuar si la búsqueda sigue activa
-    if (this.isSearching) {
-      window.scrollTo(0, document.body.scrollHeight);
-      this.scrollCount++;
-      
-      // Informar del progreso
-      if (this.progressCallback) {
-        const progress = Math.round((this.scrollCount / this.maxScrolls) * 100);
-        this.progressCallback({
-          type: 'progress',
-          value: progress,
-          message: `Realizando scroll (${this.scrollCount}/${this.maxScrolls})...`,
-          groupsFound: this.groups.length,
-          maxScrolls: this.maxScrolls
-        });
+  async scrollAndCollect() {
+    try {
+      if (!window.LeadManagerPro.state.searchState.isSearching) {
+        console.log('GroupFinder: Búsqueda detenida');
+        return this.finishSearch();
       }
 
-      // Verificar altura después del scroll
-      this._scrollTimeout = setTimeout(() => {
-        if (!this.isSearching) {
-          this.finishSearch();
-          return;
-        }
+      // Actualizar progreso
+      const progress = Math.min(
+        ((this.scrollCount + 1) / this.maxScrolls) * 100,
+        99
+      );
 
-        const heightAfterScroll = document.documentElement.scrollHeight;
-        if (heightBeforeScroll === heightAfterScroll && this.scrollCount > 3) {
-          console.log('GroupFinder: No hay más contenido para cargar');
-          this.finishSearch();
-          return;
-        }
+      window.LeadManagerPro.state.updateSearchState({
+        progress,
+        currentOperation: `Scrolling... (${this.scrollCount + 1}/${this.maxScrolls})`
+      });
+
+      // Realizar scroll
+      const currentHeight = document.documentElement.scrollHeight;
+      window.scrollTo(0, currentHeight);
+
+      // Esperar a que se cargue nuevo contenido
+      await new Promise(resolve => setTimeout(resolve, this.scrollTimeout));
+
+      // Verificar si hay nuevo contenido
+      const newHeight = document.documentElement.scrollHeight;
+      if (newHeight === currentHeight) {
+        this.noChangeCount++;
         
-        // Programar siguiente scroll solo si no hemos alcanzado el máximo
-        if (this.scrollCount < this.maxScrolls && this.isSearching) {
-          this._scrollTimeout = setTimeout(() => {
-            if (this.isSearching) {
-              this.scrollAndCollect();
-            } else {
-              this.finishSearch();
-            }
-          }, this.scrollTimeout);
-        } else {
-          this.finishSearch();
+        if (this.noChangeCount >= 3) {
+          console.log('GroupFinder: No hay más contenido nuevo');
+          return this.finishSearch();
         }
-      }, 1000);
+      } else {
+        this.noChangeCount = 0;
+      }
+
+      // Incrementar contador y continuar si no hemos alcanzado el máximo
+      this.scrollCount++;
+      
+      if (this.scrollCount >= this.maxScrolls) {
+        console.log('GroupFinder: Alcanzado máximo número de scrolls');
+        return this.finishSearch();
+      }
+
+      // Programar siguiente scroll
+      this._scrollTimeout = setTimeout(() => this.scrollAndCollect(), this.scrollTimeout);
+
+    } catch (error) {
+      console.error('GroupFinder: Error durante scroll:', error);
+      window.LeadManagerPro.state.updateSearchState({
+        errors: [...window.LeadManagerPro.state.searchState.errors, error.message]
+      });
+      return this.finishSearch();
     }
   }
   
@@ -240,85 +227,38 @@ class GroupFinder {
 
   // Recolectar grupos visibles en la página
   collectVisibleGroups() {
-    if (!this.isSearching) return;
+    try {
+      if (!window.LeadManagerPro.state.searchState.isSearching) {
+        return;
+      }
 
-    const selectors = [
-      'div[role="article"]',
-      'div[data-testid="group-card"]',
-      'div.x1yztbdb:not(.xh8yej3)',
-      'a[href*="/groups/"][role="link"]',
-      'div.x78zum5'
-    ];
-    
-    let groupElements = [];
-    
-    for (const selector of selectors) {
-      const elements = document.querySelectorAll(selector);
-      if (elements && elements.length > 0) {
-        groupElements = Array.from(elements);
-        break;
-      }
-    }
-    
-    if (groupElements.length === 0 && this.isSearching) {
-      const groupLinks = document.querySelectorAll('a[href*="/groups/"]');
-      
-      if (groupLinks.length > 0) {
-        groupElements = Array.from(groupLinks).map(link => {
-          let parent = link.parentElement;
-          for (let i = 0; i < 5; i++) {
-            if (parent && parent.offsetHeight > 100) return parent;
-            parent = parent.parentElement;
+      const groupElements = document.querySelectorAll('[role="article"]');
+      const newGroups = Array.from(groupElements)
+        .map(element => {
+          try {
+            return this.extractGroupData(element);
+          } catch (error) {
+            console.warn('GroupFinder: Error al extraer datos de grupo:', error);
+            return null;
           }
-          return link;
-        });
-        
-        groupElements = [...new Set(groupElements)];
-      }
-    }
-    
-    if (!this.isSearching) return;
-    
-    groupElements.forEach(groupElement => {
-      if (!this.isSearching) return;
-      
-      try {
-        const groupId = this.extractGroupId(groupElement);
-        if (!groupId || this.groups.some(g => g.id === groupId)) return;
-        
-        const groupInfo = {
-          id: groupId,
-          name: this.extractGroupName(groupElement),
-          url: this.extractGroupUrl(groupElement),
-          type: this.extractGroupType(groupElement),
-          members: this.extractMemberCount(groupElement),
-          postsYear: this.extractPostCount(groupElement, 'year'),
-          postsMonth: this.extractPostCount(groupElement, 'month'),
-          postsDay: this.extractPostCount(groupElement, 'day'),
-          dateFound: new Date().toISOString()
-        };
-        
-        if (this.shouldIncludeGroup(groupInfo)) {
-          this.groups.push(groupInfo);
-          
-          if (this.progressCallback && this.isSearching) {
-            this.progressCallback({
-              type: 'newGroup',
-              group: groupInfo,
-              groupsFound: this.groups.length,
-              maxScrolls: this.maxScrolls
-            });
-          }
-        }
-      } catch (error) {
-        console.error('GroupFinder: Error al procesar grupo:', error);
-      }
-    });
-    
-    // Si no hay grupos después de varios intentos, finalizar
-    if (this.groups.length === 0 && this.scrollCount > 3) {
-      console.log('GroupFinder: No se encontraron grupos después de varios intentos');
-      this.finishSearch();
+        })
+        .filter(Boolean);
+
+      // Actualizar grupos encontrados
+      const uniqueGroups = [...new Set([...this.groups, ...newGroups])];
+      this.groups = uniqueGroups;
+
+      // Notificar progreso
+      window.LeadManagerPro.state.updateSearchState({
+        foundGroups: uniqueGroups,
+        currentOperation: `Encontrados ${uniqueGroups.length} grupos hasta ahora...`
+      });
+
+    } catch (error) {
+      console.error('GroupFinder: Error al recolectar grupos:', error);
+      window.LeadManagerPro.state.updateSearchState({
+        errors: [...window.LeadManagerPro.state.searchState.errors, error.message]
+      });
     }
   }
 
@@ -400,71 +340,86 @@ class GroupFinder {
 
   // Finalizar la búsqueda
   finishSearch() {
-    console.log('GroupFinder: Finalizando búsqueda');
-    
-    // Asegurar que la búsqueda se detenga
-    this.isSearching = false;
-    
-    // Limpiar observer
-    if (this.observer) {
-      this.observer.disconnect();
-      this.observer = null;
-    }
-
-    // Detener cualquier scroll programado
-    if (this._scrollTimeout) {
-      clearTimeout(this._scrollTimeout);
-      this._scrollTimeout = null;
-    }
-    
-    // Volver al inicio de la página
-    window.scrollTo(0, 0);
-    
-    // Remover cualquier event listener que pudiera causar navegación
-    document.querySelectorAll('a[href*="/groups/"]').forEach(link => {
-      link.style.pointerEvents = 'none';
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }, true);
-    });
-    
-    if (this.progressCallback) {
-      this.progressCallback({
-        type: 'complete',
-        groupsFound: this.groups.length,
-        message: `Búsqueda finalizada. Se encontraron ${this.groups.length} grupos que cumplen los criterios.`,
-        maxScrolls: this.maxScrolls
-      });
-    }
-    
-    // Guardar resultados
     try {
-      localStorage.setItem('foundGroups', JSON.stringify(this.groups));
-      
-      const searchStats = {
-        timestamp: new Date().toISOString(),
-        totalGroups: this.groups.length,
-        searchCriteria: {
-          publicGroups: this.options.publicGroups,
-          privateGroups: this.options.privateGroups,
-          minUsers: this.options.minUsers,
-          minPostsYear: this.options.minPostsYear,
-          minPostsMonth: this.options.minPostsMonth,
-          minPostsDay: this.options.minPostsDay,
-          maxScrolls: this.maxScrolls,
-          scrollDelay: this.scrollTimeout / 1000
-        },
-        scrollCount: this.scrollCount
-      };
-      
-      localStorage.setItem('snap_lead_manager_last_search_stats', JSON.stringify(searchStats));
-    } catch (e) {
-      console.error('GroupFinder: Error al guardar datos:', e);
+      console.log('GroupFinder: Finalizando búsqueda');
+
+      // Limpiar timeouts y observer
+      if (this._scrollTimeout) {
+        clearTimeout(this._scrollTimeout);
+        this._scrollTimeout = null;
+      }
+
+      if (this.observer) {
+        this.observer.disconnect();
+        this.observer = null;
+      }
+
+      // Actualizar estado final
+      const finalGroups = this.groups.filter(Boolean);
+      window.LeadManagerPro.state.updateSearchState({
+        isSearching: false,
+        progress: 100,
+        currentOperation: 'Búsqueda completada',
+        foundGroups: finalGroups
+      });
+
+      // Notificar resultados
+      window.LeadManagerPro.state.notifyResults(
+        finalGroups,
+        `Se encontraron ${finalGroups.length} grupos.`,
+        'success'
+      );
+
+      return finalGroups;
+    } catch (error) {
+      console.error('GroupFinder: Error al finalizar búsqueda:', error);
+      window.LeadManagerPro.state.updateSearchState({
+        isSearching: false,
+        errors: [...window.LeadManagerPro.state.searchState.errors, error.message],
+        currentOperation: 'Error al finalizar búsqueda'
+      });
+
+      window.LeadManagerPro.state.notifyResults(
+        [],
+        `Error: ${error.message}`,
+        'error'
+      );
+
+      return [];
     }
-    
-    return this.groups;
+  }
+
+  extractGroupData(element) {
+    try {
+      const linkElement = element.querySelector('a[href*="/groups/"]');
+      if (!linkElement) return null;
+
+      const url = linkElement.href;
+      if (!url || !url.includes('/groups/')) return null;
+
+      const name = linkElement.textContent.trim();
+      if (!name) return null;
+
+      const membersText = element.textContent.match(/(\d+(?:,\d+)*)\s*miembros?/i);
+      const members = membersText ? parseInt(membersText[1].replace(/,/g, '')) : 0;
+
+      const descElement = element.querySelector('span[dir="auto"]');
+      const description = descElement ? descElement.textContent.trim() : '';
+
+      const timestamp = new Date().toISOString();
+
+      return {
+        name,
+        url,
+        members,
+        description,
+        timestamp,
+        source: 'facebook-search'
+      };
+    } catch (error) {
+      console.error('Error extrayendo datos del grupo:', error);
+      return null;
+    }
   }
 
   // Extraer ID del grupo del elemento DOM
@@ -629,6 +584,49 @@ class GroupFinder {
     }
     
     return null;
+  }
+
+  async searchGroups() {
+    try {
+      // Inicializar búsqueda
+      this.setupObserver();
+      this.groups = [];
+      this.scrollCount = 0;
+
+      // Actualizar estado inicial
+      window.LeadManagerPro.state.updateSearchState({
+        isSearching: true,
+        currentOperation: 'Iniciando búsqueda de grupos...',
+        currentPage: 1,
+        totalPages: 1,
+        foundProfiles: []
+      });
+
+      // Comenzar el proceso de scroll
+      await new Promise((resolve) => {
+        this.scrollAndCollect();
+        
+        // Verificar periódicamente si la búsqueda ha terminado
+        const checkInterval = setInterval(() => {
+          if (!this.state.isSearching) {
+            clearInterval(checkInterval);
+            resolve();
+          }
+        }, 1000);
+      });
+
+      // Notificar resultados finales
+      const results = this.groups;
+      window.LeadManagerPro.state.notifyResults(
+        results,
+        `Búsqueda completada. Se encontraron ${results.length} grupos.`
+      );
+
+      return results;
+    } catch (error) {
+      console.error('Error en searchGroups:', error);
+      throw error;
+    }
   }
 }
 

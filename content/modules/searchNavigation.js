@@ -16,40 +16,20 @@ window.LeadManagerPro.modules.navigateToSearchPage = async function(searchState)
   const updateStatus = window.LeadManagerPro.utils.updateStatus;
   
   const { searchType, searchTerm } = searchState;
-  let searchUrl;
   
-  // URLs correctas para diferentes tipos de búsqueda en Facebook
-  if (searchType === 'people') {
-    searchUrl = `https://www.facebook.com/search/people/?q=${encodeURIComponent(searchTerm)}`;
-  } else if (searchType === 'groups') {
-    searchUrl = `https://www.facebook.com/search/groups/?q=${encodeURIComponent(searchTerm)}`;
-  } else {
-    searchUrl = `https://www.facebook.com/search/top/?q=${encodeURIComponent(searchTerm)}`;
-  }
+  // Siempre usar la URL base de búsqueda
+  const baseSearchUrl = 'https://www.facebook.com/search/groups';
+  const searchUrl = `${baseSearchUrl}?q=${encodeURIComponent(searchTerm)}`;
   
-  updateStatus(`Navegando a la página de búsqueda de ${searchType === 'people' ? 'personas' : 'grupos'}...`, 10);
+  updateStatus(`Navegando a la página de búsqueda de grupos...`, 10);
   
-  // Comprobar si estamos en la página correcta
-  const currentUrl = window.location.href;
-  
-  // Verificación más flexible para determinar si estamos en el tipo correcto de página de búsqueda
-  const isInSearchPage = currentUrl.includes('/search/');
-  const hasCorrectType = 
-    (searchType === 'people' && currentUrl.includes('/search/people')) || 
-    (searchType === 'groups' && currentUrl.includes('/search/groups')) ||
-    (searchType === 'top' && currentUrl.includes('/search/top'));
-  const hasCorrectQuery = currentUrl.includes(searchTerm);
-  
-  // Si ya estamos en la página correcta, no navegamos
-  if (isInSearchPage && hasCorrectType && hasCorrectQuery) {
-    console.log('Lead Manager Pro: Ya estamos en la página de búsqueda correcta');
-    updateStatus('Ya estamos en la página de búsqueda correcta.', 15);
-    return true;
-  }
-  
-  // Navegación garantizada
   try {
-    // Preservamos el estado para después de la recarga
+    // Limpiar cualquier estado previo
+    localStorage.removeItem('snap_lead_manager_results_pending');
+    localStorage.removeItem('snap_lead_manager_search_results');
+    localStorage.removeItem('snap_lead_manager_city_filter_applied');
+    
+    // Preservar el estado para después de la recarga
     localStorage.setItem('snap_lead_manager_force_reload', 'true');
     localStorage.setItem('snap_lead_manager_search_url', searchUrl);
     localStorage.setItem('snap_lead_manager_search_type', searchType);
@@ -58,7 +38,7 @@ window.LeadManagerPro.modules.navigateToSearchPage = async function(searchState)
     // Debug
     console.log(`Lead Manager Pro: Navegando a ${searchUrl}`);
     
-    // Ocultar el sidebar antes de navegar para no interferir
+    // Ocultar el sidebar antes de navegar
     const sidebarContainer = document.getElementById('snap-lead-manager-container');
     if (sidebarContainer) {
       sidebarContainer.style.transform = 'translateX(100%)';
@@ -66,10 +46,25 @@ window.LeadManagerPro.modules.navigateToSearchPage = async function(searchState)
       if (toggleButton) toggleButton.innerHTML = '▶';
     }
     
-    // Cambiar la ubicación de la ventana sin interferir con la página actual
-    setTimeout(() => {
+    // Usar un enfoque más seguro para la navegación
+    try {
+      // Intentar primero con window.location
       window.location.href = searchUrl;
-    }, 200);
+    } catch (navError) {
+      console.warn('Error al navegar con location.href, intentando método alternativo:', navError);
+      
+      // Alternativa: Crear un enlace y hacer clic en él
+      const navLink = document.createElement('a');
+      navLink.href = searchUrl;
+      navLink.style.display = 'none';
+      document.body.appendChild(navLink);
+      navLink.click();
+      
+      // Limpiar después
+      setTimeout(() => {
+        document.body.removeChild(navLink);
+      }, 100);
+    }
     
     return new Promise((resolve) => {
       setTimeout(() => resolve(true), 300);

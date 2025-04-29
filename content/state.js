@@ -85,16 +85,18 @@ chrome.storage.local.get([
 // Estado de búsqueda
 window.LeadManagerPro.state.searchState = {
   isSearching: false,
-  searchType: 'people', // 'people' o 'groups'
+  searchType: null, // 'groups' o 'profiles'
   searchTerm: '',
-  city: '',
   currentPage: 1,
   totalPages: 1,
-  foundProfiles: [], // Se usa tanto para perfiles como para grupos
-  foundCount: 0,      // Contador universal
+  currentOperation: '',
+  progress: 0,
+  foundProfiles: [],
+  foundGroups: [],
+  errors: [],
   pauseSearch: false,
   stopSearch: false,
-  startTime: null
+  lastUpdate: null
 };
 
 // Estado de recuperación de errores
@@ -108,22 +110,32 @@ window.LeadManagerPro.state.recoveryState = {
  * Reinicia el estado de búsqueda con nuevos valores
  * @param {Object} newState - Nuevos valores para el estado
  */
-window.LeadManagerPro.state.resetSearchState = function(newState = {}) {
-  const defaultState = {
+window.LeadManagerPro.state.resetSearchState = function() {
+  console.log('Reiniciando estado de búsqueda');
+  
+  this.searchState = {
     isSearching: false,
-    searchType: 'people',
+    searchType: null,
     searchTerm: '',
-    city: '',
     currentPage: 1,
     totalPages: 1,
+    currentOperation: '',
+    progress: 0,
     foundProfiles: [],
-    foundCount: 0,
+    foundGroups: [],
+    errors: [],
     pauseSearch: false,
     stopSearch: false,
-    startTime: null
+    lastUpdate: null
   };
-  
-  window.LeadManagerPro.state.searchState = { ...defaultState, ...newState };
+
+  // Notificar reinicio
+  this.updateSearchState(this.searchState);
+
+  // Limpiar localStorage
+  localStorage.removeItem('searchState');
+  localStorage.removeItem('lastSearchResults');
+  localStorage.removeItem('lastSearchTime');
 };
 
 /**
@@ -135,4 +147,89 @@ window.LeadManagerPro.state.resetRecoveryState = function() {
     lastErrorTime: null,
     isInRecoveryMode: false
   };
+};
+
+// Función para actualizar el estado de la búsqueda
+window.LeadManagerPro.state.updateSearchState = function(newState) {
+  console.log('Actualizando estado de búsqueda:', newState);
+  
+  // Actualizar estado local
+  this.searchState = {
+    ...this.searchState,
+    ...newState,
+    lastUpdate: new Date().toISOString()
+  };
+
+  // Notificar al sidebar
+  chrome.runtime.sendMessage({
+    type: 'SEARCH_STATUS_UPDATE',
+    payload: this.searchState
+  }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error('Error al enviar actualización al sidebar:', chrome.runtime.lastError);
+    } else {
+      console.log('Estado actualizado en sidebar:', response);
+    }
+  });
+
+  // Notificar al background script
+  chrome.runtime.sendMessage({
+    type: 'BACKGROUND_STATUS_UPDATE',
+    payload: this.searchState
+  });
+
+  // Guardar estado en localStorage para persistencia
+  try {
+    localStorage.setItem('searchState', JSON.stringify(this.searchState));
+  } catch (error) {
+    console.error('Error al guardar estado en localStorage:', error);
+  }
+};
+
+// Función para notificar resultados
+window.LeadManagerPro.state.notifyResults = function(results, message = '') {
+  console.log('Notificando resultados:', { results, message });
+
+  const payload = {
+    isSearching: false,
+    currentOperation: message,
+    progress: 100
+  };
+
+  if (Array.isArray(results)) {
+    if (this.searchState.searchType === 'groups') {
+      payload.foundGroups = results;
+    } else {
+      payload.foundProfiles = results;
+    }
+  }
+
+  // Actualizar estado
+  this.updateSearchState(payload);
+
+  // Guardar resultados en localStorage
+  try {
+    localStorage.setItem('lastSearchResults', JSON.stringify(results));
+    localStorage.setItem('lastSearchTime', new Date().toISOString());
+  } catch (error) {
+    console.error('Error al guardar resultados en localStorage:', error);
+  }
+};
+
+// Cargar estado al inicializar
+window.LeadManagerPro.state.loadSavedState = function() {
+  try {
+    const savedState = localStorage.getItem('searchState');
+    if (savedState) {
+      const parsedState = JSON.parse(savedState);
+      this.searchState = {
+        ...this.searchState,
+        ...parsedState
+      };
+      console.log('Estado cargado desde localStorage:', this.searchState);
+    }
+  } catch (error) {
+    console.error('Error al cargar estado desde localStorage:', error);
+    this.resetSearchState();
+  }
 };

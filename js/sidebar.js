@@ -89,6 +89,19 @@ let tabButtons;
 let tabContents;
 let n8nIntegrationContainer;
 
+// Variables para el intervalo de verificación de estado
+let statusCheckInterval = null;
+const STATUS_CHECK_INTERVAL = 1000; // 1 segundo
+
+// Al inicio del archivo, después de la declaración del estado global
+const DEBUG = true;
+
+function debugLog(...args) {
+  if (DEBUG) {
+    console.log('[Snap Lead Manager]', ...args);
+  }
+}
+
 // Funciones de utilidad
 function formatTime(milliseconds) {
   const seconds = Math.floor(milliseconds / 1000);
@@ -160,115 +173,59 @@ function clearError() {
   }
 }
 
-function updateStatus(message, progress = state.progress, isError = false, configInfo = null) {
-  // Actualizar barra de progreso principal
-  if (progressBar) {
+// Función para actualizar el estado y la UI
+function updateStatus(message, progress = null, isError = false) {
+  // Actualizar mensaje de estado
+  state.statusMessage = message;
+  
+  // Actualizar progreso si se proporciona
+  if (progress !== null) {
+    state.progress = progress;
+  }
+  
+  // Actualizar elementos de UI básicos
+  if (statusMessage) {
+    statusMessage.textContent = message;
+    statusMessage.className = isError ? 'status error' : 'status';
+  }
+  
+  if (progressBar && progress !== null) {
     progressBar.style.width = `${progress}%`;
   }
   
-  // Actualizar mensaje de estado principal
-  if (statusMessage) {
-    statusMessage.textContent = message;
-  }
-  
-  // Cambiar clase si es un error
-  if (statusMessage) {
-    statusMessage.classList.toggle('error', isError);
-  }
-  
-  // Actualizar el estado
-  state.statusMessage = message;
-  state.progress = progress;
-  
-  // Mostrar contenedor de estado detallado si el progreso está en marcha (>0)
-  if (progress > 0 && progress < 100) {
-    if (searchStatusContainer) {
-      searchStatusContainer.style.display = 'block';
-    }
-  }
-  
-  // Actualizar UI detallada
+  // Actualizar elementos de UI detallados
   if (detailedStatusMessage) {
     detailedStatusMessage.textContent = message;
-    
-    // Si no tenemos información de configuración, intentar obtenerla del estado y localStorage
-    if (!configInfo) {
-      try {
-        const generalOptions = JSON.parse(localStorage.getItem('snap_lead_manager_general_options') || '{}');
-        configInfo = {
-          maxScrolls: generalOptions.maxScrolls || state.maxScrolls || 50,
-          scrollDelay: generalOptions.scrollDelay || state.scrollDelay || 2
-        };
-      } catch(e) {
-        console.warn('No se pudo obtener información de configuración:', e);
-      }
-    }
-    
-    // Si tenemos información de configuración, mostrarla en el mensaje detallado
-    if (configInfo && detailedStatusMessage) {
-      const configText = `Configuración: ${configInfo.maxScrolls} scrolls máx., ${configInfo.scrollDelay}s entre scrolls`;
-      
-      // Agregar información de configuración si no existe
-      if (!detailedStatusMessage.querySelector('.config-info')) {
-        const configSpan = document.createElement('span');
-        configSpan.className = 'config-info';
-        configSpan.style.display = 'block';
-        configSpan.style.fontSize = '12px';
-        configSpan.style.color = '#666';
-        configSpan.style.marginTop = '4px';
-        configSpan.textContent = configText;
-        detailedStatusMessage.appendChild(configSpan);
-      } else {
-        detailedStatusMessage.querySelector('.config-info').textContent = configText;
-      }
-    }
   }
   
-  if (detailedProgressBar) {
+  if (detailedProgressBar && progress !== null) {
     detailedProgressBar.style.width = `${progress}%`;
   }
   
-  if (progressPercentage) {
-    progressPercentage.textContent = `${progress}%`;
+  if (progressPercentage && progress !== null) {
+    progressPercentage.textContent = `${Math.round(progress)}%`;
   }
   
-  // Si es un error, agregar al log
-  if (isError) {
-    addLogEntry(message, true);
-  } else if (state.logEntries.length === 0 || state.logEntries[state.logEntries.length - 1].message !== message) {
-    // Solo agregar al log si es un mensaje nuevo y no repetido
-    addLogEntry(message);
+  // Actualizar operación actual
+  if (currentOperation) {
+    currentOperation.textContent = message;
   }
   
-  // Iniciar contador de tiempo si se inicia una búsqueda
-  if (progress > 0 && !state.searchStartTime) {
-    state.searchStartTime = Date.now();
-    // Iniciar intervalo para actualizar el tiempo transcurrido
-    if (elapsedTime) {
-      setInterval(updateElapsedTime, 1000);
-    }
+  // Actualizar tiempo transcurrido
+  updateElapsedTime();
+  
+  // Actualizar estado de los botones
+  if (pauseButton) {
+    pauseButton.disabled = !state.isRunning;
+    pauseButton.textContent = state.isPaused ? 'Reanudar' : 'Pausar';
   }
   
-  // Ocultar contenedor de estado detallado cuando el proceso termina
-  if (progress === 0 || progress === 100) {
-    // No ocultar inmediatamente para que el usuario pueda ver el resultado final
-    setTimeout(() => {
-      if (state.progress === 0 || state.progress === 100) {
-        if (searchStatusContainer) {
-          searchStatusContainer.style.display = 'none';
-        }
-        state.searchStartTime = null; // Reiniciar timer
-      }
-    }, 5000);
+  if (stopButton) {
+    stopButton.disabled = !state.isRunning;
   }
   
-  // Enviar actualización de estado a la página principal
-  window.parent.postMessage({
-    action: 'status_update',
-    status: message,
-    progress: progress,
-    config: configInfo
-  }, '*');
+  // Agregar entrada al log
+  addLogEntry(message, isError);
 }
 
 // Función para actualizar la UI basada en el estado actual
@@ -357,181 +314,119 @@ function updateSearchInfo() {
   }
 }
 
-// Función para realizar la búsqueda
+// Funciones de manejo de estado y búsqueda
+function startStatusChecking() {
+  debugLog('Iniciando verificación de estado...');
+  
+  if (statusCheckInterval) {
+    clearInterval(statusCheckInterval);
+    debugLog('Intervalo de verificación anterior limpiado');
+  }
+  
+  // Actualizar tiempo transcurrido cada segundo
+  statusCheckInterval = setInterval(() => {
+    if (state.isRunning && !state.isPaused) {
+      updateElapsedTime();
+    }
+  }, STATUS_CHECK_INTERVAL);
+  
+  // Verificar estado inicial
+  getSearchStatus();
+  debugLog('Verificación de estado iniciada');
+}
+
+function stopStatusChecking() {
+  debugLog('Deteniendo verificación de estado...');
+  
+  if (statusCheckInterval) {
+    clearInterval(statusCheckInterval);
+    statusCheckInterval = null;
+    debugLog('Verificación de estado detenida');
+  }
+}
+
+function getSearchStatus() {
+  debugLog('Solicitando estado actual de búsqueda...');
+  window.parent.postMessage({
+    action: 'get_search_status'
+  }, '*');
+}
+
+// Modificar la función performSearch
 function performSearch() {
+  debugLog('Iniciando búsqueda...');
+  
   try {
+    // Obtener valores de los campos
     const searchType = searchTypeSelect.value;
     const searchTerm = searchTermInput.value.trim();
     const searchCity = searchCityInput.value.trim();
     
+    debugLog('Datos de búsqueda:', { searchType, searchTerm, searchCity });
+    
+    // Validaciones básicas
     if (!searchTerm) {
-      throw new Error('Por favor ingresa un término de búsqueda');
+      showError('Por favor ingrese un término de búsqueda');
+      return;
     }
     
-    // Guardar datos de búsqueda
+    // Limpiar estado previo
+    state.profiles = [];
+    state.progress = 0;
+    state.isRunning = true;
+    state.isPaused = false;
+    state.searchStartTime = Date.now();
     state.currentSearchTerm = searchTerm;
     state.currentSearchCity = searchCity;
     state.currentSearchType = searchType;
     
-    // Actualizar información de búsqueda
-    updateSearchInfo();
+    debugLog('Estado inicial configurado');
     
-    // Añadir clase para indicar que la búsqueda está activa
-    document.body.classList.add('search-active');
+    // Limpiar localStorage de búsquedas previas
+    localStorage.removeItem('snap_lead_manager_results_pending');
+    localStorage.removeItem('snap_lead_manager_search_results');
+    localStorage.removeItem('snap_lead_manager_city_filter_applied');
+    localStorage.removeItem('snap_lead_manager_force_reload');
+    localStorage.removeItem('snap_lead_manager_search_url');
     
-    // Crear mensaje para enviar a la página con formato unificado
+    // Guardar datos de búsqueda
     const searchData = {
       type: searchType,
       term: searchTerm,
       city: searchCity,
-      timestamp: Date.now(),
-      userInitiated: true // Marcar explícitamente como iniciado por el usuario
+      timestamp: Date.now()
     };
-    
-    // Agregar opciones generales - convertir explícitamente a números
-    const maxScrollsValue = parseInt(maxScrollsInput.value, 10);
-    const scrollDelayValue = parseFloat(scrollDelayInput.value);
-    
-    searchData.maxScrolls = isNaN(maxScrollsValue) ? 50 : maxScrollsValue;
-    searchData.scrollDelay = isNaN(scrollDelayValue) ? 2 : scrollDelayValue;
-    
-    console.log('Opciones configuradas - maxScrolls:', searchData.maxScrolls, 'scrollDelay:', searchData.scrollDelay);
-    
-    // Guardar en el estado
-    state.maxScrolls = searchData.maxScrolls;
-    state.scrollDelay = searchData.scrollDelay;
-    
-    // Si es búsqueda de grupos, agregar opciones específicas
-    if (searchType === 'groups') {
-      // Obtener valores de los campos y permitir valores vacíos
-      const minUsersValue = minUsersInput.value.trim() === '' ? '' : (parseInt(minUsersInput.value, 10) || 0);
-      const minPostsYearValue = minPostsYearInput.value.trim() === '' ? '' : (parseInt(minPostsYearInput.value, 10) || 0);
-      const minPostsMonthValue = minPostsMonthInput.value.trim() === '' ? '' : (parseInt(minPostsMonthInput.value, 10) || 0);
-      const minPostsDayValue = minPostsDayInput.value.trim() === '' ? '' : (parseInt(minPostsDayInput.value, 10) || 0);
-      
-      // Verificar que al menos hay un valor de usuarios
-      if (minUsersValue === '') {
-        throw new Error('Por favor ingresa una cantidad mínima de usuarios para filtrar grupos');
-      }
-      
-      const groupOptions = {
-        publicGroups: publicGroupsCheckbox.checked,
-        privateGroups: privateGroupsCheckbox.checked,
-        minUsers: minUsersValue,
-        minPostsYear: minPostsYearValue,
-        minPostsMonth: minPostsMonthValue,
-        minPostsDay: minPostsDayValue
-      };
-      
-      searchData.groupOptions = groupOptions;
-      state.groupOptions = groupOptions;
-      
-      // Agregar información del filtro y explicación sobre cómo se aplica
-      console.log('Criterios de filtrado para grupos:', {
-        'Mínimo de usuarios': minUsersValue,
-        'Mínimo publicaciones por año': minPostsYearValue,
-        'Mínimo publicaciones por mes': minPostsMonthValue,
-        'Mínimo publicaciones por día': minPostsDayValue,
-        'Lógica aplicada': 'Debe cumplir mínimo de usuarios Y cualquiera de los mínimos de publicaciones'
-      });
-      
-      // Guardar estas opciones también en chrome.storage.local para acceso desde el background script
-      try {
-        // Guardar TODAS las opciones en chrome.storage.local
-        chrome.storage.local.set({
-          // Opciones de configuración general
-          maxScrolls: maxScrollsValue,
-          scrollDelay: scrollDelayValue,
-          // Opciones específicas para grupos
-          groupPublic: publicGroupsCheckbox.checked,
-          groupPrivate: privateGroupsCheckbox.checked,
-          minUsers: minUsersValue,
-          minPostsYear: minPostsYearValue,
-          minPostsMonth: minPostsMonthValue,
-          minPostsDay: minPostsDayValue
-        });
-        
-        console.log('Opciones guardadas correctamente en chrome.storage.local:', {
-          maxScrolls: maxScrollsValue,
-          scrollDelay: scrollDelayValue,
-          groupPublic: publicGroupsCheckbox.checked,
-          groupPrivate: privateGroupsCheckbox.checked,
-          minUsers: minUsersValue,
-          minPostsYear: minPostsYearValue,
-          minPostsMonth: minPostsMonthValue,
-          minPostsDay: minPostsDayValue
-        });
-      } catch (e) {
-        console.warn('No se pudieron guardar las opciones en chrome.storage:', e);
-      }
-    }
-    
-    // Limpiar cualquier estado de búsqueda previo
-    localStorage.removeItem('snap_lead_manager_force_reload');
-    localStorage.removeItem('snap_lead_manager_search_url');
-    
-    // Guardar en localStorage para que el content script pueda acceder
-    // Asegurarse de que los valores numéricos sean tratados correctamente
     localStorage.setItem('snap_lead_manager_search_data', JSON.stringify(searchData));
-    
-    // Guardar opciones generales como números explícitamente
-    const generalOptions = {
-      maxScrolls: Number(searchData.maxScrolls),
-      scrollDelay: Number(searchData.scrollDelay)
-    };
-    
-    console.log('Guardando opciones generales en localStorage:', generalOptions);
-    localStorage.setItem('snap_lead_manager_general_options', JSON.stringify(generalOptions));
-    
-    if (searchType === 'groups') {
-      localStorage.setItem('snap_lead_manager_group_options', JSON.stringify(searchData.groupOptions));
-      
-      // Guardar las opciones de grupo en una tabla específica para sincronización posterior
-      try {
-        const groupOptionsForSync = {
-          ...searchData.groupOptions,
-          timestamp: Date.now(),
-          searchTerm: searchTerm,
-          searchType: searchType,
-          maxScrolls: Number(searchData.maxScrolls),
-          scrollDelay: Number(searchData.scrollDelay)
-        };
-        
-        // Guardar para sincronización futura con base de datos
-        localStorage.setItem('snap_lead_manager_group_options_for_sync', JSON.stringify(groupOptionsForSync));
-        
-        // Preparar datos para enviar posteriormente a la base de datos
-        prepareDataForDatabase(groupOptionsForSync);
-        
-        // Loggear las opciones guardadas para debugging
-        console.log('Opciones de grupo guardadas para sincronización:', groupOptionsForSync);
-      } catch (error) {
-        console.error('Error al guardar opciones para sincronización:', error);
-      }
-    }
-    
-    // Reiniciar indicador de filtro aplicado
-    localStorage.setItem('snap_lead_manager_city_filter_applied', 'false');
-    
-    // Registrar la acción en la consola para depuración
-    console.log('Iniciando búsqueda con datos:', searchData);
-    
-    // Enviar mensaje a la página para iniciar búsqueda
-    window.parent.postMessage({
-      action: 'find_profiles',
-      searchData: searchData
-    }, '*');
-    
-    // Actualizar estado
-    state.isRunning = true;
-    state.isPaused = false;
-    state.searchStartTime = Date.now();
-    state.profiles = []; // Limpiar resultados anteriores
-    
-    // Guardar indicador de búsqueda activa
     localStorage.setItem('snap_lead_manager_search_active', 'true');
     
-    // Limpiar los resultados previos
+    debugLog('Datos de búsqueda guardados');
+    
+    // Actualizar UI
+    document.body.classList.add('search-active');
+    if (pauseButton) pauseButton.disabled = false;
+    if (stopButton) stopButton.disabled = false;
+    
+    // Guardar opciones generales
+    chrome.storage.local.set({
+      maxScrolls: maxScrollsInput ? maxScrollsInput.value : 50,
+      scrollDelay: scrollDelayInput ? scrollDelayInput.value : 2
+    });
+    
+    // Guardar opciones de grupo si es una búsqueda de grupos
+    if (searchType === 'groups') {
+      chrome.storage.local.set({
+        groupPublic: publicGroupsCheckbox ? publicGroupsCheckbox.checked : true,
+        groupPrivate: privateGroupsCheckbox ? privateGroupsCheckbox.checked : true,
+        minUsers: minUsersInput ? minUsersInput.value : '',
+        minPostsYear: minPostsYearInput ? minPostsYearInput.value : '',
+        minPostsMonth: minPostsMonthInput ? minPostsMonthInput.value : '',
+        minPostsDay: minPostsDayInput ? minPostsDayInput.value : ''
+      });
+    }
+    
+    debugLog('Opciones guardadas');
+    
+    // Limpiar resultados previos
     if (searchResultsList) {
       searchResultsList.innerHTML = '';
     }
@@ -539,13 +434,44 @@ function performSearch() {
       resultsSummary.innerHTML = '';
     }
     
-    updateStatus(`Iniciando búsqueda de ${searchType === 'people' ? 'personas' : 'grupos'}: ${searchTerm}`, 5);
+    // Inicializar la sección de estado
+    if (searchStatusContainer) {
+      searchStatusContainer.style.display = 'block';
+    }
+    
+    // Actualizar estado inicial
+    updateStatus(`Iniciando búsqueda de ${searchType === 'groups' ? 'grupos' : 'perfiles'}: ${searchTerm}`, 5);
+    
+    // Actualizar UI
     updateUI();
+    updateSearchInfo();
     
     // Iniciar verificación del estado
     startStatusChecking();
     
+    // Agregar entrada inicial al log
     addLogEntry(`Búsqueda iniciada: ${searchTerm}${searchCity ? ` en ${searchCity}` : ''}`);
+    
+    debugLog('Enviando mensaje para iniciar búsqueda...');
+    
+    // Enviar mensaje para iniciar la búsqueda
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: 'find_profiles',
+          searchData: {
+            type: searchType,
+            term: searchTerm,
+            city: searchCity,
+            userInitiated: true,
+            timestamp: Date.now()
+          }
+        });
+        debugLog('Mensaje de búsqueda enviado');
+      } else {
+        throw new Error('No se encontró la pestaña activa');
+      }
+    });
     
   } catch (error) {
     console.error('Error al iniciar búsqueda:', error);
@@ -663,7 +589,12 @@ function stopSearch() {
 
 // Función para actualizar la lista de resultados
 function updateResultsList(profiles) {
-  if (!searchResultsList) return;
+  console.log('Actualizando lista de resultados:', profiles);
+  
+  if (!searchResultsList) {
+    console.error('No se encontró el contenedor de resultados');
+    return;
+  }
   
   // Limpiar lista actual
   searchResultsList.innerHTML = '';
@@ -677,51 +608,80 @@ function updateResultsList(profiles) {
     return;
   }
   
-  // Agregar cada perfil a la lista
-  profiles.forEach((profile, index) => {
+  // Agregar cada grupo a la lista
+  profiles.forEach((group, index) => {
     const listItem = document.createElement('li');
     listItem.className = 'result-item';
     
-    // Determinar el tipo de resultado (persona o grupo)
-    const isPerson = !profile.groupUrl;
-    
-    // Crear contenido del item
-    let htmlContent = `
-      <div class="result-header">
-        <span class="result-name">${profile.name || 'Sin nombre'}</span>
-        <span class="result-link">Ver</span>
+    // Crear contenido del item con estilos mejorados
+    listItem.innerHTML = `
+      <div class="result-item-container" style="padding: 15px; border-bottom: 1px solid #e4e6eb; background: white;">
+        <div class="result-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <span class="result-name" style="font-weight: bold; font-size: 16px; color: #1c1e21;">
+            ${group.name || 'Sin nombre'}
+          </span>
+          <a href="${group.url}" target="_blank" class="result-link" style="background: #1877f2; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 14px;">
+            Ver grupo
+          </a>
+        </div>
+        <div class="result-info" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; color: #65676b; font-size: 14px;">
+          <div style="display: flex; align-items: center;">
+            <span style="margin-right: 5px;">🔒</span>
+            ${group.type === 'private' ? 'Privado' : 'Público'}
+          </div>
+          <div style="display: flex; align-items: center;">
+            <span style="margin-right: 5px;">👥</span>
+            ${typeof group.members === 'number' ? group.members.toLocaleString() : group.members} miembros
+          </div>
+          ${group.postsYear ? `
+            <div style="display: flex; align-items: center;">
+              <span style="margin-right: 5px;">📊</span>
+              ${group.postsYear} publicaciones/año
+            </div>
+          ` : ''}
+          ${group.postsMonth ? `
+            <div style="display: flex; align-items: center;">
+              <span style="margin-right: 5px;">📊</span>
+              ${group.postsMonth} publicaciones/mes
+            </div>
+          ` : ''}
+          ${group.postsDay ? `
+            <div style="display: flex; align-items: center;">
+              <span style="margin-right: 5px;">📊</span>
+              ${group.postsDay} publicaciones/día
+            </div>
+          ` : ''}
+        </div>
       </div>
-      <div class="result-info">
     `;
     
-    // Agregar información adicional según el tipo
-    if (isPerson) {
-      if (profile.location) htmlContent += `<div>📍 ${profile.location}</div>`;
-      if (profile.occupation) htmlContent += `<div>💼 ${profile.occupation}</div>`;
-    } else {
-      if (profile.type) htmlContent += `<div>🔒 ${profile.type}</div>`;
-      if (profile.members) htmlContent += `<div>👥 ${profile.members} miembros</div>`;
-      if (profile.postsMonth) htmlContent += `<div>📊 ${profile.postsMonth} publicaciones al mes</div>`;
-      if (profile.postsDay) htmlContent += `<div>📊 ${profile.postsDay} publicaciones al día</div>`;
-    }
-    
-    htmlContent += `</div>`;
-    
-    listItem.innerHTML = htmlContent;
     searchResultsList.appendChild(listItem);
   });
   
-  // Si hay perfiles, enviarlos a n8n
-  if (profiles && profiles.length > 0) {
-    sendResultsToN8n(profiles, state.currentSearchType)
-      .then(success => {
-        if (success) {
-          console.log('Resultados enviados a n8n con éxito');
-        }
-      })
-      .catch(error => {
-        console.error('Error al enviar resultados a n8n:', error);
-      });
+  // Guardar resultados en localStorage
+  try {
+    localStorage.setItem('snap_lead_manager_search_results', JSON.stringify(profiles));
+  } catch (error) {
+    console.error('Error al guardar resultados en localStorage:', error);
+  }
+  
+  // Mostrar resumen
+  if (resultsSummary) {
+    resultsSummary.innerHTML = `
+      <div class="results-summary" style="padding: 15px; background: #f0f2f5; border-radius: 8px; margin-top: 15px;">
+        <h3 style="margin: 0 0 10px 0; color: #1c1e21;">Resumen de la búsqueda</h3>
+        <p style="margin: 0 0 15px 0;">Se encontraron <strong>${profiles.length}</strong> grupos que cumplen con los criterios.</p>
+        <div style="display: flex; gap: 10px;">
+          <button class="snap-lead-button" onclick="exportResults('json')" style="background: #1877f2; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+            Exportar JSON
+          </button>
+          <button class="snap-lead-button" onclick="exportResults('csv')" style="background: #1877f2; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+            Exportar CSV
+          </button>
+        </div>
+      </div>
+    `;
+    resultsSummary.style.display = 'block';
   }
 }
 
@@ -1253,292 +1213,93 @@ function closeModals() {
   });
 }
 
-// Manejador de mensajes recibidos de la página
-function handleReceivedMessage(event) {
-  const message = event.data;
+// Función para aplicar criterios de búsqueda
+function applySavedCriteria(criteria) {
+  if (!criteria) return;
   
-  if (!message || !message.action) return;
+  // Aplicar valores básicos
+  if (searchTypeSelect) searchTypeSelect.value = criteria.type || 'groups';
+  if (searchTermInput) searchTermInput.value = criteria.term || '';
+  if (searchCityInput) searchCityInput.value = criteria.city || '';
   
-  // No loggear status_update para evitar spam en consola
-  if (message.action !== 'status_update') {
-    console.log('Mensaje recibido:', message.action);
+  // Aplicar opciones generales
+  if (maxScrollsInput) maxScrollsInput.value = criteria.maxScrolls || 50;
+  if (scrollDelayInput) scrollDelayInput.value = criteria.scrollDelay || 2;
+  
+  // Aplicar opciones de grupo si existen
+  if (criteria.groupOptions) {
+    if (publicGroupsCheckbox) publicGroupsCheckbox.checked = criteria.groupOptions.publicGroups !== false;
+    if (privateGroupsCheckbox) privateGroupsCheckbox.checked = criteria.groupOptions.privateGroups !== false;
+    if (minUsersInput) minUsersInput.value = criteria.groupOptions.minUsers || '';
+    if (minPostsYearInput) minPostsYearInput.value = criteria.groupOptions.minPostsYear || '';
+    if (minPostsMonthInput) minPostsMonthInput.value = criteria.groupOptions.minPostsMonth || '';
+    if (minPostsDayInput) minPostsDayInput.value = criteria.groupOptions.minPostsDay || '';
   }
   
-  switch (message.action) {
-    case 'search_result':
-      if (message.result) {
-        console.log('Recibido search_result:', message.result);
-        
-        // Aceptar tanto 'profiles' como 'results' para compatibilidad con ambos tipos de búsqueda
-        const results = message.result.profiles || message.result.results || [];
-        state.profiles = results;
-        
-        // Actualizar la cuenta global
-        state.foundCount = results.length;
-        
-        // Actualizar la lista de resultados
-        updateResultsList(state.profiles);
-        
-        // Mostrar mensaje personalizado si hay uno
-        if (message.result.message) {
-          addLogEntry(message.result.message);
-        } else {
-          addLogEntry(`Se encontraron ${state.profiles.length} ${state.currentSearchType === 'people' ? 'perfiles' : 'grupos'}.`);
-        }
-        
-        if (message.result.success) {
-          state.isRunning = false;
-          state.isPaused = false;
-          updateStatus('Búsqueda completada', 100);
-          localStorage.setItem('snap_lead_manager_search_active', 'false');
-          document.body.classList.remove('search-active');
-          updateUI();
-        }
-      }
-      break;
-    
-    // Mensaje explícito de que la búsqueda ha terminado
-    case 'search_complete':
-      state.isRunning = false;
-      state.isPaused = false;
-      state.progress = 100;
-      updateStatus('Búsqueda completada', 100);
-      
-      // Guardar indicador de búsqueda inactiva
-      localStorage.setItem('snap_lead_manager_search_active', 'false');
-      
-      // Detener cualquier actualización de estado
-      clearInterval(state.statusUpdateInterval);
-      
-      // Remover clase search-active
-      document.body.classList.remove('search-active');
-      
-      // Actualizar la UI
-      updateUI();
-      break;
-    
-    // Nueva acción para manejar resultados enviados con 'found_results'
-    case 'found_results':
-      if (message.results) {
-        console.log('Recibido found_results:', message.results);
-        state.profiles = message.results;
-        state.foundCount = message.results.length;
-        updateResultsList(state.profiles);
-      }
-      break;
-    
-    case 'status_update':
-      // Si el mensaje incluye información de configuración, usarla
-      if (message.config) {
-        updateStatus(
-          message.status || 'Actualizando...', 
-          message.progress || state.progress, 
-          false, 
-          message.config
-        );
-      } else {
-        updateStatus(message.status || 'Actualizando...', message.progress || state.progress);
-      }
-      break;
-    
-    case 'filter_status_update':
-      // Actualizar el estado del filtro de ciudad en la UI
-      if (message.filterApplied && state.currentSearchCity) {
-        const filterStatusElement = document.querySelector('#current-search-info p.status i');
-        if (filterStatusElement) {
-          filterStatusElement.textContent = '✓ Filtro de ciudad aplicado correctamente';
-          filterStatusElement.parentElement.className = 'status success';
-        }
-        localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
-      }
-      break;
-      
-    case 'pause_result':
-      // Confirmar que la pausa fue procesada
-      if (message.result && message.result.success) {
-        // Asegurarse de que el estado refleje la pausa
-        if (!state.isPaused && pauseButton.textContent === 'Reanudar') {
-          state.isPaused = true;
-          updateUI();
-          addLogEntry('Búsqueda pausada confirmada');
-        }
-      }
-      break;
-      
-    case 'resume_result':
-      // Confirmar que se reanudó la búsqueda
-      if (message.result && message.result.success) {
-        // Asegurarse de que el estado refleje la reanudación
-        if (state.isPaused && pauseButton.textContent === 'Pausar') {
-          state.isPaused = false;
-          updateUI();
-          addLogEntry('Búsqueda reanudada confirmada');
-        }
-      }
-      break;
-      
-    case 'stop_result':
-      // Confirmar que se detuvo la búsqueda
-      if (message.result && message.result.success) {
-        // Asegurarse de que el estado refleje la detención
-        state.isRunning = false;
-        state.isPaused = false;
-        state.progress = 0;
-        updateStatus('Búsqueda detenida', 0);
-        updateUI();
-        addLogEntry('Búsqueda detenida confirmada');
-      }
-      break;
-      
-    case 'sidebar_ready':
-      // El content script nos informa que está listo para recibir mensajes
-      console.log('Conexión con content script establecida');
-      break;
-      
-    case 'configure_search':
-      // Configurar la interfaz para búsqueda
-      if (message.config) {
-        console.log('Configurando búsqueda:', message.config);
-        
-        // Establecer tipo de búsqueda
-        if (message.config.type && searchTypeSelect) {
-          searchTypeSelect.value = message.config.type;
-          state.currentSearchType = message.config.type;
-          handleSearchTypeChange();
-        }
-        
-        // Establecer término de búsqueda
-        if (message.config.term && searchTermInput) {
-          searchTermInput.value = message.config.term;
-          state.currentSearchTerm = message.config.term;
-          
-          // Guardar para referencias futuras
-          localStorage.setItem('snap_lead_manager_search_term', message.config.term);
-        }
-        
-        // Establecer ciudad
-        if (message.config.city && searchCityInput) {
-          searchCityInput.value = message.config.city;
-          state.currentSearchCity = message.config.city;
-          
-          // Guardar para referencias futuras
-          localStorage.setItem('snap_lead_manager_search_city', message.config.city);
-        }
-        
-        // Actualizar información de búsqueda
-        updateSearchInfo();
-        
-        // Si todo está configurado, iniciar la búsqueda automáticamente
-        if (message.config.autoStart && searchButton) {
-          // Pequeño retraso para asegurar que la UI esté actualizada
-          setTimeout(() => {
-            // Hacer clic en el botón de búsqueda
-            console.log('Iniciando búsqueda automáticamente');
-            searchButton.click();
-          }, 500);
-        }
-      }
-      break;
-      
-    case 'set_filter_options':
-      // Guardar opciones de filtrado adicionales para usarlas durante la búsqueda
-      if (message.options) {
-        console.log('Recibidas opciones de filtrado adicionales:', message.options);
-        state.filterOptions = message.options;
-        
-        // Guardar para uso persistente
-        localStorage.setItem('snap_lead_manager_filter_options', JSON.stringify(message.options));
-      }
-      break;
-      
-    case 'search_with_options':
-      // Iniciar búsqueda directa con opciones
-      if (message.searchData) {
-        console.log('Iniciando búsqueda con datos y opciones:', message.searchData);
-        
-        // Configurar la interfaz primero
-        if (message.searchData.type && searchTypeSelect) {
-          searchTypeSelect.value = message.searchData.type;
-          state.currentSearchType = message.searchData.type;
-          handleSearchTypeChange();
-        }
-        
-        if (message.searchData.term && searchTermInput) {
-          searchTermInput.value = message.searchData.term;
-          state.currentSearchTerm = message.searchData.term;
-        }
-        
-        if (message.searchData.city && searchCityInput) {
-          searchCityInput.value = message.searchData.city;
-          state.currentSearchCity = message.searchData.city;
-        }
-        
-        // Guardar opciones de filtrado si están presentes
-        if (message.searchData.filterOptions) {
-          state.filterOptions = message.searchData.filterOptions;
-          localStorage.setItem('snap_lead_manager_filter_options', JSON.stringify(message.searchData.filterOptions));
-        }
-        
-        // Actualizar información de búsqueda
-        updateSearchInfo();
-        
-        // Iniciar la búsqueda automáticamente
-        setTimeout(() => {
-          console.log('Ejecutando búsqueda automática');
-          performSearch();
-        }, 500);
-      }
-      break;
-  }
+  // Actualizar estado
+  state.currentSearchTerm = criteria.term || '';
+  state.currentSearchCity = criteria.city || '';
+  state.currentSearchType = criteria.type || 'groups';
+  
+  // Manejar cambio de tipo de búsqueda
+  handleSearchTypeChange();
+  
+  // Actualizar información de búsqueda
+  updateSearchInfo();
+  
+  // Guardar criterios en localStorage
+  localStorage.setItem('snap_lead_manager_search_criteria', JSON.stringify(criteria));
 }
 
-// Inicialización
-document.addEventListener('DOMContentLoaded', function() {
-  // Inicializar referencias DOM
-  initDOMReferences();
+// Función para inicializar eventos
+function initializeEvents() {
+  debugLog('Inicializando eventos...');
   
-  // Inicializar navegación por tabs
-  initTabNavigation();
-  
-  // Cargar criterios guardados
-  loadSavedCriteriaFromStorage();
-  
-  // Enlazar eventos
+  // Eventos de búsqueda
   if (searchButton) {
     searchButton.addEventListener('click', performSearch);
+    debugLog('Evento de búsqueda configurado');
   }
   
   if (pauseButton) {
     pauseButton.disabled = true;
     pauseButton.addEventListener('click', togglePauseSearch);
+    debugLog('Evento de pausa configurado');
   }
   
   if (stopButton) {
     stopButton.disabled = true;
     stopButton.addEventListener('click', stopSearch);
+    debugLog('Evento de detener configurado');
   }
   
   if (openWindowButton) {
     openWindowButton.addEventListener('click', openInWindow);
+    debugLog('Evento de abrir en ventana configurado');
   }
   
+  // Eventos de tipo de búsqueda
   if (searchTypeSelect) {
     searchTypeSelect.addEventListener('change', handleSearchTypeChange);
-    // Inicializar tipo de búsqueda
-    handleSearchTypeChange();
+    handleSearchTypeChange(); // Inicializar tipo de búsqueda
+    debugLog('Eventos de tipo de búsqueda configurados');
   }
   
+  // Eventos de configuración
   if (collapsibleTrigger) {
     collapsibleTrigger.addEventListener('click', toggleCollapsible);
+    debugLog('Evento de configuración avanzada configurado');
   }
   
-  // Gestión de criterios
+  // Eventos de criterios
   if (clearCriteriaButton) {
     clearCriteriaButton.addEventListener('click', clearSearchCriteria);
+    debugLog('Evento de limpiar criterios configurado');
   }
   
   if (saveCriteriaButton) {
     saveCriteriaButton.addEventListener('click', showSaveCriteriaModal);
+    debugLog('Evento de guardar criterios configurado');
   }
   
   if (cancelEditButton) {
@@ -1546,17 +1307,20 @@ document.addEventListener('DOMContentLoaded', function() {
       state.editingCriteriaId = null;
       updateUI();
     });
+    debugLog('Evento de cancelar edición configurado');
   }
   
   if (manageCriteriaButton) {
     manageCriteriaButton.addEventListener('click', showManageCriteriaModal);
+    debugLog('Evento de administrar criterios configurado');
   }
   
-  // Eventos para modales
+  // Eventos de modales
   const closeModalButtons = document.querySelectorAll('.close-modal');
   closeModalButtons.forEach(btn => {
     btn.addEventListener('click', closeModals);
   });
+  debugLog('Eventos de modales configurados');
   
   if (confirmSaveButton) {
     confirmSaveButton.addEventListener('click', saveSearchCriteria);
@@ -1570,411 +1334,291 @@ document.addEventListener('DOMContentLoaded', function() {
     closeManageCriteriaButton.addEventListener('click', closeModals);
   }
   
-  // Intentar inicializar el tab activo inicial
-  const activeTab = document.querySelector('.tab-button.active');
-  if (activeTab) {
-    const tabId = activeTab.getAttribute('data-tab');
-    if (tabId === 'n8n-tab') {
-      // Inicializar el tab de n8n si está activo por defecto
-      setTimeout(() => {
-        initN8nIntegration();
-      }, 500); // Pequeño retraso para asegurar que todo esté cargado
-    }
-  }
+  debugLog('Todos los eventos inicializados correctamente');
+}
+
+// Modificar la función initializeSidebar para incluir la inicialización de eventos
+async function initializeSidebar() {
+  debugLog('Iniciando sidebar...');
   
-  // Mostrar UI
-  updateUI();
+  try {
+    // Inicializar referencias DOM
+    initDOMReferences();
+    debugLog('Referencias DOM inicializadas');
+    
+    // Inicializar eventos
+    initializeEvents();
+    debugLog('Eventos inicializados');
+    
+    // Cargar estado guardado
+    await loadSavedState();
+    debugLog('Estado guardado cargado');
+    
+    // Configurar listeners de mensajes
+    setupMessageListeners();
+    debugLog('Listeners de mensajes configurados');
+    
+    // Inicializar navegación por tabs
+    initTabNavigation();
+    debugLog('Navegación por tabs inicializada');
+    
+    // Verificar si hay una búsqueda en curso
+    const searchActive = localStorage.getItem('snap_lead_manager_search_active') === 'true';
+    debugLog('Estado de búsqueda activa:', searchActive);
+    
+    if (searchActive) {
+      debugLog('Recuperando estado de búsqueda activa...');
+      // Restaurar estado de búsqueda
+      state.isRunning = true;
+      updateUI();
+      // Solicitar estado actual
+      requestSearchStatus();
+    }
+    
+    // Inicializar tab activo
+    const activeTab = document.querySelector('.tab-button.active');
+    if (activeTab) {
+      const tabId = activeTab.getAttribute('data-tab');
+      if (tabId === 'n8n-tab') {
+        setTimeout(() => {
+          initN8nIntegration();
+        }, 500);
+      }
+    }
+    
+    // Actualizar UI inicial
+    updateUI();
+    
+    debugLog('Sidebar inicializado correctamente');
+    return true;
+  } catch (error) {
+    console.error('Error al inicializar sidebar:', error);
+    return false;
+  }
+}
+
+// Función para cargar el estado guardado
+async function loadSavedState() {
+  debugLog('Cargando estado guardado...');
+  
+  try {
+    // Cargar criterios guardados
+    const savedCriteria = localStorage.getItem('snap_lead_manager_saved_criteria');
+    if (savedCriteria) {
+      state.savedCriteria = JSON.parse(savedCriteria);
+      debugLog('Criterios guardados cargados:', state.savedCriteria.length);
+    }
+    
+    // Cargar resultados previos si existen
+    const savedResults = localStorage.getItem('snap_lead_manager_search_results');
+    if (savedResults) {
+      const results = JSON.parse(savedResults);
+      debugLog('Resultados previos encontrados:', results.length);
+      // Mostrar resultados previos
+      handleSearchResults(results, 'Resultados de búsqueda previa');
+    }
+    
+    // Cargar datos de búsqueda actual
+    const searchData = localStorage.getItem('snap_lead_manager_search_data');
+    if (searchData) {
+      const data = JSON.parse(searchData);
+      debugLog('Datos de búsqueda actual:', data);
+      
+      // Actualizar campos
+      if (searchTermInput) searchTermInput.value = data.term || '';
+      if (searchCityInput) searchCityInput.value = data.city || '';
+      if (searchTypeSelect) {
+        searchTypeSelect.value = data.type || 'groups';
+        handleSearchTypeChange();
+      }
+      
+      // Actualizar estado
+      state.currentSearchTerm = data.term || '';
+      state.currentSearchCity = data.city || '';
+      state.currentSearchType = data.type || 'groups';
+      
+      updateSearchInfo();
+    }
+    
+    debugLog('Estado guardado cargado correctamente');
+  } catch (error) {
+    console.error('Error al cargar estado guardado:', error);
+  }
+}
+
+// Función para configurar listeners de mensajes
+function setupMessageListeners() {
+  debugLog('Configurando listeners de mensajes...');
+  
+  // Listener principal de mensajes
+  window.addEventListener('message', function(event) {
+    const message = event.data;
+    if (!message || !message.action) return;
+    
+    debugLog('Mensaje recibido:', message.action, message);
+    
+    switch (message.action) {
+      case 'status_update':
+        if (message.status) {
+          state.isRunning = message.status.isSearching;
+          state.isPaused = message.status.pauseSearch;
+          updateStatus(message.status.message || 'Actualizando...', message.status.progress);
+          updateUI();
+          debugLog('Estado actualizado:', {
+            isRunning: state.isRunning,
+            isPaused: state.isPaused,
+            message: message.status.message,
+            progress: message.status.progress
+          });
+        }
+        break;
+        
+      case 'search_result':
+      case 'found_results':
+        if (message.results || (message.result && message.result.profiles)) {
+          const results = message.results || message.result.profiles;
+          const statusMessage = message.message || message.result.message;
+          debugLog('Resultados recibidos:', results.length);
+          
+          // Actualizar estado antes de procesar resultados
+          state.isRunning = false;
+          state.isPaused = false;
+          
+          // Procesar resultados
+          handleSearchResults(results, statusMessage);
+          
+          // Actualizar estado final
+          updateStatus(statusMessage || 'Búsqueda completada', 100);
+          document.body.classList.remove('search-active');
+          localStorage.setItem('snap_lead_manager_search_active', 'false');
+          
+          // Detener verificación de estado
+          stopStatusChecking();
+          
+          // Actualizar UI final
+          updateUI();
+          
+          debugLog('Procesamiento de resultados completado');
+        }
+        break;
+        
+      case 'error':
+        console.error('Error recibido:', message.error);
+        showError(message.error);
+        state.isRunning = false;
+        state.isPaused = false;
+        localStorage.setItem('snap_lead_manager_search_active', 'false');
+        stopStatusChecking();
+        updateUI();
+        debugLog('Error procesado:', message.error);
+        break;
+        
+      case 'sidebar_ready':
+        debugLog('Sidebar listo, verificando estado inicial...');
+        // Si hay una búsqueda activa, solicitar estado
+        if (localStorage.getItem('snap_lead_manager_search_active') === 'true') {
+          getSearchStatus();
+        }
+        break;
+    }
+  });
+  
+  // Enviar mensaje de que el sidebar está listo
+  window.parent.postMessage({
+    action: 'sidebar_ready'
+  }, '*');
+  
+  debugLog('Listeners de mensajes configurados correctamente');
+}
+
+// Función para solicitar estado actual de búsqueda
+function requestSearchStatus() {
+  debugLog('Solicitando estado actual de búsqueda...');
+  window.parent.postMessage({
+    action: 'get_search_status'
+  }, '*');
+}
+
+// Modificar el evento DOMContentLoaded
+document.addEventListener('DOMContentLoaded', async function() {
+  debugLog('DOM cargado, iniciando aplicación...');
+  
+  // Inicializar sidebar
+  const initialized = await initializeSidebar();
+  
+  if (initialized) {
+    debugLog('Aplicación iniciada correctamente');
+  } else {
+    console.error('Error al iniciar la aplicación');
+  }
 });
 
 function initTabNavigation() {
+  debugLog('Inicializando navegación por tabs...');
+  
   if (!tabButtons || !tabContents) {
     console.error('Tab buttons or tab contents not found in the DOM');
     return;
   }
   
-  console.log('Initializing tab navigation');
+  // Asegurarse de que los contenedores de resultados existan
+  const resultsTab = document.getElementById('results-tab');
+  if (resultsTab && !document.getElementById('search-results')) {
+    const resultsList = document.createElement('ul');
+    resultsList.id = 'search-results';
+    resultsList.className = 'results-list';
+    resultsTab.appendChild(resultsList);
+    debugLog('Contenedor de resultados creado');
+  }
   
   tabButtons.forEach(button => {
     button.addEventListener('click', () => {
-      // Obtener el id del tab a mostrar
       const tabId = button.getAttribute('data-tab');
-      console.log('Tab clicked:', tabId);
+      debugLog('Tab clicked:', tabId);
       
       // Desactivar todos los tabs
-      tabButtons.forEach(btn => btn.classList.remove('active'));
-      tabContents.forEach(content => content.classList.remove('active'));
+      tabButtons.forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-selected', 'false');
+      });
+      tabContents.forEach(content => {
+        content.classList.remove('active');
+        content.style.display = 'none';
+      });
       
       // Activar el tab seleccionado
       button.classList.add('active');
+      button.setAttribute('aria-selected', 'true');
       const tabContent = document.getElementById(tabId);
       if (tabContent) {
         tabContent.classList.add('active');
-        console.log('Tab activated:', tabId);
+        tabContent.style.display = 'block';
+        debugLog('Tab activado:', tabId);
+        
+        // Si es el tab de resultados, asegurar que los resultados sean visibles
+        if (tabId === 'results-tab' && state.profiles && state.profiles.length > 0) {
+          const searchResultsList = document.getElementById('search-results');
+          const resultsSummary = document.getElementById('results-summary');
+          if (searchResultsList) searchResultsList.style.display = 'block';
+          if (resultsSummary) resultsSummary.style.display = 'block';
+          debugLog('Contenido de resultados mostrado');
+        }
+        
+        // Si es el tab de integración con n8n, inicializar si es necesario
+        if (tabId === 'n8n-tab') {
+          debugLog('Inicializando n8n integration');
+          initN8nIntegration();
+        }
       } else {
         console.error('Tab content not found:', tabId);
       }
-      
-      // Si es el tab de integración con n8n, inicializar si aún no se ha hecho
-      if (tabId === 'n8n-tab') {
-        console.log('Initializing n8n integration');
-        initN8nIntegration();
-      }
     });
   });
+  
+  debugLog('Navegación por tabs inicializada');
 }
 
 // Implementación directa de los módulos de n8n en caso de que la carga falle
-function initializeN8nModulesDirect() {
-  console.log('Inicializando módulos n8n directamente');
-  
-  // Namespace para la organización del código
-  window.LeadManagerPro = window.LeadManagerPro || {};
-  window.LeadManagerPro.modules = window.LeadManagerPro.modules || {};
-  
-  // Clase N8nIntegrationManager
-  class N8nIntegrationManager {
-    constructor() {
-      this.n8nWebhookUrl = '';
-      this.userId = null;
-      this.username = '';
-      this.apiKey = '';
-      this.isConfigured = false;
-      this.pendingData = [];
-      this.lastSyncTime = null;
-      this.dbEnabled = false;
-    }
-    
-    async init() {
-      console.log('N8nIntegrationManager: Iniciando módulo');
-      
-      try {
-        // Cargar configuración desde chrome.storage
-        const result = await new Promise(resolve => {
-          chrome.storage.local.get(['leadManagerN8nConfig', 'leadManagerUserId'], resolve);
-        });
-        
-        if (result && result.leadManagerN8nConfig) {
-          this.n8nWebhookUrl = result.leadManagerN8nConfig.webhookUrl || '';
-          this.apiKey = result.leadManagerN8nConfig.apiKey || '';
-          this.dbEnabled = result.leadManagerN8nConfig.dbEnabled || false;
-          this.lastSyncTime = result.leadManagerN8nConfig.lastSyncTime || null;
-          this.isConfigured = !!(this.n8nWebhookUrl && this.apiKey);
-          
-          console.log('N8nIntegrationManager: Configuración cargada');
-        }
-        
-        if (result && result.leadManagerUserId) {
-          this.userId = result.leadManagerUserId.id || null;
-          this.username = result.leadManagerUserId.username || '';
-          
-          console.log('N8nIntegrationManager: ID de usuario cargado');
-        }
-        
-        // Cargar datos pendientes
-        await this.loadPendingData();
-        
-        return this;
-      } catch (error) {
-        console.error('N8nIntegrationManager: Error al inicializar', error);
-        return this;
-      }
-    }
-    
-    async configure(config) {
-      try {
-        if (config.webhookUrl !== undefined) this.n8nWebhookUrl = config.webhookUrl;
-        if (config.apiKey !== undefined) this.apiKey = config.apiKey;
-        if (config.dbEnabled !== undefined) this.dbEnabled = config.dbEnabled;
-        if (config.userId !== undefined) this.userId = config.userId;
-        if (config.username !== undefined) this.username = config.username;
-        
-        this.isConfigured = !!(this.n8nWebhookUrl && this.apiKey);
-        
-        await Promise.all([
-          new Promise(resolve => {
-            chrome.storage.local.set({
-              'leadManagerN8nConfig': {
-                webhookUrl: this.n8nWebhookUrl,
-                apiKey: this.apiKey,
-                dbEnabled: this.dbEnabled,
-                lastSyncTime: this.lastSyncTime
-              }
-            }, resolve);
-          }),
-          new Promise(resolve => {
-            if (this.userId) {
-              chrome.storage.local.set({
-                'leadManagerUserId': {
-                  id: this.userId,
-                  username: this.username
-                }
-              }, resolve);
-            } else {
-              resolve();
-            }
-          })
-        ]);
-        
-        return true;
-      } catch (error) {
-        console.error('N8nIntegrationManager: Error al configurar', error);
-        return false;
-      }
-    }
-    
-    isAuthenticated() {
-      return !!this.userId;
-    }
-    
-    async loadPendingData() {
-      try {
-        const result = await new Promise(resolve => {
-          chrome.storage.local.get(['leadManagerPendingData'], resolve);
-        });
-        
-        if (result && result.leadManagerPendingData) {
-          this.pendingData = result.leadManagerPendingData;
-        }
-        
-        return true;
-      } catch (error) {
-        console.error('N8nIntegrationManager: Error al cargar datos pendientes', error);
-        return false;
-      }
-    }
-    
-    getStatus() {
-      return {
-        isConfigured: this.isConfigured,
-        userId: this.userId,
-        username: this.username,
-        n8nWebhookUrl: this.n8nWebhookUrl,
-        dbEnabled: this.dbEnabled,
-        lastSyncTime: this.lastSyncTime,
-        pendingDataCount: this.pendingData.length
-      };
-    }
-    
-    // Métodos simplificados para la implementación directa
-    async sendToN8n(dataType, data) {
-      console.log(`N8nIntegrationManager: Enviando ${data.length} elementos a n8n`);
-      return true;
-    }
-    
-    async getUserData(dataType) {
-      return [];
-    }
-  }
-  
-  // Clase N8nIntegrationUI
-  class N8nIntegrationUI {
-    constructor() {
-      this.initialized = false;
-      this.manager = null;
-    }
-    
-    async init() {
-      if (this.initialized) return this;
-      
-      console.log('N8nIntegrationUI: Inicializando módulo');
-      
-      try {
-        // Crear una instancia del gestor si no existe
-        if (!window.LeadManagerPro.n8nIntegration) {
-          window.LeadManagerPro.n8nIntegration = new N8nIntegrationManager();
-        }
-        
-        this.manager = window.LeadManagerPro.n8nIntegration;
-        await this.manager.init();
-        
-        this.initialized = true;
-        
-        return this;
-      } catch (error) {
-        console.error('N8nIntegrationUI: Error al inicializar', error);
-        return this;
-      }
-    }
-    
-    generateConfigHTML() {
-      const status = this.manager?.getStatus() || {};
-      const isConfigured = status.isConfigured || false;
-      const userId = status.userId || '';
-      const username = status.username || '';
-      const webhookUrl = status.n8nWebhookUrl || '';
-      const dbEnabled = status.dbEnabled || false;
-      const lastSyncTime = status.lastSyncTime ? new Date(status.lastSyncTime).toLocaleString() : 'Nunca';
-      const pendingDataCount = status.pendingDataCount || 0;
-      
-      return `
-        <div class="snap-lead-section">
-          <h3>Integración con n8n</h3>
-          <div class="snap-lead-config-form">
-            <div class="snap-lead-form-row">
-              <label for="n8n-webhook-url">URL de Webhook de n8n:</label>
-              <input type="text" id="n8n-webhook-url" value="${webhookUrl}" placeholder="https://tu-instancia-n8n.com/webhook/..." />
-            </div>
-            
-            <div class="snap-lead-form-row">
-              <label for="n8n-api-key">API Key:</label>
-              <input type="password" id="n8n-api-key" placeholder="Ingresa tu API key" />
-            </div>
-            
-            <div class="snap-lead-form-row">
-              <label for="n8n-user-id">ID de Usuario:</label>
-              <input type="text" id="n8n-user-id" value="${userId}" placeholder="Tu ID de usuario" />
-            </div>
-            
-            <div class="snap-lead-form-row">
-              <label for="n8n-username">Nombre de Usuario:</label>
-              <input type="text" id="n8n-username" value="${username}" placeholder="Tu nombre de usuario" />
-            </div>
-            
-            <div class="snap-lead-form-row checkbox-row">
-              <label for="n8n-db-enabled">
-                <input type="checkbox" id="n8n-db-enabled" ${dbEnabled ? 'checked' : ''} />
-                Habilitar almacenamiento local de datos
-              </label>
-            </div>
-            
-            <div class="snap-lead-form-row">
-              <button id="n8n-save-config" class="snap-lead-button primary">Guardar Configuración</button>
-            </div>
-            
-            <div class="snap-lead-status-info">
-              <p>Estado: <span class="status-badge ${isConfigured ? 'success' : 'error'}">${isConfigured ? 'Configurado' : 'No configurado'}</span></p>
-              <p>Última sincronización: <span>${lastSyncTime}</span></p>
-              <p>Datos pendientes: <span>${pendingDataCount}</span></p>
-              ${pendingDataCount > 0 ? `<button id="n8n-sync-now" class="snap-lead-button secondary">Sincronizar Ahora</button>` : ''}
-            </div>
-          </div>
-        </div>
-      `;
-    }
-    
-    async generateUserDataHTML() {
-      if (!this.manager || !this.manager.isAuthenticated()) {
-        return `
-          <div class="snap-lead-section">
-            <h3>Datos de Usuario</h3>
-            <p>Debes configurar la integración y tu ID de usuario para ver tus datos.</p>
-          </div>
-        `;
-      }
-      
-      return `
-        <div class="snap-lead-section">
-          <h3>Datos de Usuario</h3>
-          
-          <div class="snap-lead-data-stats">
-            <div class="stat-box">
-              <span class="stat-value">0</span>
-              <span class="stat-label">Perfiles</span>
-            </div>
-            <div class="stat-box">
-              <span class="stat-value">0</span>
-              <span class="stat-label">Grupos</span>
-            </div>
-            <div class="stat-box">
-              <span class="stat-value">0</span>
-              <span class="stat-label">Miembros</span>
-            </div>
-          </div>
-          
-          <div class="snap-lead-data-actions">
-            <button id="view-profiles-btn" class="snap-lead-button secondary">Ver Perfiles</button>
-            <button id="view-groups-btn" class="snap-lead-button secondary">Ver Grupos</button>
-            <button id="view-members-btn" class="snap-lead-button secondary">Ver Miembros</button>
-            <button id="export-data-btn" class="snap-lead-button primary">Exportar Datos</button>
-          </div>
-        </div>
-      `;
-    }
-    
-    attachEvents(container) {
-      // Botón de guardar configuración
-      const saveConfigBtn = container.querySelector('#n8n-save-config');
-      if (saveConfigBtn) {
-        saveConfigBtn.addEventListener('click', async () => {
-          const webhookUrl = container.querySelector('#n8n-webhook-url').value.trim();
-          const apiKey = container.querySelector('#n8n-api-key').value.trim();
-          const userId = container.querySelector('#n8n-user-id').value.trim();
-          const username = container.querySelector('#n8n-username').value.trim();
-          const dbEnabled = container.querySelector('#n8n-db-enabled').checked;
-          
-          try {
-            await this.manager.configure({
-              webhookUrl,
-              apiKey: apiKey || undefined,
-              userId: userId || undefined,
-              username: username || undefined,
-              dbEnabled
-            });
-            
-            alert('Configuración guardada correctamente');
-            
-            // Actualizar la interfaz
-            this.updateUI(container);
-          } catch (error) {
-            console.error('N8nIntegrationUI: Error al guardar configuración', error);
-            alert(`Error al guardar configuración: ${error.message}`);
-          }
-        });
-      }
-    }
-    
-    async updateUI(container) {
-      try {
-        // Actualizar sección de configuración
-        const configSection = container.querySelector('.snap-lead-section:first-child');
-        if (configSection) {
-          configSection.innerHTML = this.generateConfigHTML();
-        }
-        
-        // Actualizar sección de datos de usuario
-        const dataSection = container.querySelector('.snap-lead-section:last-child');
-        if (dataSection) {
-          dataSection.innerHTML = await this.generateUserDataHTML();
-        }
-        
-        // Volver a enlazar eventos
-        this.attachEvents(container);
-      } catch (error) {
-        console.error('N8nIntegrationUI: Error al actualizar UI', error);
-      }
-    }
-    
-    async render(container) {
-      try {
-        // Generar HTML
-        const configHTML = this.generateConfigHTML();
-        const userDataHTML = await this.generateUserDataHTML();
-        
-        // Insertar en el contenedor
-        container.innerHTML = `
-          <div class="n8n-integration-ui">
-            ${configHTML}
-            ${userDataHTML}
-          </div>
-        `;
-        
-        // Enlazar eventos
-        this.attachEvents(container);
-      } catch (error) {
-        console.error('N8nIntegrationUI: Error al renderizar', error);
-        container.innerHTML = `<p class="error">Error al cargar la interfaz: ${error.message}</p>`;
-      }
-    }
-  }
-  
-  // Asignar las clases al namespace
-  window.LeadManagerPro.n8nIntegration = new N8nIntegrationManager();
-  window.LeadManagerPro.modules.n8nIntegrationUI = new N8nIntegrationUI();
-  
-  return true;
-}
-
-// Modificar la función initN8nIntegration para usar la implementación directa como respaldo
 async function initN8nIntegration() {
   // Verificar si el contenedor existe
   if (!n8nIntegrationContainer) {
@@ -2121,70 +1765,194 @@ async function sendResultsToN8n(results, searchType) {
   }
 }
 
-/**
- * Carga los criterios guardados desde el almacenamiento local
- */
-function loadSavedCriteriaFromStorage() {
-  try {
-    // Cargar criterios guardados desde localStorage
-    const savedCriteria = localStorage.getItem('snap_lead_manager_saved_criteria');
-    if (savedCriteria) {
-      state.savedCriteria = JSON.parse(savedCriteria);
-      console.log('Criterios guardados cargados:', state.savedCriteria.length);
-    }
-    
-    // Cargar opciones generales desde chrome.storage.local
-    chrome.storage.local.get(['maxScrolls', 'scrollDelay'], function(result) {
-      if (maxScrollsInput) maxScrollsInput.value = result.maxScrolls || 4;
-      if (scrollDelayInput) scrollDelayInput.value = result.scrollDelay || 2;
-      
-      state.maxScrolls = result.maxScrolls || 4;
-      state.scrollDelay = result.scrollDelay || 2;
-      
-      console.log('Opciones generales cargadas:', {
-        maxScrolls: state.maxScrolls,
-        scrollDelay: state.scrollDelay
-      });
+// Función para manejar los resultados de búsqueda
+function handleSearchResults(results, message = '') {
+  debugLog('Manejando resultados de búsqueda:', results);
+  
+  if (!Array.isArray(results)) {
+    console.error('Los resultados no son un array:', results);
+    return;
+  }
+  
+  // Actualizar estado
+  state.profiles = results;
+  state.foundCount = results.length;
+  
+  // Obtener referencias a los elementos necesarios
+  const resultsTab = document.querySelector('.tab-button[data-tab="results-tab"]');
+  const resultsContent = document.getElementById('results-tab');
+  
+  // Activar la pestaña de resultados sin deshabilitar la navegación
+  if (resultsTab && resultsContent) {
+    // Cambiar a la pestaña de resultados
+    tabButtons.forEach(btn => {
+      btn.classList.remove('active');
+      btn.setAttribute('aria-selected', 'false');
+    });
+    tabContents.forEach(content => {
+      content.classList.remove('active');
+      content.style.display = 'none';
     });
     
-    // Restaurar datos de búsqueda guardados si existen
-    const savedSearchData = localStorage.getItem('snap_lead_manager_search_data');
-    if (savedSearchData) {
-      try {
-        const searchData = JSON.parse(savedSearchData);
-        
-        // Actualizar campos de formulario
-        if (searchData.term && searchTermInput) {
-          searchTermInput.value = searchData.term;
-          state.currentSearchTerm = searchData.term;
-        }
-        
-        if (searchData.city && searchCityInput) {
-          searchCityInput.value = searchData.city;
-          state.currentSearchCity = searchData.city;
-        }
-        
-        if (searchData.type && searchTypeSelect) {
-          searchTypeSelect.value = searchData.type;
-          state.currentSearchType = searchData.type;
-          handleSearchTypeChange();
-        }
-        
-        // Actualizar información de búsqueda
-        updateSearchInfo();
-      } catch (error) {
-        console.error('Error al restaurar datos de búsqueda:', error);
-      }
-    }
-  } catch (error) {
-    console.error('Error al cargar datos guardados:', error);
-    state.savedCriteria = [];
+    resultsTab.classList.add('active');
+    resultsTab.setAttribute('aria-selected', 'true');
+    resultsContent.classList.add('active');
+    resultsContent.style.display = 'block';
   }
+  
+  // Actualizar contenido de resultados
+  const searchResultsList = document.getElementById('search-results');
+  if (!searchResultsList) {
+    debugLog('Creando nuevo contenedor de resultados');
+    const newResultsList = document.createElement('ul');
+    newResultsList.id = 'search-results';
+    newResultsList.className = 'results-list';
+    resultsContent.appendChild(newResultsList);
+    searchResultsList = newResultsList;
+  }
+  
+  // Limpiar y mostrar el contenedor de resultados
+  searchResultsList.innerHTML = '';
+  searchResultsList.style.display = 'block';
+  
+  // Agregar cada resultado a la lista
+  results.forEach((group) => {
+    const listItem = document.createElement('li');
+    listItem.className = 'result-item';
+    listItem.innerHTML = `
+      <div class="result-item-container">
+        <div class="result-header">
+          <span class="result-name">${group.name || 'Sin nombre'}</span>
+          <a href="${group.url}" target="_blank" class="result-link">Ver grupo</a>
+        </div>
+        <div class="result-info">
+          <div>
+            <span>🔒</span>
+            ${group.type === 'private' ? 'Privado' : 'Público'}
+          </div>
+          <div>
+            <span>👥</span>
+            ${typeof group.members === 'number' ? group.members.toLocaleString() : group.members} miembros
+          </div>
+          ${group.postsYear ? `
+            <div>
+              <span>📊</span>
+              ${group.postsYear} publicaciones/año
+            </div>
+          ` : ''}
+          ${group.postsMonth ? `
+            <div>
+              <span>📊</span>
+              ${group.postsMonth} publicaciones/mes
+            </div>
+          ` : ''}
+          ${group.postsDay ? `
+            <div>
+              <span>📊</span>
+              ${group.postsDay} publicaciones/día
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+    searchResultsList.appendChild(listItem);
+  });
+  
+  // Crear o actualizar el resumen
+  if (!resultsSummary) {
+    resultsSummary = document.createElement('div');
+    resultsSummary.id = 'results-summary';
+    if (resultsContent) {
+      resultsContent.appendChild(resultsSummary);
+    }
+  }
+  
+  resultsSummary.innerHTML = `
+    <div class="results-summary">
+      <h3>Resumen de la búsqueda</h3>
+      <p>Se encontraron <strong>${results.length}</strong> grupos que cumplen con los criterios.</p>
+      <div class="export-buttons">
+        <button class="snap-lead-button" onclick="exportResults('json')">Exportar JSON</button>
+        <button class="snap-lead-button" onclick="exportResults('csv')">Exportar CSV</button>
+      </div>
+    </div>
+  `;
+  resultsSummary.style.display = 'block';
+  
+  // Agregar entrada al log
+  addLogEntry(message || `Búsqueda completada. Se encontraron ${results.length} grupos.`);
+  
+  // Guardar resultados en localStorage
+  try {
+    localStorage.setItem('snap_lead_manager_search_results', JSON.stringify(results));
+  } catch (error) {
+    console.error('Error al guardar resultados en localStorage:', error);
+  }
+  
+  // Actualizar UI
+  updateUI();
+  
+  // Forzar un reflow para asegurar que los cambios se apliquen
+  resultsContent?.offsetHeight;
+  
+  debugLog('Resultados procesados y mostrados');
 }
 
-// Función para obtener el estado actual de búsqueda
-function getSearchStatus() {
-  window.parent.postMessage({
-    action: 'get_search_status'
-  }, '*');
+// Función para exportar resultados
+function exportResults(format) {
+  const results = state.profiles;
+  if (!results || !Array.isArray(results) || results.length === 0) {
+    showError('No hay resultados para exportar');
+    return;
+  }
+
+  try {
+    let content, filename, type;
+    
+    if (format === 'json') {
+      content = JSON.stringify(results, null, 2);
+      filename = 'grupos_facebook.json';
+      type = 'application/json';
+    } else if (format === 'csv') {
+      // Definir las columnas del CSV
+      const headers = ['nombre', 'url', 'tipo', 'miembros', 'publicacionesAño', 'publicacionesMes', 'publicacionesDia'];
+      
+      // Crear las filas
+      const rows = [
+        headers.join(','), // Cabecera
+        ...results.map(group => [
+          `"${(group.name || '').replace(/"/g, '""')}"`,
+          `"${(group.url || '').replace(/"/g, '""')}"`,
+          group.type || '',
+          group.members || '',
+          group.postsYear || '',
+          group.postsMonth || '',
+          group.postsDay || ''
+        ].join(','))
+      ];
+      
+      content = rows.join('\n');
+      filename = 'grupos_facebook.csv';
+      type = 'text/csv';
+    } else {
+      throw new Error('Formato no soportado');
+    }
+    
+    // Crear el blob y descargar
+    const blob = new Blob([content], { type: `${type};charset=utf-8;` });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    // Mostrar mensaje de éxito
+    addLogEntry(`Exportación ${format.toUpperCase()} completada`);
+  } catch (error) {
+    console.error('Error al exportar resultados:', error);
+    showError(`Error al exportar: ${error.message}`);
+  }
 }
