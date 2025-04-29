@@ -79,11 +79,19 @@ class GroupFinder {
     
     console.log('GroupFinder: Iniciando búsqueda de grupos');
     
+    // Reiniciar estado para evitar problemas con búsquedas anteriores
+    localStorage.removeItem('snap_lead_manager_force_reload');
+    
     // Iniciar el observador para detectar nuevos grupos
     this.setupObserver();
     
-    // Comenzar el scrolling
-    this.scrollAndCollect();
+    // Añadir pequeño retraso antes de comenzar el scrolling
+    // para dar tiempo a que la página termine de cargar
+    setTimeout(() => {
+      if (this.isSearching) {
+        this.scrollAndCollect();
+      }
+    }, 1500);
     
     return true;
   }
@@ -125,14 +133,42 @@ class GroupFinder {
       }
     });
     
-    // Observar cambios en el contenedor principal de resultados
-    // Ajustar selector según la estructura de Facebook
-    const targetNode = document.querySelector('div[role="main"]');
-    if (targetNode) {
-      this.observer.observe(targetNode, { childList: true, subtree: true });
-    } else {
-      console.warn('GroupFinder: No se encontró el contenedor principal para observar');
+    // Buscar el contenedor principal de resultados con varios selectores
+    // para adaptarse a diferentes versiones de Facebook
+    const selectors = [
+      'div[role="main"]',
+      'div[role="feed"]',
+      '#content_container',
+      'div[data-pagelet="MainFeed"]',
+      'div[id^="mount_0_0"]',
+      'div[data-testid="Keycommand_wrapper"]'
+    ];
+    
+    let targetNode = null;
+    for (const selector of selectors) {
+      targetNode = document.querySelector(selector);
+      if (targetNode) {
+        console.log(`GroupFinder: Encontrado contenedor con selector: ${selector}`);
+        break;
+      }
     }
+    
+    // Si todavía no encontramos un nodo, usar el body como fallback
+    if (!targetNode) {
+      console.warn('GroupFinder: No se encontró un contenedor específico, observando document.body');
+      targetNode = document.body;
+    }
+    
+    // Iniciar observación con opciones más amplias
+    this.observer.observe(targetNode, { 
+      childList: true, 
+      subtree: true,
+      attributes: true,
+      characterData: false,
+      attributeFilter: ['class', 'style', 'aria-hidden'] 
+    });
+    
+    console.log('GroupFinder: Observador configurado correctamente');
   }
 
   // Realizar scroll y recolectar grupos
@@ -241,39 +277,96 @@ class GroupFinder {
   // Recolectar grupos visibles en la página
   collectVisibleGroups() {
     if (!this.isSearching) return;
-
+    
+    console.log('GroupFinder: Buscando grupos visibles en la página');
+    
+    // Lista ampliada de selectores para cubrir más casos
     const selectors = [
       'div[role="article"]',
       'div[data-testid="group-card"]',
       'div.x1yztbdb:not(.xh8yej3)',
       'a[href*="/groups/"][role="link"]',
-      'div.x78zum5'
+      'div.x78zum5',
+      // Selectores adicionales
+      'div[data-pagelet*="GroupSearchResult"]',
+      'div[data-pagelet^="GroupCard"]',
+      'div[data-pagelet*="EntitySearchResult"]',
+      'div.x1qjc9v5.x9f619.x78zum5.xdt5ytf.x1iyjqo2.xs83m0k.xeuugli',
+      'div.x1qjc9v5.x9f619.x78zum5',
+      'div[data-visualcompletion="ignore-dynamic"]',
+      'div.x1iorvi4.x1pi30zi',
+      // Fallback genérico para Facebook actual
+      'div.x1uhb9sk'
     ];
     
     let groupElements = [];
     
+    // Imprimir la estructura DOM para depuración
+    console.log('Estructura DOM inicial:', document.body.innerHTML.substring(0, 200) + '...');
+    
+    // Intentar cada selector
     for (const selector of selectors) {
-      const elements = document.querySelectorAll(selector);
-      if (elements && elements.length > 0) {
-        groupElements = Array.from(elements);
-        break;
+      try {
+        const elements = document.querySelectorAll(selector);
+        if (elements && elements.length > 0) {
+          console.log(`GroupFinder: Encontrados ${elements.length} elementos con selector ${selector}`);
+          groupElements = Array.from(elements);
+          break;
+        }
+      } catch (error) {
+        console.error(`Error al buscar con selector ${selector}:`, error);
       }
     }
     
+    // Si no encontramos grupos, buscar todos los enlaces que contengan "/groups/"
     if (groupElements.length === 0 && this.isSearching) {
-      const groupLinks = document.querySelectorAll('a[href*="/groups/"]');
+      console.log('GroupFinder: Realizando búsqueda alternativa por enlaces');
       
-      if (groupLinks.length > 0) {
-        groupElements = Array.from(groupLinks).map(link => {
-          let parent = link.parentElement;
-          for (let i = 0; i < 5; i++) {
-            if (parent && parent.offsetHeight > 100) return parent;
-            parent = parent.parentElement;
-          }
-          return link;
-        });
+      try {
+        const groupLinks = document.querySelectorAll('a[href*="/groups/"]');
         
-        groupElements = [...new Set(groupElements)];
+        if (groupLinks.length > 0) {
+          console.log(`GroupFinder: Encontrados ${groupLinks.length} enlaces a grupos`);
+          
+          // Transformar enlaces en elementos de grupo buscando padres adecuados
+          const tempElements = [];
+          
+          Array.from(groupLinks).forEach(link => {
+            // Verificar si ya está incluido en los elementos temporales
+            if (tempElements.some(el => el.contains(link) || link.contains(el))) {
+              return;
+            }
+            
+            // Intentar encontrar un contenedor padre apropiado
+            let parent = link.parentElement;
+            let found = false;
+            
+            for (let i = 0; i < 8; i++) { // Buscar hasta 8 niveles hacia arriba
+              if (!parent) break;
+              
+              // Verificar si este elemento parece un contenedor de grupo
+              if (parent.offsetHeight > 80 && 
+                 (parent.offsetWidth > 300 || parent.clientWidth > 300)) {
+                tempElements.push(parent);
+                found = true;
+                break;
+              }
+              
+              parent = parent.parentElement;
+            }
+            
+            // Si no encontramos un contenedor apropiado, usar el enlace
+            if (!found) {
+              tempElements.push(link);
+            }
+          });
+          
+          // Eliminar duplicados
+          groupElements = [...new Set(tempElements)];
+          console.log(`GroupFinder: Procesados ${groupElements.length} elementos únicos`);
+        }
+      } catch (error) {
+        console.error('Error en búsqueda alternativa:', error);
       }
     }
     
@@ -477,19 +570,56 @@ class GroupFinder {
     
     // Intentar enviar resultados directamente al iframe del sidebar
     const iframe = document.getElementById('snap-lead-manager-iframe');
+    
+    // Método 1: Usando la referencia del iframe
     if (iframe && iframe.contentWindow) {
-      console.log(`GroupFinder: Enviando ${this.groups.length} grupos al sidebar`);
+      console.log(`GroupFinder: Enviando ${this.groups.length} grupos al sidebar via iframe`);
       
-      // Enviar los grupos encontrados al sidebar
-      iframe.contentWindow.postMessage({
+      try {
+        // Enviar los grupos encontrados al sidebar
+        iframe.contentWindow.postMessage({
+          action: 'found_results',
+          results: this.groups,
+          success: true,
+          message: `Se encontraron ${this.groups.length} grupos.`
+        }, '*');
+        
+        // Enviar también una notificación de búsqueda completada
+        iframe.contentWindow.postMessage({
+          action: 'search_complete',
+          success: true,
+          result: {
+            success: true,
+            profiles: this.groups,
+            results: this.groups,
+            message: `Búsqueda completada. Se encontraron ${this.groups.length} grupos.`
+          }
+        }, '*');
+        
+        // Enviar actualización de estado final
+        iframe.contentWindow.postMessage({
+          action: 'status_update',
+          status: `Búsqueda completada. Se encontraron ${this.groups.length} grupos.`,
+          progress: 100
+        }, '*');
+        
+        return true;
+      } catch (error) {
+        console.error('Error al enviar mensajes al iframe:', error);
+      }
+    }
+    
+    // Método 2: Usando window.parent si estamos en un iframe
+    console.log('GroupFinder: Intentando enviar resultados via window.parent');
+    try {
+      window.parent.postMessage({
         action: 'found_results',
         results: this.groups,
         success: true,
         message: `Se encontraron ${this.groups.length} grupos.`
       }, '*');
       
-      // Enviar también una notificación de búsqueda completada
-      iframe.contentWindow.postMessage({
+      window.parent.postMessage({
         action: 'search_complete',
         success: true,
         result: {
@@ -500,19 +630,16 @@ class GroupFinder {
         }
       }, '*');
       
-      // Enviar actualización de estado final
-      iframe.contentWindow.postMessage({
-        action: 'status_update',
-        status: `Búsqueda completada. Se encontraron ${this.groups.length} grupos.`,
-        progress: 100
-      }, '*');
-      
+      console.log('GroupFinder: Mensajes enviados via window.parent');
       return true;
-    } else {
-      console.error('GroupFinder: No se pudo encontrar el sidebar para enviar resultados');
-      
-      // Intentar usar la función global si está disponible
-      if (typeof sendMessageToSidebar === 'function') {
+    } catch (error) {
+      console.error('Error al enviar mensajes via window.parent:', error);
+    }
+    
+    // Método 3: Usando la función global
+    console.log('GroupFinder: Intentando enviar resultados via sendMessageToSidebar');
+    if (typeof sendMessageToSidebar === 'function') {
+      try {
         sendMessageToSidebar('search_result', {
           result: {
             success: true,
@@ -521,11 +648,34 @@ class GroupFinder {
             message: `Búsqueda completada. Se encontraron ${this.groups.length} grupos.`
           }
         });
+        console.log('GroupFinder: Mensajes enviados via sendMessageToSidebar');
         return true;
+      } catch (error) {
+        console.error('Error al enviar mensajes via sendMessageToSidebar:', error);
       }
-      
-      return false;
     }
+    
+    // Método 4: Guardar en localStorage para que el sidebar los recupere
+    console.log('GroupFinder: Guardando resultados en localStorage como último recurso');
+    try {
+      localStorage.setItem('snap_lead_manager_search_results', JSON.stringify({
+        success: true,
+        type: 'groups',
+        timestamp: new Date().toISOString(),
+        results: this.groups,
+        message: `Búsqueda completada. Se encontraron ${this.groups.length} grupos.`
+      }));
+      
+      // Activar un flag para que el sidebar sepa que hay resultados
+      localStorage.setItem('snap_lead_manager_results_pending', 'true');
+      console.log('GroupFinder: Resultados guardados en localStorage');
+      return true;
+    } catch (error) {
+      console.error('Error al guardar resultados en localStorage:', error);
+    }
+    
+    console.warn('GroupFinder: No se pudo enviar resultados por ningún método');
+    return false;
   }
 
   // Extraer ID del grupo del elemento DOM

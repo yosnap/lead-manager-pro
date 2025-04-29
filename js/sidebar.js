@@ -1066,29 +1066,104 @@ function loadSavedCriteria(criteriaId, forEditing = false) {
   }
   
   console.log(`Cargando criterio ${criteriaId} para edición: ${forEditing}`);
+  console.log('Contenido del criterio:', JSON.stringify(criteria, null, 2));
   
-  // Establecer valores en los campos
-  searchTypeSelect.value = criteria.type;
-  searchTermInput.value = criteria.term;
-  searchCityInput.value = criteria.city || '';
+  // Verificar que tenemos referencias a los elementos UI
+  if (!searchTypeSelect) {
+    console.error('searchTypeSelect no está definido. Reinicializando referencias DOM.');
+    initDOMReferences();
+  }
   
-  // Opciones generales
-  maxScrollsInput.value = criteria.maxScrolls || 50;
-  scrollDelayInput.value = criteria.scrollDelay || 2;
+  if (!searchTypeSelect || !searchTermInput || !searchCityInput) {
+    console.error('Referencias DOM críticas no disponibles:', {
+      searchTypeSelect: !!searchTypeSelect,
+      searchTermInput: !!searchTermInput,
+      searchCityInput: !!searchCityInput
+    });
+    showError('Error al cargar criterios: Elementos del formulario no encontrados');
+    return;
+  }
   
-  // Manejar cambio de tipo de búsqueda para mostrar/ocultar opciones de grupo
-  handleSearchTypeChange();
-  
-  // Opciones de grupo si están disponibles
-  if (criteria.groupOptions) {
-    publicGroupsCheckbox.checked = criteria.groupOptions.publicGroups !== false;
-    privateGroupsCheckbox.checked = criteria.groupOptions.privateGroups !== false;
+  try {
+    // Establecer valores en los campos - con validaciones
+    if (searchTypeSelect && criteria.type) {
+      searchTypeSelect.value = criteria.type;
+      console.log(`Tipo de búsqueda establecido: ${criteria.type}`);
+    }
     
-    // Manejar valores vacíos
-    minUsersInput.value = criteria.groupOptions.minUsers === '' ? '' : (criteria.groupOptions.minUsers || 0);
-    minPostsYearInput.value = criteria.groupOptions.minPostsYear === '' ? '' : (criteria.groupOptions.minPostsYear || 0);
-    minPostsMonthInput.value = criteria.groupOptions.minPostsMonth === '' ? '' : (criteria.groupOptions.minPostsMonth || 0);
-    minPostsDayInput.value = criteria.groupOptions.minPostsDay === '' ? '' : (criteria.groupOptions.minPostsDay || 0);
+    if (searchTermInput && criteria.term) {
+      searchTermInput.value = criteria.term;
+      console.log(`Término de búsqueda establecido: ${criteria.term}`);
+    }
+    
+    if (searchCityInput) {
+      searchCityInput.value = criteria.city || '';
+      console.log(`Ciudad establecida: ${criteria.city || 'vacío'}`);
+    }
+    
+    // Opciones generales
+    if (maxScrollsInput) {
+      maxScrollsInput.value = criteria.maxScrolls || 50;
+      console.log(`MaxScrolls establecido: ${maxScrollsInput.value}`);
+    }
+    
+    if (scrollDelayInput) {
+      scrollDelayInput.value = criteria.scrollDelay || 2;
+      console.log(`ScrollDelay establecido: ${scrollDelayInput.value}`);
+    }
+    
+    // Manejar cambio de tipo de búsqueda para mostrar/ocultar opciones de grupo
+    if (typeof handleSearchTypeChange === 'function') {
+      handleSearchTypeChange();
+      console.log('handleSearchTypeChange ejecutado');
+    } else {
+      console.warn('handleSearchTypeChange no está definido');
+      
+      // Implementación alternativa si la función no existe
+      if (groupOptionsContainer) {
+        groupOptionsContainer.style.display = criteria.type === 'groups' ? 'block' : 'none';
+        console.log(`Opciones de grupo ${criteria.type === 'groups' ? 'mostradas' : 'ocultadas'}`);
+      }
+    }
+    
+    // Opciones de grupo si están disponibles
+    if (criteria.groupOptions) {
+      console.log('Estableciendo opciones de grupo:', criteria.groupOptions);
+      
+      if (publicGroupsCheckbox) {
+        publicGroupsCheckbox.checked = criteria.groupOptions.publicGroups !== false;
+        console.log(`Grupos públicos: ${publicGroupsCheckbox.checked}`);
+      }
+      
+      if (privateGroupsCheckbox) {
+        privateGroupsCheckbox.checked = criteria.groupOptions.privateGroups !== false;
+        console.log(`Grupos privados: ${privateGroupsCheckbox.checked}`);
+      }
+      
+      // Manejar valores vacíos
+      if (minUsersInput) {
+        minUsersInput.value = criteria.groupOptions.minUsers === '' ? '' : (criteria.groupOptions.minUsers || 0);
+        console.log(`Mínimo usuarios: ${minUsersInput.value}`);
+      }
+      
+      if (minPostsYearInput) {
+        minPostsYearInput.value = criteria.groupOptions.minPostsYear === '' ? '' : (criteria.groupOptions.minPostsYear || 0);
+        console.log(`Mínimo posts año: ${minPostsYearInput.value}`);
+      }
+      
+      if (minPostsMonthInput) {
+        minPostsMonthInput.value = criteria.groupOptions.minPostsMonth === '' ? '' : (criteria.groupOptions.minPostsMonth || 0);
+        console.log(`Mínimo posts mes: ${minPostsMonthInput.value}`);
+      }
+      
+      if (minPostsDayInput) {
+        minPostsDayInput.value = criteria.groupOptions.minPostsDay === '' ? '' : (criteria.groupOptions.minPostsDay || 0);
+        console.log(`Mínimo posts día: ${minPostsDayInput.value}`);
+      }
+    }
+  } catch (error) {
+    console.error('Error al establecer valores de criterios:', error);
+    showError(`Error al cargar criterios: ${error.message}`);
   }
   
   // Actualizar estado
@@ -1202,28 +1277,51 @@ function showTemporaryMessage(message, isError = false) {
 
 // Inicializar referencias a elementos DOM
 function initDOMReferences() {
-  searchTypeSelect = document.getElementById('search-type');
-  searchTermInput = document.getElementById('search-term');
-  searchCityInput = document.getElementById('search-city');
-  cityFilterGroup = document.getElementById('city-filter-group');
-  searchButton = document.getElementById('search-button');
-  pauseButton = document.getElementById('pause-button');
-  stopButton = document.getElementById('stop-button');
-  statusMessage = document.getElementById('status-message');
-  progressBar = document.getElementById('progress-bar');
-  searchResultsList = document.getElementById('search-results');
-  currentSearchInfo = document.getElementById('current-search-info');
-  openWindowButton = document.getElementById('open-window-btn');
+  console.log('Inicializando referencias DOM...');
+  
+  // Crear un mapa de las referencias para inspección
+  const domRefs = {};
+  
+  // Función auxiliar para asignar y registrar referencias
+  function assignRef(varName, domId, isRequired = false) {
+    const element = document.getElementById(domId);
+    if (!element) {
+      if (isRequired) {
+        console.error(`Elemento requerido no encontrado: #${domId}`);
+      } else {
+        console.warn(`Elemento no encontrado: #${domId}`);
+      }
+      domRefs[varName] = null;
+      return null;
+    } else {
+      domRefs[varName] = "OK";
+      return element;
+    }
+  }
+  
+  // Elementos principales - requeridos
+  searchTypeSelect = assignRef('searchTypeSelect', 'search-type', true);
+  searchTermInput = assignRef('searchTermInput', 'search-term', true);
+  searchCityInput = assignRef('searchCityInput', 'search-city', true);
+  cityFilterGroup = assignRef('cityFilterGroup', 'city-filter-group');
+  searchButton = assignRef('searchButton', 'search-button', true);
+  pauseButton = assignRef('pauseButton', 'pause-button');
+  stopButton = assignRef('stopButton', 'stop-button');
+  statusMessage = assignRef('statusMessage', 'status-message');
+  progressBar = assignRef('progressBar', 'progress-bar');
+  searchResultsList = assignRef('searchResultsList', 'search-results');
+  currentSearchInfo = assignRef('currentSearchInfo', 'current-search-info');
+  openWindowButton = assignRef('openWindowButton', 'open-window-btn');
   
   // Elementos detallados
-  searchStatusContainer = document.getElementById('search-status-container');
-  detailedStatusMessage = document.getElementById('detailed-status-message');
-  detailedProgressBar = document.getElementById('detailed-progress-bar');
-  progressPercentage = document.getElementById('progress-percentage');
-  currentOperation = document.getElementById('current-operation');
-  elapsedTime = document.getElementById('elapsed-time');
-  scrollLogContainer = document.getElementById('scroll-log-container');
-  resultsSummary = document.getElementById('results-summary');
+  searchStatusContainer = assignRef('searchStatusContainer', 'search-status-container');
+  detailedStatusMessage = assignRef('detailedStatusMessage', 'detailed-status-message');
+  detailedProgressBar = assignRef('detailedProgressBar', 'detailed-progress-bar');
+  progressPercentage = assignRef('progressPercentage', 'progress-percentage');
+  currentOperation = assignRef('currentOperation', 'current-operation');
+  elapsedTime = assignRef('elapsedTime', 'elapsed-time');
+  scrollLogContainer = assignRef('scrollLogContainer', 'scroll-log-container');
+  resultsSummary = assignRef('resultsSummary', 'results-summary');
   
   // Si no existe el elemento resultsSummary, crearlo
   if (!resultsSummary) {
@@ -1244,56 +1342,152 @@ function initDOMReferences() {
       // Si no se puede insertar en el lugar adecuado, agregarlo al body
       document.body.appendChild(resultsSummary);
     }
+    
+    domRefs['resultsSummary'] = "CREATED";
   }
   
   // Configuración avanzada
   collapsibleTrigger = document.querySelector('.collapsible-trigger');
   collapsibleContent = document.querySelector('.collapsible-content');
-  maxScrollsInput = document.getElementById('max-scrolls');
-  scrollDelayInput = document.getElementById('scroll-delay');
-  groupOptionsContainer = document.getElementById('group-options');
-  publicGroupsCheckbox = document.getElementById('public-groups');
-  privateGroupsCheckbox = document.getElementById('private-groups');
-  minUsersInput = document.getElementById('min-users');
-  minPostsYearInput = document.getElementById('min-posts-year');
-  minPostsMonthInput = document.getElementById('min-posts-month');
-  minPostsDayInput = document.getElementById('min-posts-day');
+  domRefs['collapsibleTrigger'] = collapsibleTrigger ? "OK" : "NOT_FOUND";
+  domRefs['collapsibleContent'] = collapsibleContent ? "OK" : "NOT_FOUND";
+  
+  // Opciones de configuración - importantes para los criterios
+  maxScrollsInput = assignRef('maxScrollsInput', 'max-scrolls', true);
+  scrollDelayInput = assignRef('scrollDelayInput', 'scroll-delay', true);
+  groupOptionsContainer = assignRef('groupOptionsContainer', 'group-options', true);
+  
+  // Opciones de grupo - cruciales para la funcionalidad
+  publicGroupsCheckbox = assignRef('publicGroupsCheckbox', 'public-groups', true);
+  privateGroupsCheckbox = assignRef('privateGroupsCheckbox', 'private-groups', true);
+  minUsersInput = assignRef('minUsersInput', 'min-users', true);
+  minPostsYearInput = assignRef('minPostsYearInput', 'min-posts-year', true);
+  minPostsMonthInput = assignRef('minPostsMonthInput', 'min-posts-month', true);
+  minPostsDayInput = assignRef('minPostsDayInput', 'min-posts-day', true);
+  
+  // Intento alternativo si los elementos no se encuentran por su ID
+  if (!publicGroupsCheckbox || !privateGroupsCheckbox || !minUsersInput || 
+      !minPostsYearInput || !minPostsMonthInput || !minPostsDayInput) {
+    console.warn('Intentando buscar elementos de opciones de grupo por selector alternativo');
+    
+    // Buscar por nombre y tipo en lugar de ID
+    if (!publicGroupsCheckbox)
+      publicGroupsCheckbox = document.querySelector('input[type="checkbox"][name="public-groups"]');
+    if (!privateGroupsCheckbox)
+      privateGroupsCheckbox = document.querySelector('input[type="checkbox"][name="private-groups"]');
+    if (!minUsersInput)
+      minUsersInput = document.querySelector('input[name="min-users"]');
+    if (!minPostsYearInput)
+      minPostsYearInput = document.querySelector('input[name="min-posts-year"]');
+    if (!minPostsMonthInput)
+      minPostsMonthInput = document.querySelector('input[name="min-posts-month"]');
+    if (!minPostsDayInput)
+      minPostsDayInput = document.querySelector('input[name="min-posts-day"]');
+    
+    // Actualizar referencias en el mapa
+    domRefs['publicGroupsCheckbox'] = publicGroupsCheckbox ? "FOUND_ALT" : "NOT_FOUND";
+    domRefs['privateGroupsCheckbox'] = privateGroupsCheckbox ? "FOUND_ALT" : "NOT_FOUND";
+    domRefs['minUsersInput'] = minUsersInput ? "FOUND_ALT" : "NOT_FOUND";
+    domRefs['minPostsYearInput'] = minPostsYearInput ? "FOUND_ALT" : "NOT_FOUND";
+    domRefs['minPostsMonthInput'] = minPostsMonthInput ? "FOUND_ALT" : "NOT_FOUND";
+    domRefs['minPostsDayInput'] = minPostsDayInput ? "FOUND_ALT" : "NOT_FOUND";
+  }
   
   // Gestión de criterios
-  clearCriteriaButton = document.getElementById('clear-criteria');
-  saveCriteriaButton = document.getElementById('save-criteria');
-  cancelEditButton = document.getElementById('cancel-edit');
-  manageCriteriaButton = document.getElementById('manage-criteria');
+  clearCriteriaButton = assignRef('clearCriteriaButton', 'clear-criteria');
+  saveCriteriaButton = assignRef('saveCriteriaButton', 'save-criteria');
+  cancelEditButton = assignRef('cancelEditButton', 'cancel-edit');
+  manageCriteriaButton = assignRef('manageCriteriaButton', 'manage-criteria');
   
   // Modales
-  saveCriteriaModal = document.getElementById('save-criteria-modal');
-  criteriaNameInput = document.getElementById('criteria-name');
-  criteriaNameError = document.getElementById('criteria-name-error');
-  confirmSaveButton = document.getElementById('confirm-save');
-  cancelSaveButton = document.getElementById('cancel-save');
+  saveCriteriaModal = assignRef('saveCriteriaModal', 'save-criteria-modal');
+  criteriaNameInput = assignRef('criteriaNameInput', 'criteria-name');
+  criteriaNameError = assignRef('criteriaNameError', 'criteria-name-error');
+  confirmSaveButton = assignRef('confirmSaveButton', 'confirm-save');
+  cancelSaveButton = assignRef('cancelSaveButton', 'cancel-save');
   
-  manageCriteriaModal = document.getElementById('manage-criteria-modal');
-  savedCriteriaList = document.getElementById('saved-criteria-list');
-  closeManageCriteriaButton = document.getElementById('close-manage-criteria');
+  manageCriteriaModal = assignRef('manageCriteriaModal', 'manage-criteria-modal');
+  savedCriteriaList = assignRef('savedCriteriaList', 'saved-criteria-list');
+  closeManageCriteriaButton = assignRef('closeManageCriteriaButton', 'close-manage-criteria');
   
   // Referencias para tabs
   tabButtons = document.querySelectorAll('.tab-button');
   tabContents = document.querySelectorAll('.tab-content');
+  domRefs['tabButtons'] = tabButtons && tabButtons.length > 0 ? `OK (${tabButtons.length})` : "NOT_FOUND";
+  domRefs['tabContents'] = tabContents && tabContents.length > 0 ? `OK (${tabContents.length})` : "NOT_FOUND";
   
   // Referencias para integración con n8n
-  n8nIntegrationContainer = document.getElementById('n8n-integration-container');
+  n8nIntegrationContainer = assignRef('n8nIntegrationContainer', 'n8n-integration-container');
+  
+  // Registrar resumen del estado de inicialización
+  console.log('Resumen de inicialización DOM:', domRefs);
+  
+  // Verificar si faltan elementos críticos y mostrar error
+  const missingCritical = Object.entries(domRefs)
+    .filter(([key, status]) => status === null && ['searchTypeSelect', 'searchTermInput', 'searchButton'].includes(key))
+    .map(([key]) => key);
+    
+  if (missingCritical.length > 0) {
+    console.error(`Elementos críticos no encontrados: ${missingCritical.join(', ')}`);
+    
+    // Intentar mostrar un mensaje de error en la interfaz
+    if (document.body) {
+      const errorDiv = document.createElement('div');
+      errorDiv.style.color = 'red';
+      errorDiv.style.padding = '10px';
+      errorDiv.style.backgroundColor = '#ffeeee';
+      errorDiv.style.border = '1px solid red';
+      errorDiv.style.borderRadius = '5px';
+      errorDiv.style.margin = '10px';
+      errorDiv.innerHTML = `
+        <h3>Error de inicialización</h3>
+        <p>No se pudieron encontrar algunos elementos críticos de la interfaz. La funcionalidad puede estar limitada.</p>
+        <p>Elementos faltantes: ${missingCritical.join(', ')}</p>
+        <button id="retry-init-btn" style="padding: 5px 10px;">Reintentar</button>
+      `;
+      
+      // Insertar al principio del body
+      if (document.body.firstChild) {
+        document.body.insertBefore(errorDiv, document.body.firstChild);
+      } else {
+        document.body.appendChild(errorDiv);
+      }
+      
+      // Agregar listener al botón de reintento
+      const retryBtn = document.getElementById('retry-init-btn');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', function() {
+          errorDiv.remove();
+          initDOMReferences();
+        });
+      }
+    }
+  }
+  
+  return missingCritical.length === 0; // Devolver true si todos los elementos críticos se encontraron
 }
 
 // Función para manejar el cambio de tipo de búsqueda
 function handleSearchTypeChange() {
+  console.log('Ejecutando handleSearchTypeChange');
+  
+  // Verificar que tenemos los elementos necesarios
+  if (!searchTypeSelect) {
+    console.error('searchTypeSelect no está definido en handleSearchTypeChange');
+    return;
+  }
+  
   const searchType = searchTypeSelect.value;
   state.currentSearchType = searchType;
+  
+  console.log(`Tipo de búsqueda cambiado a: ${searchType}`);
   
   // Actualizar el placeholder según el tipo
   if (searchTermInput) {
     searchTermInput.placeholder = searchType === 'people' 
       ? 'Nombre, profesión, etc.' 
       : 'Nombre o temática del grupo';
+    console.log(`Placeholder de término actualizado: ${searchTermInput.placeholder}`);
   }
   
   // Actualizar placeholder de ciudad
@@ -1301,12 +1495,47 @@ function handleSearchTypeChange() {
     searchCityInput.placeholder = searchType === 'people'
       ? 'Ej: Madrid, Barcelona'
       : 'Filtrar grupos por ciudad';
+    console.log(`Placeholder de ciudad actualizado: ${searchCityInput.placeholder}`);
   }
   
   // Mostrar u ocultar opciones específicas para grupos
   if (groupOptionsContainer) {
-    groupOptionsContainer.style.display = searchType === 'groups' ? 'block' : 'none';
+    const display = searchType === 'groups' ? 'block' : 'none';
+    groupOptionsContainer.style.display = display;
+    console.log(`Opciones de grupo: ${display}`);
+    
+    // Si se muestran las opciones de grupo, asegurarse de que sean visibles
+    if (searchType === 'groups') {
+      // Asegurar que el contenedor colapsable esté expandido
+      if (collapsibleContent && collapsibleTrigger) {
+        if (collapsibleContent.style.maxHeight === '' || collapsibleContent.style.maxHeight === 'null') {
+          // Expandir manualmente
+          collapsibleContent.style.maxHeight = collapsibleContent.scrollHeight + 'px';
+          collapsibleTrigger.classList.add('active');
+          console.log('Expandido contenedor colapsable para mostrar opciones de grupo');
+        }
+      }
+      
+      // Aplicar estilos para asegurarse de que sea visible
+      groupOptionsContainer.style.opacity = '1';
+      groupOptionsContainer.style.height = 'auto';
+      groupOptionsContainer.style.overflow = 'visible';
+      groupOptionsContainer.style.marginTop = '10px';
+      
+      // Asegurarse de que todos los campos de entrada sean interactivos
+      if (publicGroupsCheckbox) publicGroupsCheckbox.disabled = false;
+      if (privateGroupsCheckbox) privateGroupsCheckbox.disabled = false;
+      if (minUsersInput) minUsersInput.disabled = false;
+      if (minPostsYearInput) minPostsYearInput.disabled = false;
+      if (minPostsMonthInput) minPostsMonthInput.disabled = false;
+      if (minPostsDayInput) minPostsDayInput.disabled = false;
+    }
+  } else {
+    console.warn('groupOptionsContainer no está definido, no se puede mostrar/ocultar opciones de grupo');
   }
+  
+  // Actualizar UI relacionada
+  updateSearchInfo();
 }
 
 // Función para manejar el comportamiento de secciones colapsables
@@ -1329,6 +1558,39 @@ function closeModals() {
   });
 }
 
+// Verificar si hay resultados pendientes en localStorage
+function checkPendingResults() {
+  const hasPendingResults = localStorage.getItem('snap_lead_manager_results_pending');
+  if (hasPendingResults === 'true') {
+    console.log('Detectados resultados pendientes en localStorage');
+    
+    try {
+      const rawResults = localStorage.getItem('snap_lead_manager_search_results');
+      if (rawResults) {
+        const resultData = JSON.parse(rawResults);
+        console.log('Procesando resultados pendientes:', resultData);
+        
+        // Crear un mensaje simulado con estos resultados
+        const syntheticMessage = {
+          action: 'found_results',
+          results: resultData.results || [],
+          success: true,
+          message: resultData.message || `Se encontraron ${resultData.results?.length || 0} resultados.`
+        };
+        
+        // Procesar el mensaje
+        handleReceivedMessage({data: syntheticMessage});
+        
+        // Limpiar estado
+        localStorage.removeItem('snap_lead_manager_results_pending');
+        localStorage.removeItem('snap_lead_manager_search_results');
+      }
+    } catch (error) {
+      console.error('Error al procesar resultados pendientes:', error);
+    }
+  }
+}
+
 // Manejador de mensajes recibidos de la página
 function handleReceivedMessage(event) {
   const message = event.data;
@@ -1338,6 +1600,11 @@ function handleReceivedMessage(event) {
   // No loggear status_update para evitar spam en consola
   if (message.action !== 'status_update') {
     console.log('Mensaje recibido:', message.action);
+  }
+  
+  // Depuración para mensajes importantes
+  if (message.action === 'found_results' || message.action === 'search_result') {
+    console.log('MENSAJE IMPORTANTE RECIBIDO:', message);
   }
   
   switch (message.action) {
@@ -1403,53 +1670,84 @@ function handleReceivedMessage(event) {
       if (message.results) {
         console.log('Recibido found_results:', message.results.length, 'grupos');
         
-        // Primero actualizar el estado
-        state.profiles = message.results;
-        state.foundCount = message.results.length;
-        state.isRunning = false;
-        state.isPaused = false;
-        localStorage.setItem('snap_lead_manager_search_active', 'false');
-        
-        // Detener cualquier intervalo de actualización
-        stopStatusChecking();
-        
-        // Actualizar la UI con el estado final
-        updateStatus(message.message || `Se encontraron ${state.profiles.length} grupos`, 100);
-        
-        // Actualizar la lista de resultados
-        console.log('Actualizando lista de resultados con', state.profiles.length, 'grupos');
-        updateResultsList(state.profiles);
-        
-        // Mostrar mensaje de resumen
-        if (resultsSummary) {
-          console.log('Actualizando resumen de resultados');
-          resultsSummary.innerHTML = `<p>Se encontraron <strong>${state.profiles.length}</strong> grupos que cumplen con tus criterios.</p>`;
-          resultsSummary.style.display = 'block';
+        try {
+          // Primero actualizar el estado
+          state.profiles = message.results;
+          state.foundCount = message.results.length;
+          state.isRunning = false;
+          state.isPaused = false;
+          localStorage.setItem('snap_lead_manager_search_active', 'false');
+          
+          // Detener cualquier intervalo de actualización
+          stopStatusChecking();
+          
+          // Actualizar la UI con el estado final
+          updateStatus(message.message || `Se encontraron ${state.profiles.length} grupos`, 100);
+          
+          // Registrar en consola cada paso para debug
+          console.log('found_results: Actualizando lista de resultados con', state.profiles.length, 'grupos');
+          
+          // Asegurarse de que los resultados no sean nulos o indefinidos
+          if (!state.profiles) {
+            console.warn('found_results: profiles es nulo o indefinido, inicializando array vacío');
+            state.profiles = [];
+          }
+          
+          // Actualizar la lista de resultados
+          try {
+            updateResultsList(state.profiles);
+            console.log('found_results: Lista de resultados actualizada correctamente');
+          } catch (resultError) {
+            console.error('Error al actualizar lista de resultados:', resultError);
+          }
+          
+          // Mostrar mensaje de resumen
+          if (resultsSummary) {
+            console.log('found_results: Actualizando resumen de resultados');
+            resultsSummary.innerHTML = `<p>Se encontraron <strong>${state.profiles.length}</strong> grupos que cumplen con tus criterios.</p>`;
+            resultsSummary.style.display = 'block';
+          }
+          
+          // Agregar entrada en el log
+          addLogEntry(message.message || `Búsqueda completada. Se encontraron ${state.profiles.length} grupos.`);
+          
+          // Actualizar la UI completa
+          document.body.classList.remove('search-active');
+          updateUI();
+          
+          // Cambiar a la pestaña de Resultados
+          if (tabButtons && tabButtons.length > 1) {
+            console.log('found_results: Cambiando a pestaña de resultados');
+            setTimeout(() => {
+              try {
+                tabButtons[1].click(); // El índice 1 debería ser la pestaña de Resultados
+              } catch (tabError) {
+                console.warn('Error al cambiar de pestaña:', tabError);
+              }
+            }, 500);
+          }
+          
+          // Intentar enviar los resultados a n8n si está disponible
+          console.log('found_results: Intentando enviar a n8n');
+          try {
+            sendResultsToN8n(state.profiles, state.currentSearchType)
+              .then(success => {
+                if (success) {
+                  console.log('Resultados enviados a n8n con éxito');
+                  addLogEntry(`${state.profiles.length} resultados enviados a n8n con éxito`);
+                }
+              })
+              .catch(error => {
+                console.error('Error al enviar resultados a n8n:', error);
+              });
+          } catch (n8nError) {
+            console.warn('Error al intentar enviar a n8n:', n8nError);
+          }
+        } catch (error) {
+          console.error('Error general procesando found_results:', error);
         }
-        
-        // Agregar entrada en el log
-        addLogEntry(message.message || `Búsqueda completada. Se encontraron ${state.profiles.length} grupos.`);
-        
-        // Actualizar la UI completa
-        document.body.classList.remove('search-active');
-        updateUI();
-        
-        // Cambiar a la pestaña de Resultados
-        if (tabButtons && tabButtons.length > 1) {
-          tabButtons[1].click(); // El índice 1 debería ser la pestaña de Resultados
-        }
-        
-        // Intentar enviar los resultados a n8n si está disponible
-        sendResultsToN8n(state.profiles, state.currentSearchType)
-          .then(success => {
-            if (success) {
-              console.log('Resultados enviados a n8n con éxito');
-              addLogEntry(`${state.profiles.length} resultados enviados a n8n con éxito`);
-            }
-          })
-          .catch(error => {
-            console.error('Error al enviar resultados a n8n:', error);
-          });
+      } else {
+        console.warn('found_results recibido pero sin resultados');
       }
       break;
     
@@ -1620,14 +1918,65 @@ function handleReceivedMessage(event) {
 
 // Inicialización
 document.addEventListener('DOMContentLoaded', function() {
-  // Inicializar referencias DOM
-  initDOMReferences();
+  console.log('⏱️ DOMContentLoaded - Iniciando configuración del sidebar');
   
-  // Inicializar navegación por tabs
-  initTabNavigation();
+  // Intentar inicializar referencias DOM con reintentos
+  console.log('🔍 Inicializando referencias DOM...');
+  let initSuccess = initDOMReferences();
   
-  // Cargar criterios guardados
-  loadSavedCriteriaFromStorage();
+  if (!initSuccess) {
+    console.warn('⚠️ La inicialización de referencias DOM no fue completamente exitosa, reintentando una vez...');
+    // Reintento después de un breve retraso
+    setTimeout(() => {
+      console.log('🔄 Reintentando inicialización de referencias DOM...');
+      initSuccess = initDOMReferences();
+      if (!initSuccess) {
+        console.error('❌ La inicialización de referencias DOM falló después del reintento');
+      } else {
+        console.log('✅ Inicialización de referencias DOM exitosa en el segundo intento');
+        continueInitialization();
+      }
+    }, 300);
+  } else {
+    console.log('✅ Inicialización de referencias DOM exitosa');
+    continueInitialization();
+  }
+  
+  function continueInitialization() {
+    // Inicializar navegación por tabs
+    console.log('🔄 Inicializando navegación por tabs...');
+    try {
+      initTabNavigation();
+      console.log('✅ Navegación por tabs inicializada correctamente');
+    } catch (error) {
+      console.error('❌ Error al inicializar navegación por tabs:', error);
+    }
+    
+    // Cargar criterios guardados
+    console.log('🔄 Cargando criterios guardados...');
+    try {
+      loadSavedCriteriaFromStorage();
+      console.log('✅ Criterios guardados cargados correctamente');
+    } catch (error) {
+      console.error('❌ Error al cargar criterios guardados:', error);
+    }
+    
+    // Verificar si hay resultados pendientes en localStorage
+    console.log('🔄 Verificando resultados pendientes...');
+    try {
+      checkPendingResults();
+      console.log('✅ Verificación de resultados pendientes completada');
+    } catch (error) {
+      console.error('❌ Error al verificar resultados pendientes:', error);
+    }
+    
+    // Registrar un manejador de mensajes desde la ventana principal
+    console.log('🔄 Registrando manejador de mensajes...');
+    window.addEventListener('message', handleReceivedMessage);
+    
+    // Mostrar un mensaje en la consola indicando que todo está listo
+    console.log('🚀 Inicialización completada - Sidebar Lead Manager Pro listo');
+  }
   
   // Enlazar eventos
   if (searchButton) {
@@ -2252,25 +2601,99 @@ async function sendResultsToN8n(results, searchType) {
  */
 function loadSavedCriteriaFromStorage() {
   try {
+    console.log('Iniciando carga de criterios guardados...');
+    
+    // Verificar que tenemos referencias a los elementos DOM
+    if (!searchTypeSelect || !searchTermInput || !searchCityInput) {
+      console.warn('Referencias DOM no inicializadas, reinicializando...');
+      initDOMReferences();
+    }
+    
+    // Verificar nuevamente después de inicializar
+    if (!searchTypeSelect || !searchTermInput || !searchCityInput) {
+      console.error('Referencias DOM críticas siguen faltando después de inicializar');
+      return;
+    }
+    
     // Cargar criterios guardados desde localStorage
     const savedCriteria = localStorage.getItem('snap_lead_manager_saved_criteria');
     if (savedCriteria) {
-      state.savedCriteria = JSON.parse(savedCriteria);
-      console.log('Criterios guardados cargados:', state.savedCriteria.length);
+      try {
+        state.savedCriteria = JSON.parse(savedCriteria);
+        console.log('Criterios guardados cargados:', state.savedCriteria.length);
+      } catch (parseError) {
+        console.error('Error al parsear criterios guardados:', parseError);
+        state.savedCriteria = [];
+      }
+    } else {
+      console.log('No se encontraron criterios guardados');
+      state.savedCriteria = [];
     }
     
+    // Mostrar estado actual de los elementos DOM
+    console.log('Estado actual de elementos DOM:', {
+      searchTypeSelect: searchTypeSelect ? 'OK' : 'No encontrado',
+      searchTermInput: searchTermInput ? 'OK' : 'No encontrado',
+      searchCityInput: searchCityInput ? 'OK' : 'No encontrado',
+      maxScrollsInput: maxScrollsInput ? 'OK' : 'No encontrado',
+      scrollDelayInput: scrollDelayInput ? 'OK' : 'No encontrado',
+      publicGroupsCheckbox: publicGroupsCheckbox ? 'OK' : 'No encontrado',
+      privateGroupsCheckbox: privateGroupsCheckbox ? 'OK' : 'No encontrado',
+      minUsersInput: minUsersInput ? 'OK' : 'No encontrado',
+      minPostsYearInput: minPostsYearInput ? 'OK' : 'No encontrado',
+      minPostsMonthInput: minPostsMonthInput ? 'OK' : 'No encontrado',
+      minPostsDayInput: minPostsDayInput ? 'OK' : 'No encontrado'
+    });
+    
     // Cargar opciones generales desde chrome.storage.local
-    chrome.storage.local.get(['maxScrolls', 'scrollDelay'], function(result) {
+    chrome.storage.local.get(['maxScrolls', 'scrollDelay', 'groupPublic', 'groupPrivate', 'minUsers', 'minPostsYear', 'minPostsMonth', 'minPostsDay'], function(result) {
+      console.log('Opciones cargadas desde chrome.storage.local:', result);
+      
+      // Opciones generales
       if (maxScrollsInput) maxScrollsInput.value = result.maxScrolls || 4;
       if (scrollDelayInput) scrollDelayInput.value = result.scrollDelay || 2;
       
       state.maxScrolls = result.maxScrolls || 4;
       state.scrollDelay = result.scrollDelay || 2;
       
+      // Opciones de grupo
+      if (result.groupPublic !== undefined && publicGroupsCheckbox) {
+        publicGroupsCheckbox.checked = result.groupPublic;
+        console.log('Grupos públicos establecido a:', result.groupPublic);
+      }
+      
+      if (result.groupPrivate !== undefined && privateGroupsCheckbox) {
+        privateGroupsCheckbox.checked = result.groupPrivate;
+        console.log('Grupos privados establecido a:', result.groupPrivate);
+      }
+      
+      if (result.minUsers !== undefined && minUsersInput) {
+        minUsersInput.value = result.minUsers;
+        console.log('Mínimo usuarios establecido a:', result.minUsers);
+      }
+      
+      if (result.minPostsYear !== undefined && minPostsYearInput) {
+        minPostsYearInput.value = result.minPostsYear;
+        console.log('Mínimo posts año establecido a:', result.minPostsYear);
+      }
+      
+      if (result.minPostsMonth !== undefined && minPostsMonthInput) {
+        minPostsMonthInput.value = result.minPostsMonth;
+        console.log('Mínimo posts mes establecido a:', result.minPostsMonth);
+      }
+      
+      if (result.minPostsDay !== undefined && minPostsDayInput) {
+        minPostsDayInput.value = result.minPostsDay;
+        console.log('Mínimo posts día establecido a:', result.minPostsDay);
+      }
+      
       console.log('Opciones generales cargadas:', {
         maxScrolls: state.maxScrolls,
         scrollDelay: state.scrollDelay
       });
+      
+      // Actualizar información de búsqueda después de cargar todas las opciones
+      updateSearchInfo();
     });
     
     // Restaurar datos de búsqueda guardados si existen
@@ -2278,22 +2701,68 @@ function loadSavedCriteriaFromStorage() {
     if (savedSearchData) {
       try {
         const searchData = JSON.parse(savedSearchData);
+        console.log('Datos de búsqueda encontrados:', searchData);
         
         // Actualizar campos de formulario
         if (searchData.term && searchTermInput) {
           searchTermInput.value = searchData.term;
           state.currentSearchTerm = searchData.term;
+          console.log('Término de búsqueda restaurado:', searchData.term);
         }
         
         if (searchData.city && searchCityInput) {
           searchCityInput.value = searchData.city;
           state.currentSearchCity = searchData.city;
+          console.log('Ciudad restaurada:', searchData.city);
         }
         
         if (searchData.type && searchTypeSelect) {
           searchTypeSelect.value = searchData.type;
           state.currentSearchType = searchData.type;
-          handleSearchTypeChange();
+          console.log('Tipo de búsqueda restaurado:', searchData.type);
+          
+          // Llamar handleSearchTypeChange con un pequeño retraso
+          setTimeout(() => {
+            if (typeof handleSearchTypeChange === 'function') {
+              handleSearchTypeChange();
+              console.log('handleSearchTypeChange ejecutado después de restaurar tipo');
+            } else {
+              console.warn('handleSearchTypeChange no está definido');
+              // Implementación alternativa
+              if (groupOptionsContainer) {
+                groupOptionsContainer.style.display = searchData.type === 'groups' ? 'block' : 'none';
+              }
+            }
+          }, 100);
+        }
+        
+        // Si hay opciones de grupo en searchData, establecerlas
+        if (searchData.groupOptions) {
+          console.log('Restaurando opciones de grupo desde searchData:', searchData.groupOptions);
+          
+          if (publicGroupsCheckbox && searchData.groupOptions.publicGroups !== undefined) {
+            publicGroupsCheckbox.checked = searchData.groupOptions.publicGroups;
+          }
+          
+          if (privateGroupsCheckbox && searchData.groupOptions.privateGroups !== undefined) {
+            privateGroupsCheckbox.checked = searchData.groupOptions.privateGroups;
+          }
+          
+          if (minUsersInput && searchData.groupOptions.minUsers !== undefined) {
+            minUsersInput.value = searchData.groupOptions.minUsers;
+          }
+          
+          if (minPostsYearInput && searchData.groupOptions.minPostsYear !== undefined) {
+            minPostsYearInput.value = searchData.groupOptions.minPostsYear;
+          }
+          
+          if (minPostsMonthInput && searchData.groupOptions.minPostsMonth !== undefined) {
+            minPostsMonthInput.value = searchData.groupOptions.minPostsMonth;
+          }
+          
+          if (minPostsDayInput && searchData.groupOptions.minPostsDay !== undefined) {
+            minPostsDayInput.value = searchData.groupOptions.minPostsDay;
+          }
         }
         
         // Actualizar información de búsqueda
@@ -2301,9 +2770,13 @@ function loadSavedCriteriaFromStorage() {
       } catch (error) {
         console.error('Error al restaurar datos de búsqueda:', error);
       }
+    } else {
+      console.log('No se encontraron datos de búsqueda guardados');
     }
+    
+    console.log('Carga de criterios y opciones completada');
   } catch (error) {
-    console.error('Error al cargar datos guardados:', error);
+    console.error('Error general al cargar datos guardados:', error);
     state.savedCriteria = [];
   }
 }

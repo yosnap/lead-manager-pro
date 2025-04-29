@@ -27,6 +27,16 @@
     {
       "matches": ["https://*.facebook.com/*"],
       "js": [
+        "content/modules/storageHelper.js",
+        "content/modules/reloadFix.js",
+        "content/modules/cityFieldFixer.js",
+        "content/modules/groupFinderFix.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://*.facebook.com/*"],
+      "js": [
         "content/utils/common.js",
         "content/state.js",
         "content/modules/initializeDefaults.js",
@@ -49,6 +59,7 @@
         "content/modules/memberInteractionUI.js",
         "content/modules/n8nIntegration.js",
         "content/modules/n8nIntegrationUI.js",
+        "content/modules/pageReloader/pageReloader.js",
         "content/modules/sidebar.js",
         "content/modules/errorHandler.js",
         "content/modules/emergency.js",
@@ -65,7 +76,12 @@
         "css/*", 
         "icons/*", 
         "content/modules/n8nIntegration.js",
-        "content/modules/n8nIntegrationUI.js"
+        "content/modules/n8nIntegrationUI.js",
+        "content/modules/pageReloader/pageReloader.js",
+        "content/modules/reloadFix.js",
+        "content/modules/storageHelper.js",
+        "content/modules/cityFieldFixer.js",
+        "content/modules/groupFinderFix.js"
       ],
       "matches": ["https://*.facebook.com/*"]
     }

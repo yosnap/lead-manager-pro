@@ -4,7 +4,11 @@ class GeneralOptions {
   constructor() {
     this.defaultOptions = {
       maxScrolls: 50,
-      scrollDelay: 2 // en segundos
+      scrollDelay: 2, // en segundos
+      maxResultsPerScroll: 20,
+      showLoadingIndicator: true,
+      autoSaveResults: true,
+      exportFormat: 'csv'
     };
     
     this.options = this.loadOptions();
