@@ -414,7 +414,7 @@ function performSearch() {
     
     // Guardar opciones de grupo si es una búsqueda de grupos
     if (searchType === 'groups') {
-      chrome.storage.local.set({
+        chrome.storage.local.set({
         groupPublic: publicGroupsCheckbox ? publicGroupsCheckbox.checked : true,
         groupPrivate: privateGroupsCheckbox ? privateGroupsCheckbox.checked : true,
         minUsers: minUsersInput ? minUsersInput.value : '',
@@ -623,7 +623,7 @@ function updateResultsList(profiles) {
           <a href="${group.url}" target="_blank" class="result-link" style="background: #1877f2; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 14px;">
             Ver grupo
           </a>
-        </div>
+      </div>
         <div class="result-info" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; color: #65676b; font-size: 14px;">
           <div style="display: flex; align-items: center;">
             <span style="margin-right: 5px;">🔒</span>
@@ -1242,11 +1242,11 @@ function applySavedCriteria(criteria) {
   state.currentSearchType = criteria.type || 'groups';
   
   // Manejar cambio de tipo de búsqueda
-  handleSearchTypeChange();
-  
-  // Actualizar información de búsqueda
-  updateSearchInfo();
-  
+          handleSearchTypeChange();
+        
+        // Actualizar información de búsqueda
+        updateSearchInfo();
+        
   // Guardar criterios en localStorage
   localStorage.setItem('snap_lead_manager_search_criteria', JSON.stringify(criteria));
 }
@@ -1381,7 +1381,7 @@ async function initializeSidebar() {
       const tabId = activeTab.getAttribute('data-tab');
       if (tabId === 'n8n-tab') {
         setTimeout(() => {
-          initN8nIntegration();
+        initN8nIntegration();
         }, 500);
       }
     }
@@ -1441,7 +1441,7 @@ async function loadSavedState() {
     }
     
     debugLog('Estado guardado cargado correctamente');
-  } catch (error) {
+      } catch (error) {
     console.error('Error al cargar estado guardado:', error);
   }
 }
@@ -1885,7 +1885,7 @@ function handleSearchResults(results, message = '') {
   // Guardar resultados en localStorage
   try {
     localStorage.setItem('snap_lead_manager_search_results', JSON.stringify(results));
-  } catch (error) {
+      } catch (error) {
     console.error('Error al guardar resultados en localStorage:', error);
   }
   

@@ -1,4 +1,14 @@
-# Snap Lead Manager - Extensión para Facebook con integración N8N
+# Lead Manager Pro - Extensión para Facebook con integración N8N
+
+## Versión 1.1.0
+
+### Novedades
+- **Mejora en la interacción con miembros**: Sistema robusto para enviar mensajes automáticamente a miembros de grupos.
+- **Detección inteligente de elementos**: Algoritmos mejorados para encontrar botones y campos en la interfaz cambiante de Facebook.
+- **Flujo optimizado**: Proceso de 8 pasos para interactuar eficientemente con miembros de grupos.
+- **Mejor manejo de errores**: Sistema de diagnóstico y recuperación para situaciones problemáticas.
+
+Consulta el [CHANGELOG.md](./CHANGELOG.md) para ver todos los cambios.
 
 ## Funcionalidad: Configuración inicial
 

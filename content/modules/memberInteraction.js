@@ -58,8 +58,11 @@ class MemberInteraction {
       }
       
       const member = this.members[i];
+      const memberName = this.extractMemberName(member);
       
       try {
+        console.log(`Procesando miembro ${i+1}/${membersToProcess}: ${memberName}`);
+        
         // Notificar progreso
         if (callback) {
           callback({
@@ -71,44 +74,148 @@ class MemberInteraction {
           });
         }
         
-        // Hacer hover sobre el miembro
-        await this.hoverMember(member);
-        
-        // Esperar el delay configurado
-        await new Promise(resolve => setTimeout(resolve, this.interactionDelay));
-        
-        // Buscar y hacer clic en el botón de mensaje
-        const messageButton = await this.findMessageButton(member);
-        if (!messageButton) {
-          console.log('No se encontró el botón de mensaje para este miembro');
+        // PASO 1: Hacer hover sobre el miembro
+        console.log(`Paso 1: Haciendo hover sobre ${memberName}`);
+        const hoverSuccess = await this.hoverMember(member);
+        if (!hoverSuccess) {
+          console.error(`No se pudo hacer hover sobre el miembro ${memberName}`);
           continue;
         }
         
+        // Esperar a que aparezca el modal de hover
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // PASO 2: Buscar y hacer clic en el botón de mensaje en el modal
+        console.log(`Paso 2: Buscando botón de mensaje para ${memberName}`);
+        const messageButton = await this.findMessageButton(member);
+        if (!messageButton) {
+          console.error(`No se encontró el botón de mensaje para ${memberName}`);
+          continue;
+        }
+        
+        // PASO 3: Hacer clic en el botón de mensaje
+        console.log(`Paso 3: Haciendo clic en botón de mensaje para ${memberName}`);
         messageButton.click();
         
-        // Esperar a que aparezca el campo de mensaje
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // PASO 4: Cerrar el modal del usuario haciendo clic en el botón de cierre
+        console.log(`Paso 4: Cerrando el modal del usuario para ${memberName}`);
+        await this.closeUserModal();
         
-        // Buscar el campo de mensaje usando múltiples selectores
-        const messageField = await this.waitForElement('[contenteditable="true"][role="textbox"], div[contenteditable="true"]', 5000);
+        // PASO 5: Esperar a que se abra la ventana de chat
+        console.log(`Paso 5: Esperando a que se abra la ventana de chat para ${memberName}`);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // PASO 6: Buscar el campo de mensaje
+        console.log(`Paso 6: Buscando campo de mensaje para ${memberName}`);
+        const messageFieldSelectors = [
+          '[contenteditable="true"][role="textbox"]',
+          'div[contenteditable="true"]',
+          'div[role="textbox"]',
+          'div[aria-label="Mensaje"][contenteditable="true"]',
+          'div[aria-label="Message"][contenteditable="true"]'
+        ];
+        
+        let messageField = null;
+        for (const selector of messageFieldSelectors) {
+          try {
+            messageField = await this.waitForElement(selector, 2000);
+            if (messageField) {
+              console.log(`Campo de mensaje encontrado con selector: ${selector}`);
+              break;
+            }
+          } catch (error) {
+            // Continuar con el siguiente selector
+          }
+        }
+        
         if (!messageField) {
-          console.log('No se encontró el campo de mensaje');
+          console.error(`No se encontró el campo de mensaje para ${memberName}`);
           continue;
         }
 
-        // Escribir el mensaje con el formato HTML correcto
-        await this.sendMessage(messageField);
+        // PASO 7: Escribir y enviar el mensaje
+        console.log(`Paso 7: Enviando mensaje a ${memberName}`);
+        const messageSent = await this.sendMessage(messageField);
         
-        processedMembers++;
+        if (messageSent) {
+          processedMembers++;
+          console.log(`Mensaje enviado exitosamente a ${memberName}`);
+          
+          // Notificar que se envió el mensaje
+          if (callback) {
+            callback({
+              type: 'progress',
+              memberIndex: i,
+              totalMembers: membersToProcess,
+              memberElement: member,
+              messageOpened: true,
+              messageSent: true
+            });
+          }
+        } else {
+          console.error(`Error al enviar mensaje a ${memberName}`);
+        }
         
-        // Esperar antes de cerrar el chat si está configurado
+        // PASO 8: Cerrar la ventana de chat si está configurado
         if (this.autoCloseChat) {
+          console.log(`Paso 8: Cerrando ventana de chat para ${memberName}`);
           await new Promise(resolve => setTimeout(resolve, 1000));
           
-          // Buscar el botón de cerrar usando el selector específico
-          const closeButton = document.querySelector('div[aria-label="Cerrar chat"][role="button"]');
+          // Buscar el botón de cerrar usando múltiples selectores
+          const closeButtonSelectors = [
+            'div[aria-label="Cerrar chat"][role="button"]',
+            'div[aria-label="Close chat"][role="button"]',
+            'div[aria-label="Cerrar"][role="button"]',
+            'div[aria-label="Close"][role="button"]',
+            '[role="button"][aria-label*="Cerrar"]',
+            '[role="button"][aria-label*="Close"]',
+            'div[role="dialog"] div[role="button"]:last-child'
+          ];
+          
+          let closeButton = null;
+          for (const selector of closeButtonSelectors) {
+            closeButton = document.querySelector(selector);
+            if (closeButton) {
+              console.log(`Botón de cierre encontrado con selector: ${selector}`);
+              break;
+            }
+          }
+          
+          // Si no se encontró con los selectores específicos, intentar buscar por contenido
+          if (!closeButton) {
+            // Buscar todos los botones y encontrar el que tiene un icono de cierre
+            const allButtons = document.querySelectorAll('[role="button"]');
+            for (const button of allButtons) {
+              // Verificar si contiene un SVG (los botones de cierre suelen tener un SVG)
+              if (button.querySelector('svg') && 
+                 (button.textContent.includes('×') || 
+                  button.innerHTML.includes('close') || 
+                  button.getAttribute('aria-label')?.includes('Cerrar'))) {
+                closeButton = button;
+                console.log('Botón de cierre encontrado por contenido SVG');
+                break;
+              }
+            }
+          }
+          
+          // Buscar en diálogos si aún no se ha encontrado
+          if (!closeButton) {
+            const dialog = document.querySelector('[role="dialog"]');
+            if (dialog) {
+              // El último botón en el diálogo suele ser el de cerrar
+              const buttons = dialog.querySelectorAll('[role="button"]');
+              if (buttons.length > 0) {
+                closeButton = buttons[buttons.length - 1];
+                console.log('Botón de cierre encontrado como último botón del diálogo');
+              }
+            }
+          }
+
           if (closeButton) {
             closeButton.click();
+            console.log('Chat cerrado exitosamente');
+          } else {
+            console.log('No se encontró el botón de cierre del chat');
           }
         }
         
@@ -201,6 +308,8 @@ class MemberInteraction {
 
         // Esperar un momento para que el scroll termine
         setTimeout(() => {
+          console.log('Realizando hover sobre el usuario:', this.extractMemberName(member));
+          
           // Simular hover sobre el enlace del usuario
           userLink.dispatchEvent(new MouseEvent('mouseover', {
             bubbles: true,
@@ -214,7 +323,24 @@ class MemberInteraction {
             view: window
           }));
           
-          resolve(true);
+          // Esperar a que aparezca el modal de hover
+          setTimeout(() => {
+            // Verificar si el modal de hover apareció
+            const hoverCard = document.querySelector('.x1ey2m1c, div[role="dialog"], .xu96u03');
+            if (hoverCard) {
+              console.log('Modal de hover detectado correctamente');
+            } else {
+              console.warn('No se detectó el modal de hover, reintentando...');
+              // Intentar nuevamente el hover
+              userLink.dispatchEvent(new MouseEvent('mouseover', {
+                bubbles: true,
+                cancelable: true,
+                view: window
+              }));
+            }
+            resolve(true);
+          }, 500); // Esperar 500ms para que aparezca el modal
+          
         }, 500);
 
       } catch (error) {
@@ -674,25 +800,207 @@ class MemberInteraction {
       
       const findButton = async () => {
         try {
-          // Buscar el modal que aparece al hacer hover
-          const modal = document.querySelector('.xu96u03.xm80bdy.x10l6tqk.x13vifvy');
+          console.log('Buscando botón de mensaje...');
           
-          if (modal) {
-            // Buscar el botón de mensaje dentro del modal
-            const messageButton = modal.querySelector('div[aria-label="Mensaje"]');
+          // ESTRATEGIA 1: Buscar directamente en el DOM global para casos donde el hover no funciona correctamente
+          // Esto es útil para cuando estamos en la vista de miembros del grupo donde los botones ya están visibles
+          const directButtonSelectors = [
+            // Selector exacto basado en el HTML proporcionado - botón de mensaje en la lista de miembros
+            '.xh8yej3 div[aria-label="Mensaje"][role="button"]',
+            'div[aria-label="Mensaje"][role="button"]',
+            'a[aria-label="Mensaje"]',
+            'button[aria-label="Mensaje"]'
+          ];
+          
+          // Intentar encontrar el botón directamente en la página
+          for (const selector of directButtonSelectors) {
+            const directButtons = document.querySelectorAll(selector);
+            console.log(`Encontrados ${directButtons.length} botones directos con selector: ${selector}`);
             
-            if (messageButton) {
-              console.log('Botón de mensaje encontrado');
-              resolve(messageButton);
+            if (directButtons.length > 0) {
+              // Si hay múltiples botones, intentar encontrar el más cercano al miembro actual
+              if (directButtons.length > 1 && member) {
+                // Intentar encontrar el botón dentro o cerca del elemento del miembro
+                const memberRect = member.getBoundingClientRect();
+                let closestButton = null;
+                let minDistance = Infinity;
+                
+                directButtons.forEach(button => {
+                  const buttonRect = button.getBoundingClientRect();
+                  const distance = Math.sqrt(
+                    Math.pow(buttonRect.top - memberRect.top, 2) + 
+                    Math.pow(buttonRect.left - memberRect.left, 2)
+                  );
+                  
+                  if (distance < minDistance) {
+                    minDistance = distance;
+                    closestButton = button;
+                  }
+                });
+                
+                if (closestButton) {
+                  console.log('Botón de mensaje encontrado directamente (el más cercano al miembro)');
+                  resolve(closestButton);
+                  return;
+                }
+              }
+              
+              // Si no pudimos encontrar el más cercano, usar el primero
+              console.log('Botón de mensaje encontrado directamente con selector:', selector);
+              resolve(directButtons[0]);
               return;
             }
           }
           
-          // Si no hemos encontrado el botón y no ha pasado el timeout, seguir intentando
+          // ESTRATEGIA 2: Buscar en el modal de hover que debe haber aparecido
+          console.log('Buscando modal de hover...');
+          const hoverModals = [
+            '.xu96u03.xm80bdy.x10l6tqk.x13vifvy', // Clase del modal de hover
+            '.x1ey2m1c',                         // Otra posible clase del modal
+            'div[role="dialog"]',                // Modal genérico
+            '.xsgj6o6'                           // Clase del contenedor del botón según el HTML proporcionado
+          ];
+          
+          let hoverCard = null;
+          for (const modalSelector of hoverModals) {
+            const possibleModals = document.querySelectorAll(modalSelector);
+            if (possibleModals.length > 0) {
+              // Usar el último modal encontrado (suele ser el más reciente)
+              hoverCard = possibleModals[possibleModals.length - 1];
+              console.log('Modal de hover encontrado con selector:', modalSelector);
+              break;
+            }
+          }
+          
+          if (hoverCard) {
+            // Buscar el botón de mensaje DENTRO del modal de hover
+            console.log('Buscando botón de mensaje dentro del modal de hover...');
+            
+            // Selector exacto basado en el HTML proporcionado
+            const messageButtonSelectors = [
+              // Selector exacto basado en el HTML proporcionado
+              'div[aria-label="Mensaje"][role="button"]',
+              'a[role="button"][aria-label="Mensaje"]',
+              
+              // Selector alternativo para diferentes idiomas
+              'div[aria-label="Message"][role="button"]',
+              
+              // Selectores basados en el HTML proporcionado
+              '.xsgj6o6 div[aria-label="Mensaje"]',
+              '.xh8yej3 div[aria-label="Mensaje"]',
+              
+              // Selectores más genéricos
+              'div[role="button"] span:contains("Mensaje")',
+              'div[role="button"]:has(span:contains("Mensaje"))',
+              'div[role="button"] img[alt*="mensaje" i]'
+            ];
+            
+            // Primero intentar buscar dentro del modal
+            for (const selector of messageButtonSelectors) {
+              // Buscar solo dentro del modal de hover
+              const buttons = hoverCard.querySelectorAll(selector);
+              console.log(`Encontrados ${buttons.length} botones con selector ${selector} dentro del modal`);
+              
+              if (buttons.length > 0) {
+                console.log('Botón de mensaje encontrado dentro del modal con selector:', selector);
+                resolve(buttons[0]);
+                return;
+              }
+            }
+            
+            // Si no encontramos con selectores específicos, buscar todos los botones dentro del modal
+            const modalButtons = hoverCard.querySelectorAll('div[role="button"], a[role="button"]');
+            console.log(`Encontrados ${modalButtons.length} botones genéricos dentro del modal`);
+            
+            for (const button of modalButtons) {
+              // Verificar atributo aria-label
+              const ariaLabel = button.getAttribute('aria-label');
+              if (ariaLabel && (ariaLabel === 'Mensaje' || ariaLabel === 'Message')) {
+                console.log('Botón de mensaje encontrado por aria-label exacto:', ariaLabel);
+                resolve(button);
+                return;
+              }
+              
+              // Verificar texto del botón
+              const buttonText = button.textContent.trim().toLowerCase();
+              if (buttonText === 'mensaje' || buttonText === 'message') {
+                console.log('Botón de mensaje encontrado por texto exacto:', buttonText);
+                resolve(button);
+                return;
+              }
+              
+              // Buscar texto que contenga "mensaje"
+              if (buttonText.includes('mensaje') || buttonText.includes('message')) {
+                console.log('Botón de mensaje encontrado por texto parcial:', buttonText);
+                resolve(button);
+                return;
+              }
+              
+              // Buscar spans dentro del botón
+              const spans = button.querySelectorAll('span');
+              for (const span of spans) {
+                const spanText = span.textContent.trim().toLowerCase();
+                if (spanText.includes('mensaje') || spanText.includes('message')) {
+                  console.log('Botón de mensaje encontrado por texto en span:', spanText);
+                  resolve(button);
+                  return;
+                }
+              }
+              
+              // Buscar imágenes dentro del botón
+              const images = button.querySelectorAll('img');
+              for (const img of images) {
+                const alt = img.getAttribute('alt');
+                const src = img.getAttribute('src');
+                if ((alt && (alt.toLowerCase().includes('mensaje') || alt.toLowerCase().includes('message'))) ||
+                    (src && (src.toLowerCase().includes('message')))) {
+                  console.log('Botón de mensaje encontrado por imagen:', alt || src);
+                  resolve(button);
+                  return;
+                }
+              }
+            }
+            
+            // ESTRATEGIA 3: Buscar por posición o estructura
+            // Si hay exactamente 2 botones, el segundo suele ser "Mensaje"
+            if (modalButtons.length === 2) {
+              console.log('Usando el segundo de 2 botones como botón de mensaje');
+              resolve(modalButtons[1]);
+              return;
+            }
+            
+            // Si hay más de 2 botones, buscar el que tiene la clase o estructura similar al botón de mensaje
+            for (const button of modalButtons) {
+              // Verificar si tiene la estructura similar al HTML proporcionado
+              if (button.querySelector('.x1ey2m1c') || 
+                  button.querySelector('.xh8yej3') || 
+                  button.querySelector('.xsgj6o6')) {
+                console.log('Botón de mensaje encontrado por estructura similar al HTML proporcionado');
+                resolve(button);
+                return;
+              }
+            }
+          }
+          
+          // ESTRATEGIA 4: Buscar botones con texto "Mensaje" en cualquier parte de la página
+          const allButtons = document.querySelectorAll('div[role="button"], a[role="button"], button');
+          console.log(`Buscando entre ${allButtons.length} botones en toda la página`);
+          
+          for (const button of allButtons) {
+            const buttonText = button.textContent.trim().toLowerCase();
+            if (buttonText === 'mensaje' || buttonText === 'message') {
+              console.log('Botón de mensaje encontrado en la página por texto exacto');
+              resolve(button);
+              return;
+            }
+          }
+          
+          // Si aún no hemos encontrado el botón y no ha pasado el timeout, seguir intentando
           if (Date.now() - startTime < 5000) {
             setTimeout(findButton, 100);
           } else {
             console.log('Tiempo de espera agotado buscando el botón de mensaje');
+            console.log('Estructura HTML actual:', document.body.innerHTML);
             resolve(null);
           }
         } catch (error) {
@@ -728,17 +1036,10 @@ class MemberInteraction {
     });
   }
 
-  async sendMessage(messageButton) {
+  async sendMessage(messageField) {
     try {
-      // Hacer clic en el botón de mensaje
-      messageButton.click();
+      // El messageField ya está disponible, no necesitamos hacer clic y esperar
       
-      // Esperar a que aparezca el campo de mensaje
-      const messageField = await this.waitForElement('div[contenteditable="true"][role="textbox"]');
-      if (!messageField) {
-        throw new Error('No se pudo encontrar el campo de mensaje');
-      }
-
       // Insertar el mensaje con el formato HTML correcto
       messageField.innerHTML = `<p class="xat24cr xdj266r xdpxx8g" dir="ltr"><span data-lexical-text="true">${this.messageToSend}</span></p>`;
       
@@ -753,52 +1054,216 @@ class MemberInteraction {
       // Esperar un momento para que Facebook procese el evento
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Enviar el mensaje con la tecla Enter
-      messageField.dispatchEvent(new KeyboardEvent('keydown', {
-        key: 'Enter',
-        code: 'Enter',
-        keyCode: 13,
-        which: 13,
-        bubbles: true,
-        cancelable: true
-      }));
+      // Intentar enviar el mensaje de varias maneras
+      let messageSent = false;
 
-      // Esperar a que el mensaje se envíe verificando que el texto desaparezca del campo
-      await new Promise((resolve) => {
-        const checkMessageSent = () => {
-          if (!messageField.textContent.trim()) {
-            resolve();
-          } else {
-            setTimeout(checkMessageSent, 100);
+      // Método 1: Enviar usando la tecla Enter
+      try {
+        messageField.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'Enter',
+          code: 'Enter',
+          keyCode: 13,
+          which: 13,
+          bubbles: true,
+          cancelable: true
+        }));
+        
+        // Verificar si el mensaje se envió (desaparece del campo)
+        messageSent = await this.checkMessageSent(messageField);
+      } catch (error) {
+        console.log('Error al enviar mensaje con Enter:', error);
+      }
+
+      // Método 2: Si el primer método falló, buscar y hacer clic en el botón Enviar
+      if (!messageSent) {
+        try {
+          console.log('Intentando encontrar el botón Enviar...');
+          
+          // Buscar el botón enviar usando diferentes selectores
+          const sendButtonSelectors = [
+            'div[aria-label="Enviar"]',
+            'div[aria-label="Send"]',
+            '[role="button"][aria-label="Enviar"]',
+            '[role="button"][aria-label="Send"]',
+            'button[type="submit"]',
+            'div[role="button"]:has(svg)' // Muchos botones de enviar tienen un ícono SVG
+          ];
+          
+          let sendButton = null;
+          for (const selector of sendButtonSelectors) {
+            sendButton = document.querySelector(selector);
+            if (sendButton) {
+              console.log('Botón Enviar encontrado con selector:', selector);
+              break;
+            }
           }
-        };
-        setTimeout(checkMessageSent, 500); // Empezar a verificar después de 500ms
-      });
+          
+          // Si no se encontró con los selectores, buscar por contenido o posición
+          if (!sendButton) {
+            // En Facebook, a menudo el botón de enviar está al final del formulario
+            const chatContainer = messageField.closest('[role="dialog"]') || messageField.closest('form');
+            if (chatContainer) {
+              const buttons = chatContainer.querySelectorAll('[role="button"]');
+              if (buttons.length > 0) {
+                // El último botón suele ser el de enviar
+                sendButton = buttons[buttons.length - 1];
+                console.log('Botón Enviar encontrado como último botón del contenedor');
+              }
+            }
+          }
+          
+          if (sendButton) {
+            sendButton.click();
+            console.log('Mensaje enviado haciendo clic en botón Enviar');
+            messageSent = await this.checkMessageSent(messageField);
+          }
+        } catch (error) {
+          console.log('Error al enviar con botón Enviar:', error);
+        }
+      }
+
+      // Si ninguno de los métodos anteriores funcionó, intentar con métodos adicionales
+      if (!messageSent) {
+        console.log('Intentando métodos alternativos para enviar el mensaje...');
+        
+        // Método 3: Tratar de ejecutar eventos del formulario
+        const form = messageField.closest('form');
+        if (form) {
+          try {
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            messageSent = await this.checkMessageSent(messageField);
+            if (messageSent) console.log('Mensaje enviado usando evento submit del formulario');
+          } catch (error) {
+            console.log('Error al enviar con submit de formulario:', error);
+          }
+        }
+      }
+
+      // Si aún no se ha enviado, comunicar el problema
+      if (!messageSent) {
+        console.warn('No se pudo enviar el mensaje automáticamente. Considera intentar manualmente.');
+      }
 
       // Esperar un momento adicional para asegurar que el mensaje se procesó
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Cerrar el modal usando el selector específico
-      const closeButton = document.querySelector('div[aria-label="Cerrar"][role="button"].x1i10hfl.xjqpnuy.xa49m3k.xqeqjp1.x2hbi6w');
-      if (closeButton) {
-        closeButton.click();
-        console.log('Modal cerrado exitosamente');
-      } else {
-        // Intentar con un selector alternativo si el primero falla
-        const alternativeCloseButton = document.querySelector('div[aria-label="Cerrar"] svg[class*="x1lliihq"]').closest('[role="button"]');
-        if (alternativeCloseButton) {
-          alternativeCloseButton.click();
-          console.log('Modal cerrado usando selector alternativo');
-        } else {
-          console.log('No se encontró el botón de cierre del modal');
-        }
-      }
-
-      return true;
+      return messageSent;
     } catch (error) {
       console.error('Error al enviar mensaje:', error);
       return false;
     }
+  }
+
+  // Método para cerrar el modal del usuario
+  async closeUserModal() {
+    return new Promise((resolve) => {
+      try {
+        console.log('Buscando botón de cierre del modal de usuario...');
+        
+        // Buscar el botón de cierre usando el selector proporcionado
+        const closeButtonSelectors = [
+          // Selector exacto basado en el HTML proporcionado
+          'div[aria-label="Cerrar"][role="button"]',
+          'div[aria-label="Close"][role="button"]',
+          
+          // Selectores alternativos
+          '.x1i10hfl[aria-label="Cerrar"]',
+          '.x1i10hfl[aria-label="Close"]',
+          
+          // Selectores más genéricos
+          '[aria-label="Cerrar"]',
+          '[aria-label="Close"]'
+        ];
+        
+        let closeButton = null;
+        
+        // Intentar encontrar el botón de cierre con los selectores específicos
+        for (const selector of closeButtonSelectors) {
+          const buttons = document.querySelectorAll(selector);
+          console.log(`Encontrados ${buttons.length} botones de cierre con selector: ${selector}`);
+          
+          if (buttons.length > 0) {
+            // Si hay múltiples botones, usar el primero visible
+            for (const button of buttons) {
+              const style = window.getComputedStyle(button);
+              if (style.display !== 'none' && style.visibility !== 'hidden') {
+                closeButton = button;
+                console.log('Botón de cierre encontrado con selector:', selector);
+                break;
+              }
+            }
+            
+            if (closeButton) break;
+          }
+        }
+        
+        // Si no encontramos el botón con los selectores específicos, buscar por contenido SVG
+        if (!closeButton) {
+          console.log('Buscando botón de cierre por contenido SVG...');
+          
+          // Buscar botones que contengan un SVG (común en botones de cierre)
+          const buttonsWithSVG = document.querySelectorAll('[role="button"] svg');
+          for (const svg of buttonsWithSVG) {
+            // Verificar si el SVG parece ser un icono de cierre (X)
+            const path = svg.querySelector('path');
+            if (path && path.getAttribute('d')?.includes('z')) {
+              // Los iconos de X suelen tener una 'z' en el path
+              closeButton = svg.closest('[role="button"]');
+              console.log('Botón de cierre encontrado por contenido SVG');
+              break;
+            }
+          }
+        }
+        
+        // Si encontramos el botón de cierre, hacer clic en él
+        if (closeButton) {
+          console.log('Haciendo clic en el botón de cierre del modal...');
+          closeButton.click();
+          
+          // Esperar un momento para que el modal se cierre completamente
+          setTimeout(() => {
+            console.log('Modal de usuario cerrado exitosamente');
+            resolve(true);
+          }, 500);
+        } else {
+          console.warn('No se encontró el botón de cierre del modal, continuando con el flujo...');
+          resolve(false);
+        }
+      } catch (error) {
+        console.error('Error al cerrar el modal de usuario:', error);
+        resolve(false);
+      }
+    });
+  }
+
+  // Función auxiliar para verificar si el mensaje se envió
+  async checkMessageSent(messageField, timeout = 2000) {
+    return new Promise((resolve) => {
+      const startTime = Date.now();
+      
+      const checkContent = () => {
+        // Verificar si el campo está vacío o el texto ha desaparecido
+        if (!messageField.textContent.trim() || 
+            !messageField.innerHTML.includes(this.messageToSend)) {
+          console.log('Mensaje enviado exitosamente: campo vacío');
+          resolve(true);
+          return;
+        }
+        
+        // Verificar si se ha excedido el tiempo de espera
+        if (Date.now() - startTime > timeout) {
+          console.log('Tiempo de espera excedido, el mensaje puede no haberse enviado');
+          resolve(false);
+          return;
+        }
+        
+        // Seguir verificando
+        setTimeout(checkContent, 100);
+      };
+      
+      // Comenzar a verificar después de un breve retraso
+      setTimeout(checkContent, 300);
+    });
   }
 
   async findSendButton() {

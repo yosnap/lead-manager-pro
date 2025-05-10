@@ -1032,10 +1032,17 @@ class MemberInteractionUI {
     // Añadir icono SVG de play
     button.innerHTML = this.icons.play;
     
-    // Click handler
+    // Modificar el event listener existente para incluir la funcionalidad de diagnóstico
     button.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
+      
+      // Si se mantiene presionada la tecla Alt, activar el modo diagnóstico
+      if (e.altKey) {
+        this.setupDiagnosticMode();
+        console.log('Modo diagnóstico activado. Haz clic en los elementos para ver sus selectores.');
+        return;
+      }
       
       try {
         // Si ya está interactuando, detener
@@ -1243,6 +1250,142 @@ class MemberInteractionUI {
     
     // La página se recargará, y el init() restaurará la visibilidad
     return true;
+  }
+
+  // Agregar después del constructor o al final de la clase, pero antes del cierre
+  setupDiagnosticMode() {
+    console.log('Modo diagnóstico activado: haciendo clic en elementos para identificar selectores');
+    
+    // Crear un indicador visual para mostrar que el modo diagnóstico está activo
+    const diagnosticIndicator = document.createElement('div');
+    diagnosticIndicator.id = 'lmp-diagnostic-mode';
+    diagnosticIndicator.style.cssText = `
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background-color: rgba(255, 0, 0, 0.7);
+      color: white;
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 10000;
+      font-size: 12px;
+      max-width: 300px;
+      max-height: 300px;
+      overflow: auto;
+    `;
+    diagnosticIndicator.innerHTML = '<div>Modo diagnóstico ACTIVO</div><div>Haz clic en los elementos para ver sus selectores</div><div id="diagnostic-log"></div>';
+    document.body.appendChild(diagnosticIndicator);
+    
+    // Función para generar un selector para un elemento
+    const generateSelector = (element) => {
+      // Colección de selectores posibles
+      let selectors = [];
+      
+      // Agregar por atributos principales
+      if (element.id) {
+        selectors.push(`#${element.id}`);
+      }
+      
+      if (element.hasAttribute('class')) {
+        const classNames = Array.from(element.classList).join('.');
+        if (classNames) {
+          selectors.push(`.${classNames}`);
+        }
+      }
+      
+      // Atributos específicos que podrían ser útiles
+      ['role', 'aria-label', 'data-testid', 'name', 'type'].forEach(attr => {
+        if (element.hasAttribute(attr)) {
+          selectors.push(`[${attr}="${element.getAttribute(attr)}"]`);
+        }
+      });
+      
+      // Tipo del elemento
+      selectors.push(element.tagName.toLowerCase());
+      
+      // Selector completo (camino del DOM)
+      let current = element;
+      let path = [];
+      while (current && current !== document.body) {
+        let selector = current.tagName.toLowerCase();
+        
+        if (current.id) {
+          selector = `#${current.id}`;
+        } else if (current.hasAttribute('aria-label')) {
+          selector = `${selector}[aria-label="${current.getAttribute('aria-label')}"]`;
+        } else if (current.classList.length > 0) {
+          const importantClasses = Array.from(current.classList)
+            .filter(cls => !cls.includes(' ') && cls.length > 0 && cls.length < 10)
+            .slice(0, 2);
+          if (importantClasses.length > 0) {
+            selector = `${selector}.${importantClasses.join('.')}`;
+          }
+        }
+        
+        path.unshift(selector);
+        current = current.parentElement;
+      }
+      
+      selectors.push(path.join(' > '));
+      
+      return selectors;
+    };
+    
+    // Agregar listener a toda la página
+    document.addEventListener('click', (event) => {
+      // Ignorar si se hace clic en nuestro propio indicador diagnóstico
+      if (event.target.closest('#lmp-diagnostic-mode')) {
+        return;
+      }
+
+      const element = event.target;
+      const selectors = generateSelector(element);
+      
+      // Mostrar información en consola
+      console.log('Elemento clicado:', element);
+      console.log('Selectores posibles:', selectors);
+      console.log('HTML:', element.outerHTML.substring(0, 300) + '...');
+      console.log('Atributos:', Object.fromEntries(
+        Array.from(element.attributes).map(attr => [attr.name, attr.value])
+      ));
+      
+      // Mostrar en el indicador visual
+      const log = document.getElementById('diagnostic-log');
+      if (log) {
+        const entry = document.createElement('div');
+        entry.style.cssText = 'margin-top: 10px; border-top: 1px solid white; padding-top: 5px;';
+        
+        let selectorText = selectors.map(s => `<div style="margin: 2px 0; word-break: break-all;">${s}</div>`).join('');
+        
+        entry.innerHTML = `
+          <div style="font-weight: bold; margin-bottom: 5px;">Elemento: ${element.tagName}</div>
+          <div style="margin-bottom: 5px;">Aria-Label: ${element.getAttribute('aria-label') || 'ninguno'}</div>
+          <div style="margin-bottom: 5px;">Role: ${element.getAttribute('role') || 'ninguno'}</div>
+          <div style="font-size: 10px; margin-bottom: 5px;">Selectores principales:</div>
+          ${selectorText}
+        `;
+        
+        log.prepend(entry);
+        
+        // Limitar el número de entradas para evitar demasiado contenido
+        if (log.children.length > 5) {
+          log.removeChild(log.lastChild);
+        }
+      }
+    }, true);
+    
+    // Método para desactivar el modo diagnóstico
+    window.disableLMPDiagnosticMode = () => {
+      const indicator = document.getElementById('lmp-diagnostic-mode');
+      if (indicator) {
+        document.body.removeChild(indicator);
+      }
+      console.log('Modo diagnóstico desactivado');
+    };
+    
+    return {
+      disable: window.disableLMPDiagnosticMode
+    };
   }
 }
 
