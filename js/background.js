@@ -1,548 +1,74 @@
-// Estado global
-let state = {
-  isRunning: false,
-  isPaused: false,
-  currentSearchTerm: '',
-  progress: 0,
-  statusMessage: 'Listo para comenzar',
-  currentTabId: null,
-  profiles: []
-};
+// Background script para manejar la comunicación entre el popup y la página de Facebook
 
-// Inicialización - Establecer estado inicial
-chrome.storage.local.set({
-  'extension_running': false,
-  'extension_stopped': false,
-  'extension_paused': false
-});
-
-// Establecer opciones por defecto si no existen
-chrome.storage.local.get([
-  'maxScrolls',
-  'scrollDelay',
-  'groupPublic',
-  'groupPrivate',
-  'minUsers',
-  'minPostsYear',
-  'minPostsMonth',
-  'minPostsDay'
-], function(result) {
-  const defaultOptions = {
-    // Si no existe la opción, se establece el valor por defecto
-    maxScrolls: result.maxScrolls || 4,
-    scrollDelay: result.scrollDelay || 2,
-    groupPublic: result.groupPublic !== undefined ? result.groupPublic : true,
-    groupPrivate: result.groupPrivate !== undefined ? result.groupPrivate : true,
-    minUsers: result.minUsers || 1000,
-    // Para las publicaciones mínimas, establecer valores predeterminados
-    minPostsYear: result.minPostsYear !== undefined ? result.minPostsYear : '1000',
-    minPostsMonth: result.minPostsMonth !== undefined ? result.minPostsMonth : '100',
-    minPostsDay: result.minPostsDay !== undefined ? result.minPostsDay : '5'
-  };
-  
-  chrome.storage.local.set(defaultOptions);
-  console.log('Opciones por defecto establecidas en chrome.storage.local:', defaultOptions);
-});
-
-// Manejador de mensajes
+// Escuchar mensajes del popup de interacción
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'status_update') {
-    // Actualizar información de estado (utilizada para UI)
-    state.statusMessage = message.message || 'Estado desconocido';
-    state.isRunning = !message.finished; // Si está finalizado, no está corriendo
-    state.progress = message.progress || 0;
-    
-    // Enviar actualización a todas las pestañas abiertas
-    updateAllTabs();
-    sendResponse({ success: true });
-    return false;
-  } else if (message.action === 'search' || message.action === 'find_profiles') {
-    // Corregir action para usar un nombre estándar
-    const actionType = 'find_profiles';
-    
-    // Verificar si la búsqueda fue iniciada explícitamente por el usuario
-    const isUserInitiated = message.searchData && (message.searchData.userInitiated === true);
-    
-    if (!isUserInitiated) {
-      console.log('Background: Búsqueda no iniciada por usuario, bloqueando.');
-      sendResponse({ 
-        success: false, 
-        error: 'Las búsquedas deben ser iniciadas explícitamente por el usuario mediante el botón Buscar' 
-      });
-      return true;
-    }
-    
-    console.log('Background: Iniciando búsqueda con datos:', message.searchData);
-    
-    // Limpiar el flag de detención cuando se inicia una nueva búsqueda
-    chrome.storage.local.remove(['extension_stopped'], function() {});
-    
-    // Extraer los datos de búsqueda correctamente
-    const searchTerm = message.searchData.term || message.searchTerm || '';
-    
-    // Guardar información de búsqueda
-    state.currentSearchTerm = searchTerm;
-    state.searchData = message.searchData || {};
-    state.isRunning = true; // Marcar el proceso como en ejecución
-    
-    // Guardar en el storage para persistir entre sesiones
-    chrome.storage.local.set({
-      currentSearchTerm: searchTerm,
-      searchData: message.searchData || {},
-      extension_running: true,
-      extension_stopped: false
-    });
-    
-    // Enviar la solicitud de búsqueda a la pestaña activa
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs.length > 0) {
-        try {
-          console.log(`Background: Enviando mensaje de búsqueda a pestaña ${tabs[0].id}`);
-          
-          chrome.tabs.sendMessage(tabs[0].id, {
-            action: actionType,
-            searchData: message.searchData
-          }, function(response) {
-            // Comprobar si hay un error de runtime
-            if (chrome.runtime.lastError) {
-              console.error('Background: Error al comunicarse con content script:', chrome.runtime.lastError);
-              sendResponse({ 
-                success: false, 
-                error: 'Error de comunicación: ' + chrome.runtime.lastError.message 
-              });
-              return;
-            }
-            
-            console.log('Background: Respuesta de content script:', response);
-            
-            // Enviar respuesta inmediata
-            sendResponse({ success: true, message: 'Búsqueda iniciada' });
-            
-            // Actualizar estado global
-            updateStatus(`Búsqueda de ${message.searchData.type === 'people' ? 'personas' : 'grupos'} iniciada en Facebook`, 10);
-          });
-        } catch (error) {
-          console.error('Background: Error al enviar mensaje:', error);
-          sendResponse({ success: false, error: 'Error al enviar mensaje: ' + error.message });
-        }
-      } else {
-        console.error('Background: No hay pestañas activas');
-        sendResponse({ success: false, error: 'No hay pestañas activas' });
+  console.log('Background script recibió mensaje:', message);
+  
+  // Si el mensaje es para iniciar la interacción desde el popup
+  if (message.action === 'startInteractionFromPopup') {
+    // Obtener la pestaña activa donde queremos ejecutar la interacción
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      if (tabs.length === 0) {
+        sendResponse({success: false, error: 'No se encontró la pestaña activa'});
+        return;
       }
-    });
-    
-    return true; // Mantener el puerto abierto para respuesta asíncrona
-  } else if (message.action === 'startGroupSearch') {
-    // Iniciar la búsqueda de grupos
-    console.log('Background: Iniciando búsqueda de grupos con opciones:', message.options);
-    
-    // Verificar que al menos un tipo de grupo esté seleccionado
-    if (!message.options.publicGroups && !message.options.privateGroups) {
-      sendResponse({ 
-        success: false, 
-        error: 'Debe seleccionar al menos un tipo de grupo (público o privado).' 
-      });
-      return true;
-    }
-    
-    // Verificar que se haya ingresado la cantidad mínima de usuarios
-    if (!message.options.minUsers) {
-      sendResponse({ 
-        success: false, 
-        error: 'Debe ingresar una cantidad mínima de usuarios.' 
-      });
-      return true;
-    }
-    
-    // Enviar la solicitud de búsqueda a la pestaña activa
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs.length > 0) {
-        try {
-          console.log(`Background: Enviando mensaje de búsqueda de grupos a pestaña ${tabs[0].id}`);
-          
-          chrome.tabs.sendMessage(tabs[0].id, {
-            action: 'startGroupSearch',
-            options: message.options
-          }, function(response) {
-            // Comprobar si hay un error de runtime
-            if (chrome.runtime.lastError) {
-              console.error('Background: Error al comunicarse con content script:', chrome.runtime.lastError);
-              sendResponse({ 
-                success: false, 
-                error: 'Error de comunicación: ' + chrome.runtime.lastError.message 
-              });
-              return;
-            }
-            
-            console.log('Background: Respuesta de content script:', response);
-            
-            // Enviar respuesta inmediata
-            sendResponse({ success: true, message: 'Búsqueda de grupos iniciada' });
-            
-            // Actualizar estado global
-            updateStatus('Búsqueda de grupos iniciada en Facebook', 10);
-          });
-        } catch (error) {
-          console.error('Background: Error al enviar mensaje:', error);
-          sendResponse({ success: false, error: 'Error al enviar mensaje: ' + error.message });
-        }
-      } else {
-        console.error('Background: No hay pestañas activas');
-        sendResponse({ success: false, error: 'No hay pestañas activas' });
+      
+      const activeTab = tabs[0];
+      
+      // Verificar si estamos en una página de grupo de Facebook
+      if (!activeTab.url.includes('facebook.com/groups/')) {
+        sendResponse({success: false, error: 'Debes estar en la página de un grupo de Facebook'});
+        return;
       }
-    });
-    
-    return true; // Mantener el puerto abierto para respuesta asíncrona
-  } else if (message.action === 'start') {
-    // Iniciar proceso
-    state.isRunning = true;
-    state.isPaused = false;
-    
-    // Actualizar estado
-    state.statusMessage = 'Proceso iniciado';
-    broadcastStatusUpdate();
-    
-    sendResponse({ success: true });
-    return false;
-  } else if (message.action === 'pause') {
-    // Pausar/reanudar proceso
-    state.isPaused = !state.isPaused;
-    
-    // Actualizar estado
-    state.statusMessage = state.isPaused ? 'Proceso pausado' : 'Proceso reanudado';
-    broadcastStatusUpdate();
-    
-    // Notificar a todas las pestañas sobre el cambio de estado
-    chrome.tabs.query({}, (tabs) => {
-      tabs.forEach(tab => {
-        if (tab.url && tab.url.includes('facebook.com')) {
-          chrome.tabs.sendMessage(tab.id, {
-            action: 'update_state',
-            isPaused: state.isPaused,
-            isRunning: state.isRunning
-          }).catch(() => {});
-        }
-      });
-    });
-    
-    sendResponse({ success: true });
-    return false;
-  } else if (message.action === 'stop' || message.action === 'emergency_stop') {
-    // Detener inmediatamente
-    state.isRunning = false;
-    state.isPaused = false;
-    state.progress = 0;
-    
-    // Guardar estado de detención en storage
-    chrome.storage.local.set({
-      'extension_stopped': true,
-      'extension_running': false,
-      'extension_paused': false
-    });
-    
-    // Notificar a todas las pestañas
-    chrome.tabs.query({}, (tabs) => {
-      tabs.forEach(tab => {
-        if (tab.url && tab.url.includes('facebook.com')) {
-          chrome.tabs.sendMessage(tab.id, {
-            action: 'stop',
-            stopAllTypes: true
-          }).catch(() => {});
-        }
-      });
-    });
-    
-    updateStatus('Proceso detenido', 0);
-    sendResponse({ success: true, message: 'Proceso detenido correctamente' });
-    return false;
-  } else if (message.type === 'search_completed') {
-    // Manejar notificación de búsqueda completada
-    state.isRunning = false;
-    state.isPaused = false;
-    state.progress = 100;
-    state.statusMessage = 'Búsqueda finalizada';
-    
-    // Notificar a todas las pestañas
-    chrome.tabs.query({}, (tabs) => {
-      tabs.forEach(tab => {
-        if (tab.url && tab.url.includes('facebook.com')) {
-          chrome.tabs.sendMessage(tab.id, {
-            type: 'status_update',
-            message: 'Búsqueda finalizada',
-            progress: 100,
-            finished: true
-          }).catch(() => {});
-        }
-      });
-    });
-    
-    // Guardar estado en storage
-    chrome.storage.local.set({
-      'extension_running': false,
-      'extension_paused': false
-    });
-    
-    sendResponse({ success: true, message: 'Estado actualizado a búsqueda finalizada' });
-    return false;
-  } else if (message.action === 'get_state') {
-    // Devolver el estado actual
-    sendResponse({
-      currentSearchTerm: state.currentSearchTerm,
-      searchData: state.searchData,
-      isRunning: state.isRunning,
-      isPaused: state.isPaused,
-      progress: state.progress,
-      statusMessage: state.statusMessage
-    });
-    return false;
-  } else if (message.action === 'get_profiles') {
-    // Devolver los perfiles guardados
-    sendResponse({ success: true, profiles: state.profiles });
-    return false;
-  } else if (message.action === 'get_status') {
-    // Devolver información de estado
-    sendResponse({
-      isRunning: state.isRunning,
-      isPaused: state.isPaused,
-      message: state.statusMessage,
-      progress: state.progress
-    });
-    return false;
-  } else if (message.action === 'found_profiles') {
-    // Guardar los perfiles encontrados
-    state.profiles = message.profiles || [];
-    
-    // Notificar a todas las pestañas sobre los nuevos perfiles
-    chrome.tabs.query({}, (tabs) => {
-      tabs.forEach(tab => {
-        if (tab.url && tab.url.includes('facebook.com')) {
-          chrome.tabs.sendMessage(tab.id, {
-            action: 'update_profiles',
-            profiles: state.profiles
-          }).catch(() => {});
-        }
-      });
-    });
-    
-    sendResponse({ success: true });
-    return false;
-  } else if (message.action === 'startGroupMemberExtraction') {
-    // Iniciar la extracción de miembros de grupo
-    console.log('Background: Iniciando extracción de miembros de grupo');
-    
-    // Enviar la solicitud a la pestaña activa
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs.length > 0) {
-        try {
-          chrome.tabs.sendMessage(tabs[0].id, {
-            action: 'startGroupMemberExtraction'
+      
+      // Guardar configuración
+      const config = message.config || {};
+      chrome.storage.local.set({ 'leadManagerGroupSettings': config }, function() {
+        console.log('Configuración guardada en background:', config);
+        
+        // Añadir un retraso para asegurar que la configuración se guarde
+        setTimeout(() => {
+          // Enviar el mensaje al content script en la pestaña activa
+          chrome.tabs.sendMessage(activeTab.id, {
+            action: 'startInteractionWithMembers',
+            sectionType: message.sectionType
           }, function(response) {
-            // Comprobar si hay un error de runtime
+            // Manejar errores de comunicación
             if (chrome.runtime.lastError) {
-              console.error('Background: Error al comunicarse con content script:', chrome.runtime.lastError);
-              sendResponse({ 
-                success: false, 
-                error: 'Error de comunicación: ' + chrome.runtime.lastError.message 
-              });
-              return;
+              console.error('Error al enviar mensaje al content script:', chrome.runtime.lastError);
+              sendResponse({success: false, error: 'No se pudo contactar con la página. Intenta recargar la página.'});
+            } else {
+              // Enviar la respuesta del content script de vuelta al popup
+              sendResponse(response || {success: true});
             }
-            
-            console.log('Background: Respuesta de content script:', response);
-            sendResponse(response);
           });
-        } catch (error) {
-          console.error('Background: Error al enviar mensaje:', error);
-          sendResponse({ success: false, error: 'Error al enviar mensaje: ' + error.message });
-        }
-      } else {
-        console.error('Background: No hay pestañas activas');
-        sendResponse({ success: false, error: 'No hay pestañas activas' });
-      }
+        }, 500);
+      });
     });
     
-    return true; // Mantener el puerto abierto para respuesta asíncrona
-  } else if (message.action === 'stopGroupMemberExtraction') {
-    // Detener la extracción de miembros de grupo
-    console.log('Background: Deteniendo extracción de miembros de grupo');
-    
-    // Enviar la solicitud a la pestaña activa
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs.length > 0) {
-        try {
-          chrome.tabs.sendMessage(tabs[0].id, {
-            action: 'stopGroupMemberExtraction'
-          }, function(response) {
-            if (chrome.runtime.lastError) {
-              console.error('Background: Error al comunicarse con content script:', chrome.runtime.lastError);
-              sendResponse({ 
-                success: false, 
-                error: 'Error de comunicación: ' + chrome.runtime.lastError.message 
-              });
-              return;
-            }
-            
-            console.log('Background: Respuesta de content script:', response);
-            sendResponse(response);
-          });
-        } catch (error) {
-          console.error('Background: Error al enviar mensaje:', error);
-          sendResponse({ success: false, error: 'Error al enviar mensaje: ' + error.message });
-        }
-      } else {
-        console.error('Background: No hay pestañas activas');
-        sendResponse({ success: false, error: 'No hay pestañas activas' });
-      }
-    });
-    
-    return true; // Mantener el puerto abierto para respuesta asíncrona
-  } else if (message.action === 'exportGroupMemberResults') {
-    // Exportar resultados de la extracción de miembros
-    console.log('Background: Exportando resultados de extracción de miembros');
-    
-    // Enviar la solicitud a la pestaña activa
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs.length > 0) {
-        try {
-          chrome.tabs.sendMessage(tabs[0].id, {
-            action: 'exportGroupMemberResults',
-            format: message.format || 'json'
-          }, function(response) {
-            if (chrome.runtime.lastError) {
-              console.error('Background: Error al comunicarse con content script:', chrome.runtime.lastError);
-              sendResponse({ 
-                success: false, 
-                error: 'Error de comunicación: ' + chrome.runtime.lastError.message 
-              });
-              return;
-            }
-            
-            console.log('Background: Respuesta de content script:', response);
-            sendResponse(response);
-          });
-        } catch (error) {
-          console.error('Background: Error al enviar mensaje:', error);
-          sendResponse({ success: false, error: 'Error al enviar mensaje: ' + error.message });
-        }
-      } else {
-        console.error('Background: No hay pestañas activas');
-        sendResponse({ success: false, error: 'No hay pestañas activas' });
-      }
-    });
-    
-    return true; // Mantener el puerto abierto para respuesta asíncrona
-  } else if (message.action === 'updateOptions') {
-    // Guardar las opciones actualizadas
-    chrome.storage.local.set(message.options, function() {
-      console.log('Opciones actualizadas:', message.options);
-    });
-    
-    sendResponse({ success: true, message: 'Opciones actualizadas correctamente' });
-    return false;
-  } else {
-    // Respuesta por defecto para acciones desconocidas
-    sendResponse({ success: false, error: 'Acción no reconocida' });
-    return false;
+    // Mantener el canal de mensajes abierto para respuesta asíncrona
+    return true;
   }
 });
 
-// Función para enviar actualización a todas las pestañas abiertas
-// Limitamos la frecuencia de actualizaciones
-let lastUpdateTime = 0;
-const UPDATE_THROTTLE_MS = 500; // Limitar actualizaciones a una cada 500ms
-
-function updateAllTabs() {
-  const now = Date.now();
+// Manejar instalación o actualización
+chrome.runtime.onInstalled.addListener(function(details) {
+  console.log('Lead Manager Pro instalado/actualizado:', details.reason);
   
-  // Evitar actualizaciones demasiado frecuentes para romper bucles infinitos
-  if (now - lastUpdateTime < UPDATE_THROTTLE_MS) {
-    return;
-  }
-  
-  lastUpdateTime = now;
-  
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
-      if (tab.url && tab.url.includes('facebook.com')) {
-        try {
-          chrome.tabs.sendMessage(tab.id, {
-            type: 'status_update',
-            message: state.statusMessage,
-            progress: state.progress,
-            finished: !state.isRunning,
-            profiles: state.profiles,
-            suppressResponse: true
-          });
-        } catch (e) {}
-      }
-    });
-  });
-}
-
-// Listener para cuando una pestaña termine de cargar
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url && tab.url.includes('facebook.com/search/')) {
-    // Si hemos cargado una página de búsqueda y tenemos estado de ejecución activo
-    if (state.isRunning) {
-      // Enviar mensaje para aplicar filtros y buscar perfiles
-      setTimeout(() => {
-        chrome.tabs.sendMessage(tabId, {
-          action: 'apply_filters'
-        });
-      }, 2000); // Dar tiempo para que la página cargue completamente
-    }
-  }
-});
-
-// Función para actualizar el estado y notificar
-function updateStatus(message, progress = null) {
-  state.statusMessage = message;
-  
-  if (progress !== null) {
-    state.progress = progress;
-  }
-  
-  // Si el mensaje es sobre detención, asegurarnos de actualizar los flags correctamente
-  if (message.includes('detenido') || message.includes('Proceso detenido')) {
-    state.isRunning = false;
-    state.progress = 0;
+  // Si es una nueva instalación, establecer valores predeterminados
+  if (details.reason === 'install') {
+    const defaultSettings = {
+      messageToSend: 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!',
+      autoCloseChat: true,
+      interactionDelay: 2,
+      delay: 2000,
+      membersToInteract: 10,
+      maxMembers: 10,
+      lastMemberType: 'admins'
+    };
     
-    // Actualizar el storage
-    chrome.storage.local.set({
-      'extension_running': false,
-      'extension_stopped': true,
-      'extension_paused': false
+    chrome.storage.local.set({ 'leadManagerGroupSettings': defaultSettings }, function() {
+      console.log('Configuración inicial establecida:', defaultSettings);
     });
   }
-  
-  // Notificar a las pestañas
-  updateAllTabs();
-}
-
-// Función para enviar actualización de estado a todas las pestañas
-function broadcastStatusUpdate() {
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
-      if (tab.url && tab.url.includes('facebook.com')) {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'status_update',
-          message: state.statusMessage,
-          progress: state.progress,
-          finished: !state.isRunning
-        });
-      }
-    });
-  });
-}
-
-// Listener para eventos de instalación
-chrome.runtime.onInstalled.addListener(() => {
-  // Establecer estado inicial
-  state.isRunning = false;
-  state.isPaused = false;
-  
-  chrome.storage.local.set({
-    'extension_running': false,
-    'extension_stopped': false,
-    'extension_paused': false
-  });
 });

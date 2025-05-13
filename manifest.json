@@ -6,7 +6,8 @@
   "permissions": [
     "activeTab",
     "storage",
-    "scripting"
+    "scripting",
+    "windows"
   ],
   "host_permissions": [
     "https://*.facebook.com/*"
@@ -21,7 +22,8 @@
     "default_title": "Lead Manager Pro"
   },
   "background": {
-    "service_worker": "js/background.js"
+    "service_worker": "js/background.js",
+    "type": "module"
   },
   "content_scripts": [
     {
@@ -65,7 +67,8 @@
         "css/*", 
         "icons/*", 
         "content/modules/n8nIntegration.js",
-        "content/modules/n8nIntegrationUI.js"
+        "content/modules/n8nIntegrationUI.js",
+        "popup/interaction.html"
       ],
       "matches": ["https://*.facebook.com/*"]
     }

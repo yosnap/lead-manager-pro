@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interacción con Miembros</title>
+  <link rel="stylesheet" href="../popup/css/popup.css">
+  <style>
+    .interaction-container {
+      width: 300px;
+      padding: 16px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    .form-group {
+      margin-bottom: 16px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+      color: #1E3A8A;
+    }
+    
+    select, input, textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #CED0D4;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    
+    textarea {
+      min-height: 60px;
+      resize: vertical;
+    }
+    
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+    }
+    
+    .checkbox-group input {
+      width: auto;
+      margin-right: 8px;
+    }
+    
+    .button {
+      width: 100%;
+      padding: 10px;
+      background-color: #1877F2;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    .button:hover {
+      background-color: #166FE5;
+    }
+    
+    .button:disabled {
+      background-color: #E4E6EB;
+      color: #BEC3C9;
+      cursor: not-allowed;
+    }
+    
+    .status-message {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    
+    .status-info {
+      background-color: #E7F3FF;
+      color: #1877F2;
+    }
+    
+    .status-error {
+      background-color: #FFEBE9;
+      color: #E41E3F;
+    }
+    
+    .status-success {
+      background-color: #D7F9E9;
+      color: #00A550;
+    }
+    
+    .status-loading {
+      background-color: #F0F2F5;
+      color: #65676B;
+    }
+    
+    .status-loading::after {
+      content: "...";
+      animation: loading 1.5s infinite;
+    }
+    
+    @keyframes loading {
+      0% { content: "."; }
+      33% { content: ".."; }
+      66% { content: "..."; }
+    }
+    
+    .header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 18px;
+      color: #1E3A8A;
+    }
+    
+    .icon {
+      margin-right: 10px;
+      color: #1877F2;
+    }
+  </style>
+</head>
+<body>
+  <div class="interaction-container">
+    <div class="header">
+      <div class="icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+        </svg>
+      </div>
+      <h1>Interacción con Miembros</h1>
+    </div>
+    
+    <div class="form-group">
+      <label for="member-type">Tipo de miembros</label>
+      <select id="member-type">
+        <option value="admins">Administradores y moderadores</option>
+        <option value="common" selected>Miembros con cosas en común</option>
+        <option value="newMembers">Nuevos miembros del grupo</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label for="message-text">Mensaje a enviar</label>
+      <textarea id="message-text" placeholder="Hola, este es un mensaje de prueba...">Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!</textarea>
+    </div>
+    
+    <div class="form-group">
+      <label for="delay-time">Tiempo entre interacciones (segundos)</label>
+      <input type="number" id="delay-time" min="1" step="0.5" value="2">
+    </div>
+    
+    <div class="form-group">
+      <label for="max-members">Máximo de miembros a contactar</label>
+      <input type="number" id="max-members" min="1" value="10">
+    </div>
+    
+    <div class="form-group checkbox-group">
+      <input type="checkbox" id="auto-close" checked>
+      <label for="auto-close" style="display: inline; font-weight: normal;">Cerrar chat automáticamente</label>
+    </div>
+    
+    <button id="start-interaction" class="button">Iniciar Interacción</button>
+    
+    <div id="status-message" class="status-message status-info" style="display: none;"></div>
+  </div>
+  
+  <script src="interaction.js"></script>
+</body>
+</html>

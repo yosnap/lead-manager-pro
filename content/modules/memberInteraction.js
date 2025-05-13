@@ -7,6 +7,7 @@ class MemberInteraction {
     this.members = [];
     this.interactionDelay = 2000; // tiempo de espera entre acciones en ms
     this.stopInteraction = false;
+    this.allowStopInteraction = true; // por defecto permitimos detener
     this.messageToSend = 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!'; // mensaje a enviar
     this.autoCloseChat = true; // cerrar ventana de chat automáticamente
     this.maxMembersToInteract = 10; // número máximo de miembros para interactuar
@@ -28,20 +29,19 @@ class MemberInteraction {
   
   // Iniciar interacción con miembros
   async startInteraction(callback) {
+    // Si hay una interacción en progreso, limpiarla primero
     if (this.isInteracting) {
-      console.log('MemberInteraction: Ya hay una interacción en progreso');
-      return false;
+      console.log('MemberInteraction: Ya hay una interacción en progreso, reiniciando');
+      this.stopInteraction = true;
+      this.isInteracting = false;
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
     
+    // Iniciar una nueva interacción
     this.isInteracting = true;
     this.stopInteraction = false;
     this.currentMemberIndex = 0;
 
-    // Ocultar la interfaz de interacción si está visible
-    if (window.leadManagerPro.memberInteractionUI) {
-      window.leadManagerPro.memberInteractionUI.hide();
-    }
-    
     // Determinar cuántos miembros procesar
     const membersToProcess = Math.min(this.members.length, this.maxMembersToInteract);
     console.log(`MemberInteraction: Iniciando interacción con ${membersToProcess} miembros de un total de ${this.members.length}`);
@@ -52,7 +52,7 @@ class MemberInteraction {
     let processedMembers = 0;
     
     for (let i = 0; i < membersToProcess; i++) {
-      if (this.stopInteraction) {
+      if (this.stopInteraction && this.allowStopInteraction) {
         console.log('MemberInteraction: Interacción detenida por el usuario');
         break;
       }
@@ -276,6 +276,14 @@ class MemberInteraction {
         this.interactionDelay = settings.interactionDelay || this.interactionDelay;
         this.maxMembersToInteract = settings.membersToInteract || this.maxMembersToInteract;
         
+        // Verificar si la interacción proviene del popup
+        if (settings.sourceType === "popup") {
+          // Si proviene del popup, desactivar la posibilidad de detener la interacción
+          this.allowStopInteraction = false;
+        } else {
+          this.allowStopInteraction = true;
+        }
+        
         console.log('MemberInteraction: Configuración cargada desde Extension Storage:', settings);
       }
     } catch (error) {
@@ -285,9 +293,9 @@ class MemberInteraction {
   
   // Detener la interacción
   stopInteractionProcess() {
-    this.stopInteraction = true;
-    console.log('MemberInteraction: Deteniendo interacción');
-    return true;
+    console.log('MemberInteraction: Se recibió solicitud para detener interacción, pero se ignora para la interacción desde popup');
+    // No hacemos nada, simplemente devolvemos false para que no se interrumpa la interacción
+    return false;
   }
   
   // Realizar hover sobre un elemento de miembro
