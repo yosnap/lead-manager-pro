@@ -299,6 +299,7 @@ class MemberInteractionUI {
       bottom: 20px;
       right: 20px;
       width: 350px;
+      max-height: 90vh; /* Limitar la altura máxima al 90% de la altura de la ventana */
       background-color: white;
       border-radius: 8px;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
@@ -344,6 +345,29 @@ class MemberInteractionUI {
     body.className = 'lead-manager-interaction-body';
     body.style.cssText = `
       padding: 16px;
+      max-height: calc(90vh - 50px); /* 90% de la altura de la ventana menos la altura del header */
+      overflow-y: auto; /* Habilitar scroll vertical */
+      scrollbar-width: thin; /* Para Firefox */
+    `;
+    
+    // Estilos para la barra de desplazamiento en WebKit (Chrome, Safari)
+    body.innerHTML = `
+      <style>
+        .lead-manager-interaction-body::-webkit-scrollbar {
+          width: 8px;
+        }
+        .lead-manager-interaction-body::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 4px;
+        }
+        .lead-manager-interaction-body::-webkit-scrollbar-thumb {
+          background: #CED0D4;
+          border-radius: 4px;
+        }
+        .lead-manager-interaction-body::-webkit-scrollbar-thumb:hover {
+          background: #AAAAAA;
+        }
+      </style>
     `;
     
     // Descripción
@@ -1000,17 +1024,101 @@ class MemberInteractionUI {
     container.appendChild(body);
     
     this.container = container;
+    
+    // Guardar referencia a los textareas para poder cargar los mensajes guardados
+    this.messageTextareas = messageTextareas;
+    
+    // Cargar la configuración guardada
+    this.loadSavedConfig();
+    
     return container;
   }
 
+  // Hacer que el contenedor sea arrastrable
+  makeDraggable(handle) {
+    if (!handle || !this.container) return;
+    
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    
+    // Cambiar el cursor y añadir indicador visual
+    handle.style.cursor = 'move';
+    
+    // Añadir un pequeño indicador de arrastre
+    const dragIndicator = document.createElement('div');
+    dragIndicator.innerHTML = '⋮⋮';
+    dragIndicator.style.cssText = `
+      margin-right: 8px;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.7);
+    `;
+    handle.insertBefore(dragIndicator, handle.firstChild);
+    
+    handle.onmousedown = dragMouseDown;
+    
+    const container = this.container;
+    
+    function dragMouseDown(e) {
+      e = e || window.event;
+      e.preventDefault();
+      
+      // Obtener la posición inicial del cursor
+      pos3 = e.clientX;
+      pos4 = e.clientY;
+      
+      document.onmouseup = closeDragElement;
+      document.onmousemove = elementDrag;
+    }
+    
+    function elementDrag(e) {
+      e = e || window.event;
+      e.preventDefault();
+      
+      // Calcular la nueva posición
+      pos1 = pos3 - e.clientX;
+      pos2 = pos4 - e.clientY;
+      pos3 = e.clientX;
+      pos4 = e.clientY;
+      
+      // Establecer la nueva posición
+      const newTop = container.offsetTop - pos2;
+      const newLeft = container.offsetLeft - pos1;
+      
+      // Comprobar límites para no salir de la pantalla
+      const maxTop = window.innerHeight - 50; // Al menos 50px visibles
+      const maxLeft = window.innerWidth - 50;
+      
+      if (newTop > 0 && newTop < maxTop) {
+        container.style.top = newTop + "px";
+        container.style.bottom = "auto";
+      }
+      
+      if (newLeft > 0 && newLeft < maxLeft) {
+        container.style.left = newLeft + "px";
+        container.style.right = "auto";
+      }
+    }
+    
+    function closeDragElement() {
+      // Detener el movimiento cuando se suelta el ratón
+      document.onmouseup = null;
+      document.onmousemove = null;
+    }
+  }
+  
   // Mostrar la interfaz
   show() {
     this.isVisible = true;
     if (!this.container) {
       this.container = this.createUI();
       document.body.appendChild(this.container);
+      
+      // Hacer que el contenedor sea arrastrable
+      const header = this.container.querySelector('.lead-manager-interaction-header');
+      if (header) {
+        this.makeDraggable(header);
+      }
     }
-      this.container.style.display = 'flex';
+    this.container.style.display = 'flex';
     
     // Verificar y ocultar el sidebar si es necesario
     if (window.location.href.includes('/groups/')) {
@@ -1535,6 +1643,7 @@ class MemberInteractionUI {
         
         const defaultConfig = {
           messageToSend: 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!',
+          messages: ['Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!'],
           autoCloseChat: true,
           delay: 2000,
           maxMembers: 10
@@ -1552,6 +1661,79 @@ class MemberInteractionUI {
         resolve(finalConfig);
       });
     });
+  }
+  
+  // Cargar los mensajes guardados en los textareas del acordeón
+  loadSavedMessages(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) return;
+    
+    console.log('Cargando mensajes guardados:', messages);
+    
+    // Usar los textareas guardados en la instancia si están disponibles
+    const textareas = this.messageTextareas || document.querySelectorAll('[class^="message-textarea-"]');
+    if (!textareas || textareas.length === 0) {
+      console.error('No se encontraron textareas para cargar los mensajes');
+      return;
+    }
+    
+    // Limpiar todos los textareas primero
+    textareas.forEach(textarea => {
+      textarea.value = '';
+    });
+    
+    // Cargar los mensajes guardados en los textareas
+    messages.forEach((message, index) => {
+      if (index < textareas.length) {
+        textareas[index].value = message;
+        console.log(`Mensaje ${index + 1} cargado:`, message);
+      }
+    });
+  }
+  
+  // Cargar la configuración guardada
+  async loadSavedConfig() {
+    try {
+      console.log('Cargando configuración guardada...');
+      const config = await this.getStoredConfig();
+      console.log('Configuración cargada:', config);
+      
+      // Cargar el tipo de miembro seleccionado
+      if (config.lastMemberType && this.memberSelector) {
+        this.memberSelector.value = config.lastMemberType;
+      }
+      
+      // Cargar el tiempo de espera
+      const delayInput = this.container.querySelector('input[type="number"]');
+      if (delayInput && config.interactionDelay) {
+        delayInput.value = config.interactionDelay;
+      }
+      
+      // Cargar el checkbox de cerrar chat automáticamente
+      const autoCloseChatCheckbox = this.container.querySelector('input[type="checkbox"]');
+      if (autoCloseChatCheckbox && config.autoCloseChat !== undefined) {
+        autoCloseChatCheckbox.checked = config.autoCloseChat;
+      }
+      
+      // Cargar el número máximo de miembros
+      const maxMembersInput = this.container.querySelectorAll('input[type="number"]')[1];
+      if (maxMembersInput && config.membersToInteract) {
+        maxMembersInput.value = config.membersToInteract;
+      }
+      
+      // Cargar los mensajes guardados
+      if (config.messages && Array.isArray(config.messages)) {
+        console.log('Cargando mensajes desde config:', config.messages);
+        this.loadSavedMessages(config.messages);
+      } else if (config.messageToSend) {
+        // Compatibilidad con versiones anteriores
+        console.log('Cargando mensaje único desde config:', config.messageToSend);
+        this.loadSavedMessages([config.messageToSend]);
+      }
+      
+      console.log('Configuración cargada correctamente');
+    } catch (error) {
+      console.error('Error al cargar la configuración guardada:', error);
+    }
   }
 
   showError(message) {

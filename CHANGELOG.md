@@ -6,10 +6,14 @@
 - **Mensajes personalizados múltiples**: Implementado sistema de acordeón con hasta 5 mensajes personalizables.
 - **Selección aleatoria de mensajes**: Los mensajes se seleccionan aleatoriamente durante las interacciones.
 - **Mejora de la interfaz**: Rediseñada la sección de mensajes para una mejor experiencia de usuario.
+- **Sidebar arrastrable**: Añadida funcionalidad para arrastrar y posicionar el sidebar de interacciones.
+- **Scroll automático**: Implementado scroll vertical cuando el contenido del sidebar es demasiado grande.
 
 ### Correcciones
 - Solucionado el error "messageTextarea is not defined" al guardar la configuración.
+- Corregido problema con el guardado y carga de mensajes personalizados.
 - Mejorada la gestión de mensajes en la interacción con miembros.
+- Corregido problema de solapamiento del sidebar en la parte superior de la pantalla.
 
 ## [1.1.0] - 2025-05-10
 
