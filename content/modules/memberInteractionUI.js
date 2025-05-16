@@ -413,21 +413,136 @@ class MemberInteractionUI {
     memberSelector.appendChild(newMembersOption);
     memberSelector.appendChild(adminMembersOption);
     
-    // Mensaje personalizado
-    const messageLabel = document.createElement('div');
-    messageLabel.textContent = 'Mensaje personalizado:';
-    messageLabel.style.fontWeight = 'bold';
-    messageLabel.style.marginBottom = '8px';
+    // Mensajes personalizados (acordeón)
+    const messagesLabel = document.createElement('div');
+    messagesLabel.textContent = 'Mensajes personalizados (se enviarán aleatoriamente):';
+    messagesLabel.style.fontWeight = 'bold';
+    messagesLabel.style.marginBottom = '8px';
     
-    const messageTextarea = document.createElement('textarea');
-    messageTextarea.value = 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!';
-    messageTextarea.style.width = '100%';
-    messageTextarea.style.padding = '8px';
-    messageTextarea.style.marginBottom = '16px';
-    messageTextarea.style.borderRadius = '4px';
-    messageTextarea.style.border = '1px solid #CED0D4';
-    messageTextarea.style.minHeight = '80px';
-    messageTextarea.style.resize = 'vertical';
+    // Contenedor principal de mensajes
+    const messagesContainer = document.createElement('div');
+    messagesContainer.className = 'lead-manager-messages-container';
+    messagesContainer.style.marginBottom = '16px';
+    
+    // Crear acordeón para los mensajes
+    const accordionContainer = document.createElement('div');
+    accordionContainer.className = 'lead-manager-accordion';
+    accordionContainer.style.cssText = `
+      border: 1px solid #CED0D4;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    `;
+    
+    // Array para almacenar referencias a los textareas
+    const messageTextareas = [];
+    
+    // Mensaje por defecto
+    const defaultMessage = 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!';
+    
+    // Crear 5 paneles de acordeón para los mensajes
+    for (let i = 0; i < 5; i++) {
+      // Panel del acordeón
+      const accordionPanel = document.createElement('div');
+      accordionPanel.className = 'lead-manager-accordion-panel';
+      accordionPanel.style.borderBottom = i < 4 ? '1px solid #CED0D4' : 'none';
+      
+      // Botón del acordeón
+      const accordionButton = document.createElement('button');
+      accordionButton.className = 'lead-manager-accordion-button';
+      accordionButton.textContent = `Mensaje ${i + 1}`;
+      accordionButton.style.cssText = `
+        width: 100%;
+        background-color: #F0F2F5;
+        border: none;
+        padding: 10px 15px;
+        text-align: left;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      `;
+      
+      // Icono para el acordeón
+      const accordionIcon = document.createElement('span');
+      accordionIcon.textContent = '+';
+      accordionIcon.style.cssText = `
+        font-size: 16px;
+        transition: transform 0.3s;
+      `;
+      accordionButton.appendChild(accordionIcon);
+      
+      // Contenido del acordeón
+      const accordionContent = document.createElement('div');
+      accordionContent.className = 'lead-manager-accordion-content';
+      accordionContent.style.cssText = `
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease-out;
+        background-color: white;
+      `;
+      
+      // Textarea para el mensaje
+      const messageTextarea = document.createElement('textarea');
+      messageTextarea.className = `message-textarea-${i}`;
+      messageTextarea.value = i === 0 ? defaultMessage : '';
+      messageTextarea.placeholder = `Escribe aquí el mensaje ${i + 1}...`;
+      messageTextarea.style.cssText = `
+        width: calc(100% - 20px);
+        padding: 8px;
+        margin: 10px;
+        border-radius: 4px;
+        border: 1px solid #CED0D4;
+        min-height: 80px;
+        resize: vertical;
+      `;
+      
+      // Guardar referencia al textarea
+      messageTextareas.push(messageTextarea);
+      
+      // Añadir textarea al contenido del acordeón
+      accordionContent.appendChild(messageTextarea);
+      
+      // Evento para el botón del acordeón
+      accordionButton.addEventListener('click', function() {
+        // Toggle active class
+        this.classList.toggle('active');
+        
+        // Cambiar el icono
+        accordionIcon.textContent = this.classList.contains('active') ? '-' : '+';
+        
+        // Toggle panel de contenido
+        if (accordionContent.style.maxHeight !== '0px' && accordionContent.style.maxHeight !== '') {
+          accordionContent.style.maxHeight = '0px';
+        } else {
+          accordionContent.style.maxHeight = messageTextarea.scrollHeight + 40 + 'px';
+        }
+      });
+      
+      // Añadir elementos al panel
+      accordionPanel.appendChild(accordionButton);
+      accordionPanel.appendChild(accordionContent);
+      
+      // Añadir panel al contenedor del acordeón
+      accordionContainer.appendChild(accordionPanel);
+    }
+    
+    // Abrir el primer panel por defecto
+    setTimeout(() => {
+      const firstButton = accordionContainer.querySelector('.lead-manager-accordion-button');
+      if (firstButton) firstButton.click();
+    }, 100);
+    
+    // Añadir acordeón al contenedor de mensajes
+    messagesContainer.appendChild(accordionContainer);
+    
+    // Función para obtener los mensajes configurados
+    const getConfiguredMessages = () => {
+      return messageTextareas
+        .map(textarea => textarea.value.trim())
+        .filter(message => message.length > 0);
+    };
     
     // Tiempo de espera
     const delayLabel = document.createElement('div');
@@ -533,7 +648,15 @@ class MemberInteractionUI {
         // Obtener valores de configuración
         const memberType = memberSelector.value;
         const delay = parseFloat(delayInput.value) * 1000;
-        const message = messageTextarea.value.trim();
+        // Obtener mensajes del acordeón
+        const messages = [];
+        document.querySelectorAll('[class^="message-textarea-"]').forEach(textarea => {
+          const text = textarea.value.trim();
+          if (text) {
+            messages.push(text);
+          }
+        });
+        const message = messages.length > 0 ? messages[0] : '';
         const autoCloseChat = autoCloseChatCheckbox.checked;
         const maxMembers = parseInt(maxMembersInput.value);
         
@@ -543,8 +666,8 @@ class MemberInteractionUI {
           return;
         }
         
-        if (!message) {
-          alert('Por favor, ingrese un mensaje para enviar a los miembros');
+        if (messages.length === 0) {
+          alert('Por favor, ingrese al menos un mensaje para enviar a los miembros');
           return;
         }
         
@@ -555,7 +678,8 @@ class MemberInteractionUI {
         
         // Guardar configuración
         const settings = {
-          messageToSend: message,
+          messages: messages,
+          messageToSend: message, // Para compatibilidad con versiones anteriores
           autoCloseChat: autoCloseChat,
           interactionDelay: delay / 1000,
           membersToInteract: maxMembers,
@@ -669,6 +793,98 @@ class MemberInteractionUI {
       this.stopInteraction();
     });
     
+    // Botón para guardar ajustes
+    const saveSettingsButton = document.createElement('button');
+    saveSettingsButton.textContent = 'Guardar ajustes';
+    saveSettingsButton.className = 'lead-manager-button save';
+    saveSettingsButton.style.cssText = `
+      flex: 1;
+      padding: 8px 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    `;
+    
+    // Evento para guardar la configuración
+    saveSettingsButton.addEventListener('click', async () => {
+      try {
+        // Obtener valores de configuración
+        const memberType = memberSelector.value;
+        const delay = parseFloat(delayInput.value) * 1000;
+        // Obtener mensajes del acordeón
+        const messages = [];
+        document.querySelectorAll('[class^="message-textarea-"]').forEach(textarea => {
+          const text = textarea.value.trim();
+          if (text) {
+            messages.push(text);
+          }
+        });
+        const message = messages.length > 0 ? messages[0] : '';
+        const autoCloseChat = autoCloseChatCheckbox.checked;
+        const maxMembers = parseInt(maxMembersInput.value);
+        
+        // Validaciones
+        if (isNaN(delay) || delay < 1000) {
+          alert('Por favor, ingrese un tiempo de espera válido (mínimo 1 segundo)');
+          return;
+        }
+        
+        if (messages.length === 0) {
+          alert('Por favor, ingrese al menos un mensaje para enviar a los miembros');
+          return;
+        }
+        
+        if (isNaN(maxMembers) || maxMembers < 1) {
+          alert('Por favor, ingrese un número válido para el máximo de miembros');
+          return;
+        }
+        
+        // Guardar configuración
+        const settings = {
+          messages: messages,
+          messageToSend: message, // Para compatibilidad con versiones anteriores
+          autoCloseChat: autoCloseChat,
+          interactionDelay: delay / 1000,
+          membersToInteract: maxMembers,
+          lastMemberType: memberType
+        };
+        
+        await new Promise((resolve, reject) => {
+          chrome.storage.local.set({ 'leadManagerGroupSettings': settings }, () => {
+            if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+            else resolve();
+          });
+        });
+        
+        // Actualizar la configuración en la instancia de memberInteraction
+        if (this.memberInteraction) {
+          this.memberInteraction.messages = messages;
+          this.memberInteraction.messageToSend = message;
+          this.memberInteraction.autoCloseChat = autoCloseChat;
+          this.memberInteraction.interactionDelay = delay;
+          this.memberInteraction.maxMembersToInteract = maxMembers;
+        }
+        
+        // Mostrar mensaje de éxito
+        this.statusText.textContent = 'Configuración guardada correctamente';
+        this.statusText.style.color = '#4CAF50';
+        
+        // Restaurar el mensaje después de unos segundos
+        setTimeout(() => {
+          this.statusText.textContent = 'Listo para iniciar interacción con miembros.';
+          this.statusText.style.color = '';
+        }, 3000);
+      } catch (error) {
+        console.error('Error al guardar la configuración:', error);
+        this.statusText.textContent = 'Error al guardar la configuración: ' + error.message;
+        this.statusText.style.color = 'red';
+      }
+    });
+    
+    actionContainer.appendChild(saveSettingsButton);
     actionContainer.appendChild(startButton);
     actionContainer.appendChild(stopButton);
     
@@ -771,8 +987,8 @@ class MemberInteractionUI {
     body.appendChild(description);
     body.appendChild(memberSelectorLabel);
     body.appendChild(memberSelector);
-    body.appendChild(messageLabel);
-    body.appendChild(messageTextarea);
+    body.appendChild(messagesLabel);
+    body.appendChild(messagesContainer);
     body.appendChild(delayLabel);
     body.appendChild(delayInput);
     body.appendChild(advancedOptionsToggle);

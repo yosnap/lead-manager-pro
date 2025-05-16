@@ -1,5 +1,16 @@
 # Historial de Cambios - Lead Manager Pro
 
+## [1.2.0] - 2025-05-16
+
+### Nuevas funcionalidades
+- **Mensajes personalizados múltiples**: Implementado sistema de acordeón con hasta 5 mensajes personalizables.
+- **Selección aleatoria de mensajes**: Los mensajes se seleccionan aleatoriamente durante las interacciones.
+- **Mejora de la interfaz**: Rediseñada la sección de mensajes para una mejor experiencia de usuario.
+
+### Correcciones
+- Solucionado el error "messageTextarea is not defined" al guardar la configuración.
+- Mejorada la gestión de mensajes en la interacción con miembros.
+
 ## [1.1.0] - 2025-05-10
 
 ### Mejoras

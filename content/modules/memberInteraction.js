@@ -8,7 +8,8 @@ class MemberInteraction {
     this.interactionDelay = 2000; // tiempo de espera entre acciones en ms
     this.stopInteraction = false;
     this.allowStopInteraction = true; // por defecto permitimos detener
-    this.messageToSend = 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!'; // mensaje a enviar
+    this.messageToSend = 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!'; // mensaje a enviar (para compatibilidad)
+    this.messages = [this.messageToSend]; // array de mensajes para selección aleatoria
     this.autoCloseChat = true; // cerrar ventana de chat automáticamente
     this.maxMembersToInteract = 10; // número máximo de miembros para interactuar
     this.currentGroupInfo = null; // información del grupo actual
@@ -271,7 +272,16 @@ class MemberInteraction {
       if (result && result.leadManagerGroupSettings) {
         const settings = result.leadManagerGroupSettings;
         
-        this.messageToSend = settings.messageToSend || this.messageToSend;
+        // Cargar mensajes (si hay un array de mensajes, usarlo; si no, usar el mensaje único)
+        if (settings.messages && Array.isArray(settings.messages) && settings.messages.length > 0) {
+          this.messages = settings.messages;
+          // Mantener messageToSend para compatibilidad
+          this.messageToSend = settings.messages[0];
+        } else if (settings.messageToSend) {
+          this.messageToSend = settings.messageToSend;
+          this.messages = [this.messageToSend];
+        }
+        
         this.autoCloseChat = settings.autoCloseChat !== undefined ? settings.autoCloseChat : this.autoCloseChat;
         this.interactionDelay = settings.interactionDelay || this.interactionDelay;
         this.maxMembersToInteract = settings.membersToInteract || this.maxMembersToInteract;
@@ -1048,15 +1058,25 @@ class MemberInteraction {
     try {
       // El messageField ya está disponible, no necesitamos hacer clic y esperar
       
+      // Seleccionar un mensaje aleatorio si hay múltiples mensajes disponibles
+      let messageToSend = this.messageToSend; // Por defecto, usar el mensaje principal
+      
+      if (this.messages && this.messages.length > 1) {
+        // Seleccionar un mensaje aleatorio del array
+        const randomIndex = Math.floor(Math.random() * this.messages.length);
+        messageToSend = this.messages[randomIndex];
+        console.log(`Seleccionado mensaje aleatorio ${randomIndex + 1} de ${this.messages.length}:`, messageToSend);
+      }
+      
       // Insertar el mensaje con el formato HTML correcto
-      messageField.innerHTML = `<p class="xat24cr xdj266r xdpxx8g" dir="ltr"><span data-lexical-text="true">${this.messageToSend}</span></p>`;
+      messageField.innerHTML = `<p class="xat24cr xdj266r xdpxx8g" dir="ltr"><span data-lexical-text="true">${messageToSend}</span></p>`;
       
       // Disparar evento de input para que Facebook detecte el cambio
       messageField.dispatchEvent(new InputEvent('input', {
         bubbles: true,
         cancelable: true,
         inputType: 'insertText',
-        data: this.messageToSend
+        data: messageToSend
       }));
 
       // Esperar un momento para que Facebook procese el evento
