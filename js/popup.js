@@ -158,14 +158,17 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isFacebook) {
           // Verificar si estamos en un grupo de Facebook
           if (activeTab.url.includes('facebook.com/groups/')) {
-            // Abrir el popup de interacción en lugar de enviar mensaje al content script
-            chrome.windows.create({
-              url: chrome.runtime.getURL('popup/interaction.html'),
-              type: 'popup',
-              width: 350,
-              height: 500
+            // Ya estamos en un grupo, abrimos la interfaz de interacción
+            chrome.tabs.sendMessage(activeTab.id, {
+              action: 'openInteractionUI'
+            }, function(response) {
+              // Si hay un error o no hay respuesta
+              if (!response || response.error) {
+                console.error('Error al abrir la interfaz de interacción:', response?.error || 'No hay respuesta');
+                showMessage('Error al abrir la interfaz de interacción', 'error');
+              }
+              window.close();
             });
-            window.close();
           } else {
             // Estamos en Facebook pero no en un grupo
             showMessage('La función de interacción solo está disponible en grupos de Facebook', 'error');

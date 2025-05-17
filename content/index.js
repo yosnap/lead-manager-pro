@@ -744,6 +744,26 @@ function setupChromeMessagesListener() {
       }
     }
     
+    // Manejador para abrir la interfaz de interacción con miembros
+    if (message.action === 'openInteractionUI') {
+      console.log('Lead Manager Pro: Recibida solicitud para abrir la interfaz de interacción');
+      
+      if (window.leadManagerPro && window.leadManagerPro.memberInteractionUI) {
+        try {
+          window.leadManagerPro.memberInteractionUI.show();
+          sendResponse({ success: true });
+        } catch (error) {
+          console.error('Error al abrir la interfaz de interacción:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      } else {
+        console.error('MemberInteractionUI no disponible');
+        sendResponse({ success: false, error: 'MemberInteractionUI no disponible' });
+      }
+      
+      return true;
+    }
+    
     if (message.action === 'save_profile_to_crm') {
       if (window.LeadManagerPro.modules.saveProfileToCRM) {
         window.LeadManagerPro.modules.saveProfileToCRM(message.profileData)
