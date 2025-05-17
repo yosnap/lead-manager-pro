@@ -1,5 +1,15 @@
 # Historial de Cambios - Lead Manager Pro
 
+## [1.3.0] - 2025-05-17
+
+### Mejoras
+- **Interacción sin distracciones**: Implementada funcionalidad para ocultar automáticamente el sidebar y la interfaz de interacción durante el proceso de interacción con miembros.
+- **Experiencia de usuario mejorada**: La interfaz de interacción se muestra nuevamente al finalizar el proceso.
+
+### Correcciones
+- Solucionado problema de carga de la extensión debido a referencias a archivos inexistentes.
+- Implementada compatibilidad con versiones anteriores para evitar errores de carga.
+
 ## [1.2.0] - 2025-05-16
 
 ### Nuevas funcionalidades

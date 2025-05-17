@@ -122,6 +122,68 @@ class MemberInteractionUI {
       this.sidebarHidden = true;
     }
   }
+  
+  // Función para cerrar el sidebar flotante
+  closeSidebar() {
+    console.log('MemberInteractionUI: Cerrando sidebar flotante durante la interacción');
+    const sidebarContainer = document.getElementById('snap-lead-manager-container');
+    if (sidebarContainer && sidebarContainer.classList.contains('visible')) {
+      // Guardar el estado actual para poder restaurarlo después
+      localStorage.setItem('snap_lead_manager_sidebar_was_visible', 'true');
+      
+      // Simular clic en el botón de toggle para cerrar el sidebar
+      const toggleButton = document.getElementById('snap-lead-manager-toggle');
+      if (toggleButton) {
+        toggleButton.click();
+      } else {
+        // Si no se encuentra el botón, ocultar directamente
+        sidebarContainer.classList.remove('visible');
+        const toggleBtn = document.getElementById('snap-lead-manager-toggle');
+        if (toggleBtn) {
+          toggleBtn.style.right = '0';
+          toggleBtn.innerHTML = '◄';
+        }
+      }
+    } else {
+      // Si el sidebar ya está cerrado, guardar ese estado
+      localStorage.setItem('snap_lead_manager_sidebar_was_visible', 'false');
+    }
+    
+    // Ocultar también el componente de interacción
+    this.hideInteractionUI();
+  }
+  
+  // Función para reabrir el sidebar flotante
+  openSidebar() {
+    console.log('MemberInteractionUI: Reabriendo sidebar flotante después de la interacción');
+    // Solo reabrir si estaba visible antes de la interacción
+    const wasVisible = localStorage.getItem('snap_lead_manager_sidebar_was_visible') === 'true';
+    
+    if (wasVisible) {
+      const sidebarContainer = document.getElementById('snap-lead-manager-container');
+      if (sidebarContainer && !sidebarContainer.classList.contains('visible')) {
+        // Simular clic en el botón de toggle para abrir el sidebar
+        const toggleButton = document.getElementById('snap-lead-manager-toggle');
+        if (toggleButton) {
+          toggleButton.click();
+        } else {
+          // Si no se encuentra el botón, mostrar directamente
+          sidebarContainer.classList.add('visible');
+          const toggleBtn = document.getElementById('snap-lead-manager-toggle');
+          if (toggleBtn) {
+            toggleBtn.style.right = '320px';
+            toggleBtn.innerHTML = '►';
+          }
+        }
+      }
+    }
+    
+    // Limpiar el estado guardado
+    localStorage.removeItem('snap_lead_manager_sidebar_was_visible');
+    
+    // Mostrar nuevamente el componente de interacción
+    this.showInteractionUI();
+  }
 
   // Modificar init para incluir la verificación del sidebar
   init() {
@@ -249,6 +311,9 @@ class MemberInteractionUI {
         this.statusText.textContent = `Iniciando interacción con ${memberElements.length} miembros...`;
       }
       
+      // Cerrar el sidebar flotante
+      this.closeSidebar();
+      
       // Iniciar la interacción
       this.memberInteraction.init(memberElements, { delay });
       
@@ -260,6 +325,8 @@ class MemberInteractionUI {
             this.startButton.style.backgroundColor = '#4267B2';
             this.startButton.textContent = 'Iniciar Interacción';
           }
+          // Reabrir el sidebar flotante cuando se complete
+          this.openSidebar();
         }
       });
       
@@ -1139,6 +1206,34 @@ class MemberInteractionUI {
     }
   }
   
+  // Ocultar solo el componente de interacción UI
+  hideInteractionUI() {
+    console.log('MemberInteractionUI: Ocultando componente de interacción durante el proceso');
+    const interactionUI = document.querySelector('.lead-manager-interaction-ui');
+    if (interactionUI) {
+      // Guardar el estado actual de visibilidad
+      localStorage.setItem('interaction_ui_was_visible', interactionUI.style.display !== 'none' ? 'true' : 'false');
+      // Ocultar el componente
+      interactionUI.style.display = 'none';
+    }
+  }
+  
+  // Mostrar nuevamente el componente de interacción UI
+  showInteractionUI() {
+    console.log('MemberInteractionUI: Mostrando componente de interacción al finalizar');
+    const wasVisible = localStorage.getItem('interaction_ui_was_visible') !== 'false';
+    
+    if (wasVisible) {
+      const interactionUI = document.querySelector('.lead-manager-interaction-ui');
+      if (interactionUI) {
+        interactionUI.style.display = 'flex';
+      }
+    }
+    
+    // Limpiar el estado guardado
+    localStorage.removeItem('interaction_ui_was_visible');
+  }
+  
   // Iniciar la interacción con miembros
   async startInteraction() {
     if (this.isInteracting) {
@@ -1148,9 +1243,9 @@ class MemberInteractionUI {
     
     this.isInteracting = true;
     
-      // Actualizar UI
-      this.startButton.style.display = 'none';
-      this.stopButton.style.display = 'block';
+    // Actualizar UI
+    this.startButton.style.display = 'none';
+    this.stopButton.style.display = 'block';
     this.statusText.textContent = 'Iniciando interacción con miembros...';
     
     // Limpiar barra de progreso
@@ -1158,6 +1253,9 @@ class MemberInteractionUI {
     if (progressFill) {
       progressFill.style.width = '0%';
     }
+    
+    // Cerrar el sidebar flotante
+    this.closeSidebar();
     
     try {
       // Iniciar la interacción con callback para actualizar progreso
@@ -1205,6 +1303,9 @@ class MemberInteractionUI {
     }
     
     this.isInteracting = false;
+    
+    // Reabrir el sidebar flotante cuando se detiene manualmente
+    this.openSidebar();
   }
   
   // Finalizar la interacción (llamado cuando se completa o se detiene)
@@ -1225,6 +1326,9 @@ class MemberInteractionUI {
 
     // Actualizar el botón de Play
     this.updatePlayButton('admins', false);
+    
+    // Reabrir el sidebar flotante
+    this.openSidebar();
   }
   
   // Actualizar progreso (callback para el proceso de interacción)
