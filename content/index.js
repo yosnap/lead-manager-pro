@@ -764,6 +764,26 @@ function setupChromeMessagesListener() {
       return true;
     }
     
+    // Manejador para actualizar la visibilidad del botón de emergencia
+    if (message.action === 'updateEmergencyButtonVisibility') {
+      console.log('Lead Manager Pro: Recibida solicitud para actualizar visibilidad del botón de emergencia:', message.showEmergencyButton);
+      
+      if (window.leadManagerPro && window.leadManagerPro.emergency) {
+        try {
+          window.leadManagerPro.emergency.updateEmergencyButtonVisibility(message.showEmergencyButton);
+          sendResponse({ success: true });
+        } catch (error) {
+          console.error('Error al actualizar la visibilidad del botón de emergencia:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      } else {
+        console.error('Módulo de emergencia no disponible');
+        sendResponse({ success: false, error: 'Módulo de emergencia no disponible' });
+      }
+      
+      return true;
+    }
+    
     if (message.action === 'save_profile_to_crm') {
       if (window.LeadManagerPro.modules.saveProfileToCRM) {
         window.LeadManagerPro.modules.saveProfileToCRM(message.profileData)

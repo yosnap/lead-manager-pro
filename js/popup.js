@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const searchSaveBtn = document.getElementById('search-save');
   const interactBtn = document.getElementById('interact');
   const reportsBtn = document.getElementById('reports');
+  const optionsBtn = document.getElementById('options');
   const contactBtn = document.getElementById('contact');
   
   // Verificar si estamos en una página de grupo de Facebook
@@ -186,14 +187,22 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
-  // Evento para Informes y estadísticas (en construcción)
+  // Evento para Informes y estadísticas
   if (reportsBtn) {
     reportsBtn.addEventListener('click', function() {
       showMessage('Esta función estará disponible próximamente', 'info');
     });
   }
   
-  // Evento para Contacto y Soporte (en construcción)
+  // Evento para Opciones
+  if (optionsBtn) {
+    optionsBtn.addEventListener('click', function() {
+      // Redirigir a la página de opciones
+      window.location.href = 'options.html';
+    });
+  }
+  
+  // Evento para Contacto y Soporte
   if (contactBtn) {
     contactBtn.addEventListener('click', function() {
       showMessage('Esta función estará disponible próximamente', 'info');

@@ -5,37 +5,73 @@
 
 console.log('Iniciando módulo de emergencia para Lead Manager Pro');
 
+// Variable para controlar la visibilidad del botón
+let emergencyButtonVisible = true;
+
 // Función para mostrar un botón de emergencia
 function showEmergencyButton() {
-  // Verificar si ya existe
-  if (document.getElementById('lmp-emergency-button')) {
-    return;
+  // Verificar la configuración guardada
+  chrome.storage.local.get(['showEmergencyButton'], function(result) {
+    // Por defecto, el botón de emergencia está visible a menos que se haya configurado lo contrario
+    emergencyButtonVisible = result.showEmergencyButton !== undefined ? result.showEmergencyButton : true;
+    
+    // Si el botón no debe mostrarse, salimos
+    if (!emergencyButtonVisible) {
+      console.log('Botón de emergencia desactivado por configuración');
+      removeEmergencyButton();
+      return;
+    }
+    
+    // Verificar si ya existe
+    if (document.getElementById('lmp-emergency-button')) {
+      return;
+    }
+    
+    // Crear botón
+    const button = document.createElement('div');
+    button.id = 'lmp-emergency-button';
+    button.textContent = '🔄 LMP';
+    button.style.cssText = `
+      position: fixed;
+      right: 10px;
+      bottom: 10px;
+      background: #ff5722;
+      color: white;
+      padding: 10px;
+      border-radius: 50%;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 99999;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    `;
+    
+    // Agregar evento
+    button.addEventListener('click', resetExtension);
+    
+    // Agregar al DOM
+    document.body.appendChild(button);
+    console.log('Botón de emergencia agregado');
+  });
+}
+
+// Función para eliminar el botón de emergencia
+function removeEmergencyButton() {
+  const button = document.getElementById('lmp-emergency-button');
+  if (button) {
+    button.remove();
+    console.log('Botón de emergencia eliminado');
   }
+}
+
+// Función para actualizar la visibilidad del botón de emergencia
+function updateEmergencyButtonVisibility(visible) {
+  emergencyButtonVisible = visible;
   
-  // Crear botón
-  const button = document.createElement('div');
-  button.id = 'lmp-emergency-button';
-  button.textContent = '🔄 LMP';
-  button.style.cssText = `
-    position: fixed;
-    right: 10px;
-    bottom: 10px;
-    background: #ff5722;
-    color: white;
-    padding: 10px;
-    border-radius: 50%;
-    font-weight: bold;
-    cursor: pointer;
-    z-index: 99999;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-  `;
-  
-  // Agregar evento
-  button.addEventListener('click', resetExtension);
-  
-  // Agregar al DOM
-  document.body.appendChild(button);
-  console.log('Botón de emergencia agregado');
+  if (visible) {
+    showEmergencyButton();
+  } else {
+    removeEmergencyButton();
+  }
 }
 
 // Función para restablecer la extensión
@@ -141,9 +177,12 @@ function resetExtension() {
 showEmergencyButton();
 
 // Exportar funciones
-window.leadManagerProEmergency = {
-  reset: resetExtension,
-  showButton: showEmergencyButton
+window.leadManagerPro = window.leadManagerPro || {};
+window.leadManagerPro.emergency = {
+  showEmergencyButton,
+  removeEmergencyButton,
+  updateEmergencyButtonVisibility,
+  resetExtension
 };
 
 console.log('Módulo de emergencia cargado correctamente');
