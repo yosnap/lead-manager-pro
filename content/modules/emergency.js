@@ -29,7 +29,7 @@ function showEmergencyButton() {
     button.style.cssText = `
       position: fixed;
       right: 10px;
-      bottom: 10px;
+      bottom: 70px;
       background: #ff5722;
       color: white;
       padding: 10px;
