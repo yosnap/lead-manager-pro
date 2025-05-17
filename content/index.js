@@ -12,116 +12,9 @@ window.LeadManagerPro.state = window.LeadManagerPro.state || {};
 window.LeadManagerPro.utils = window.LeadManagerPro.utils || {};
 window.LeadManagerPro.modules = window.LeadManagerPro.modules || {};
 
-// Función global para iniciar una búsqueda directamente sin recargar
-window.LeadManagerPro.startSearch = function(searchData) {
-  console.log('Lead Manager Pro: Iniciando búsqueda directamente con datos:', searchData);
-  
-  // Guardar datos de búsqueda en localStorage
-  if (searchData) {
-    localStorage.setItem('snap_lead_manager_search_data', JSON.stringify(searchData));
-    localStorage.setItem('snap_lead_manager_search_active', 'true');
-  }
-  
-  // Verificar si necesitamos navegar primero a la URL de búsqueda
-  let needsNavigation = false;
-  let searchUrl = '';
-  
-  if (searchData && searchData.type) {
-    if (searchData.type === 'people') {
-      searchUrl = `https://www.facebook.com/search/people/?q=${encodeURIComponent(searchData.term || '')}`;
-      needsNavigation = !window.location.href.includes('/search/people');
-    } else if (searchData.type === 'groups') {
-      searchUrl = `https://www.facebook.com/search/groups/?q=${encodeURIComponent(searchData.term || '')}`;
-      needsNavigation = !window.location.href.includes('/search/groups');
-    }
-  }
-  
-  // Si necesitamos navegar, guardamos el estado y cambiamos la URL
-  if (needsNavigation && searchUrl) {
-    console.log('Lead Manager Pro: Navegando a la URL de búsqueda adecuada:', searchUrl);
-    localStorage.setItem('snap_lead_manager_start_search_on_load', 'true');
-    window.location.href = searchUrl;
-    return;
-  }
-  
-  // Si ya estamos en la página correcta, iniciamos la búsqueda directamente
-  console.log('Lead Manager Pro: Estamos en la página correcta, iniciando búsqueda');
-  
-  try {
-    // Iniciar búsqueda según el tipo
-    if (searchData && searchData.type === 'groups') {
-      if (window.LeadManagerPro.modules.groupFinder) {
-        // Inicializar el groupFinder con las opciones
-        window.LeadManagerPro.modules.groupFinder.init({
-          publicGroups: searchData.groupOptions?.publicGroups !== false,
-          privateGroups: searchData.groupOptions?.privateGroups !== false,
-          minUsers: searchData.groupOptions?.minUsers || 0,
-          minPostsYear: searchData.groupOptions?.minPostsYear || '',
-          minPostsMonth: searchData.groupOptions?.minPostsMonth || '',
-          minPostsDay: searchData.groupOptions?.minPostsDay || ''
-        }).then(() => {
-          // Configurar maxScrolls y scrollDelay si se proporcionan
-          if (searchData.maxScrolls) {
-            window.LeadManagerPro.modules.groupFinder.maxScrolls = parseInt(searchData.maxScrolls);
-          }
-          if (searchData.scrollDelay) {
-            window.LeadManagerPro.modules.groupFinder.scrollTimeout = parseFloat(searchData.scrollDelay) * 1000;
-          }
-          
-          // Iniciar búsqueda
-          window.LeadManagerPro.modules.groupFinder.startSearch();
-        });
-      } else {
-        console.error('Lead Manager Pro: Módulo groupFinder no disponible');
-      }
-    } else if (searchData && searchData.type === 'people') {
-      if (window.LeadManagerPro.modules.profileFinder) {
-        // Iniciar búsqueda de personas
-        window.LeadManagerPro.modules.profileFinder.startSearch();
-      } else {
-        console.error('Lead Manager Pro: Módulo profileFinder no disponible');
-      }
-    }
-  } catch (error) {
-    console.error('Lead Manager Pro: Error al iniciar búsqueda:', error);
-  }
-};
-
 // Inicialización del script de contenido
 async function initContentScript() {
   console.log('Lead Manager Pro: Script de contenido inicializado');
-  
-  // Verificar si hay una búsqueda pendiente para iniciar
-  const shouldStartSearch = localStorage.getItem('snap_lead_manager_start_search_on_load') === 'true' || 
-                           localStorage.getItem('snap_lead_manager_start_search_now') === 'true';
-  
-  if (shouldStartSearch) {
-    console.log('Lead Manager Pro: Detectada búsqueda pendiente para iniciar automáticamente');
-    
-    // Limpiar flags para evitar bucles
-    localStorage.removeItem('snap_lead_manager_start_search_on_load');
-    localStorage.removeItem('snap_lead_manager_start_search_now');
-    
-    try {
-      // Obtener datos de búsqueda guardados
-      const searchDataStr = localStorage.getItem('snap_lead_manager_search_data');
-      if (searchDataStr) {
-        const searchData = JSON.parse(searchDataStr);
-        console.log('Lead Manager Pro: Iniciando búsqueda con datos:', searchData);
-        
-        // Pequeño retraso para asegurar que la página está lista
-        setTimeout(() => {
-          if (window.LeadManagerPro.startSearch) {
-            window.LeadManagerPro.startSearch(searchData);
-          } else {
-            console.warn('Lead Manager Pro: Función startSearch no disponible');
-          }
-        }, 1500);
-      }
-    } catch (error) {
-      console.error('Lead Manager Pro: Error al procesar búsqueda pendiente:', error);
-    }
-  }
   
   // Comprobar si estamos en un perfil que se estaba extrayendo
   const isExtractingProfile = localStorage.getItem('snap_lead_manager_is_extracting_profile') === 'true';
@@ -280,57 +173,7 @@ async function initContentScript() {
         await window.leadManagerPro.groupMemberUI.countMembers();
       });
       
-      // Botón para interactuar con miembros
-      const extractMembersButton = document.createElement('button');
-      extractMembersButton.id = 'lead-manager-member-extractor-button';
-      extractMembersButton.className = 'lead-manager-floating-button';
-      extractMembersButton.innerHTML = '<span style="font-size: 16px;">👥</span><span style="font-size: 14px; margin-left: 2px;">💬</span>';
-      extractMembersButton.title = 'Interactuar con los miembros';
-      extractMembersButton.style.cssText = `
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        background-color: #4267B2;
-        color: white;
-        font-size: 24px;
-        border: none;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: transform 0.2s, background-color 0.2s;
-      `;
-      
-      // Agregar estilos de hover
-      extractMembersButton.addEventListener('mouseover', () => {
-        extractMembersButton.style.transform = 'scale(1.05)';
-        extractMembersButton.style.backgroundColor = '#365899';
-      });
-      
-      extractMembersButton.addEventListener('mouseout', () => {
-        extractMembersButton.style.transform = 'scale(1)';
-        extractMembersButton.style.backgroundColor = '#4267B2';
-      });
-      
-      // Agregar evento de clic para mostrar la interfaz de interacción con miembros
-      extractMembersButton.addEventListener('click', () => {
-        // Mostrar un pequeño feedback visual al hacer clic
-        extractMembersButton.style.transform = 'scale(0.95)';
-        setTimeout(() => {
-          extractMembersButton.style.transform = 'scale(1)';
-        }, 200);
-        
-        // En lugar de mostrar la interfaz de extracción, mostrar la interfaz de interacción
-        if (window.leadManagerPro.memberInteractionUI) {
-          window.leadManagerPro.memberInteractionUI.show();
-        } else {
-          console.error('La interfaz de interacción con miembros no está disponible');
-          
-          // Mensaje de alerta si la interfaz no está disponible
-          alert('La interfaz de interacción con miembros no está disponible en este momento.');
-        }
-      });
+      // Nota: Se ha eliminado el botón 'lead-manager-member-extractor-button' por redundancia
       
       // Botón para interactuar con miembros (hover y mensajes)
       const interactMembersButton = document.createElement('button');
@@ -521,38 +364,6 @@ function setupChromeMessagesListener() {
       sendResponse({ success: true, message: 'Acción de restablecimiento iniciada' });
       return true;
     }
-    
-    // Manejador para abrir el sidebar (desde popup.js)
-    if (message.action === 'openSidebar') {
-      console.log('Lead Manager Pro: Recibida solicitud para abrir el sidebar');
-      
-      // Verificar si el sidebar existe
-      const sidebarContainer = document.getElementById('snap-lead-manager-container');
-      if (sidebarContainer) {
-        // Mostrar el sidebar existente
-        sidebarContainer.classList.add('visible');
-        const toggleButton = document.getElementById('snap-lead-manager-toggle');
-        if (toggleButton) {
-          toggleButton.innerHTML = '►';
-          toggleButton.style.right = '320px';
-          toggleButton.setAttribute('title', 'Ocultar Lead Manager');
-        }
-        localStorage.setItem('snap_lead_manager_sidebar_hidden', 'false');
-      } else {
-        // Si no existe el sidebar, crearlo
-        if (window.LeadManagerPro && window.LeadManagerPro.modules && window.LeadManagerPro.modules.insertSidebar) {
-          window.LeadManagerPro.modules.insertSidebar();
-        } else {
-          console.error('No se puede abrir el sidebar: módulos no disponibles');
-          sendResponse({ success: false, error: 'Módulos del sidebar no disponibles' });
-          return true;
-        }
-      }
-      
-      sendResponse({ success: true });
-      return true;
-    }
-    
     console.log('Lead Manager Pro: Mensaje recibido desde background', message);
     
     if (message.action === 'apply_city_filter') {

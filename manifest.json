@@ -1,12 +1,13 @@
 {
   "name": "Lead Manager Pro",
-  "version": "1.0",
+  "version": "1.1.0",
   "description": "Herramienta para buscar y gestionar leads en Facebook",
   "manifest_version": 3,
   "permissions": [
     "activeTab",
     "storage",
-    "scripting"
+    "scripting",
+    "windows"
   ],
   "host_permissions": [
     "https://*.facebook.com/*"
@@ -21,19 +22,10 @@
     "default_title": "Lead Manager Pro"
   },
   "background": {
-    "service_worker": "js/background.js"
+    "service_worker": "js/background.js",
+    "type": "module"
   },
   "content_scripts": [
-    {
-      "matches": ["https://*.facebook.com/*"],
-      "js": [
-        "content/modules/storageHelper.js",
-        "content/modules/reloadFix.js",
-        "content/modules/cityFieldFixer.js",
-        "content/modules/groupFinderFix.js"
-      ],
-      "run_at": "document_start"
-    },
     {
       "matches": ["https://*.facebook.com/*"],
       "js": [
@@ -56,10 +48,10 @@
         "content/modules/groupSearchOptions.js",
         "content/modules/groupSearchOptionsUI.js",
         "content/modules/memberInteraction.js",
+        "content/modules/messagesAccordionComplete.js",
         "content/modules/memberInteractionUI.js",
         "content/modules/n8nIntegration.js",
         "content/modules/n8nIntegrationUI.js",
-        "content/modules/pageReloader/pageReloader.js",
         "content/modules/sidebar.js",
         "content/modules/errorHandler.js",
         "content/modules/emergency.js",
@@ -77,11 +69,7 @@
         "icons/*", 
         "content/modules/n8nIntegration.js",
         "content/modules/n8nIntegrationUI.js",
-        "content/modules/pageReloader/pageReloader.js",
-        "content/modules/reloadFix.js",
-        "content/modules/storageHelper.js",
-        "content/modules/cityFieldFixer.js",
-        "content/modules/groupFinderFix.js"
+        "popup/interaction.html"
       ],
       "matches": ["https://*.facebook.com/*"]
     }
