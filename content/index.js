@@ -112,7 +112,7 @@ async function initContentScript() {
       floatingButtonsContainer.id = 'lead-manager-floating-buttons-container';
       floatingButtonsContainer.style.cssText = `
         position: fixed;
-        bottom: 20px;
+        bottom: 80px;
         right: 20px;
         display: flex;
         flex-direction: column;
