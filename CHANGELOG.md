@@ -5,6 +5,7 @@
 ### Mejoras
 - **Interacción sin distracciones**: Implementada funcionalidad para ocultar automáticamente el sidebar y la interfaz de interacción durante el proceso de interacción con miembros.
 - **Experiencia de usuario mejorada**: La interfaz de interacción se muestra nuevamente al finalizar el proceso.
+- **Interfaz simplificada**: Eliminado botón redundante de interacción con miembros para una interfaz más limpia.
 
 ### Correcciones
 - Solucionado problema de carga de la extensión debido a referencias a archivos inexistentes.

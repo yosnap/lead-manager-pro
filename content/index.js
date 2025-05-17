@@ -173,57 +173,7 @@ async function initContentScript() {
         await window.leadManagerPro.groupMemberUI.countMembers();
       });
       
-      // Botón para interactuar con miembros
-      const extractMembersButton = document.createElement('button');
-      extractMembersButton.id = 'lead-manager-member-extractor-button';
-      extractMembersButton.className = 'lead-manager-floating-button';
-      extractMembersButton.innerHTML = '<span style="font-size: 16px;">👥</span><span style="font-size: 14px; margin-left: 2px;">💬</span>';
-      extractMembersButton.title = 'Interactuar con los miembros';
-      extractMembersButton.style.cssText = `
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        background-color: #4267B2;
-        color: white;
-        font-size: 24px;
-        border: none;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: transform 0.2s, background-color 0.2s;
-      `;
-      
-      // Agregar estilos de hover
-      extractMembersButton.addEventListener('mouseover', () => {
-        extractMembersButton.style.transform = 'scale(1.05)';
-        extractMembersButton.style.backgroundColor = '#365899';
-      });
-      
-      extractMembersButton.addEventListener('mouseout', () => {
-        extractMembersButton.style.transform = 'scale(1)';
-        extractMembersButton.style.backgroundColor = '#4267B2';
-      });
-      
-      // Agregar evento de clic para mostrar la interfaz de interacción con miembros
-      extractMembersButton.addEventListener('click', () => {
-        // Mostrar un pequeño feedback visual al hacer clic
-        extractMembersButton.style.transform = 'scale(0.95)';
-        setTimeout(() => {
-          extractMembersButton.style.transform = 'scale(1)';
-        }, 200);
-        
-        // En lugar de mostrar la interfaz de extracción, mostrar la interfaz de interacción
-        if (window.leadManagerPro.memberInteractionUI) {
-          window.leadManagerPro.memberInteractionUI.show();
-        } else {
-          console.error('La interfaz de interacción con miembros no está disponible');
-          
-          // Mensaje de alerta si la interfaz no está disponible
-          alert('La interfaz de interacción con miembros no está disponible en este momento.');
-        }
-      });
+      // Nota: Se ha eliminado el botón 'lead-manager-member-extractor-button' por redundancia
       
       // Botón para interactuar con miembros (hover y mensajes)
       const interactMembersButton = document.createElement('button');
