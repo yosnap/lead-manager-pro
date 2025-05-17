@@ -226,7 +226,7 @@ async function initContentScript() {
       
       // Agregar botones al contenedor
       floatingButtonsContainer.appendChild(countMembersButton);
-      floatingButtonsContainer.appendChild(extractMembersButton);
+      // Nota: extractMembersButton fue eliminado por redundancia
       floatingButtonsContainer.appendChild(interactMembersButton);
       
       // Agregar contenedor al cuerpo del documento
