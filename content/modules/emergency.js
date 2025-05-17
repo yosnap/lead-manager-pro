@@ -12,30 +12,41 @@ function showEmergencyButton() {
     return;
   }
   
-  // Crear botón
-  const button = document.createElement('div');
-  button.id = 'lmp-emergency-button';
-  button.textContent = '🔄 LMP';
-  button.style.cssText = `
-    position: fixed;
-    right: 10px;
-    bottom: 10px;
-    background: #ff5722;
-    color: white;
-    padding: 10px;
-    border-radius: 50%;
-    font-weight: bold;
-    cursor: pointer;
-    z-index: 99999;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-  `;
-  
-  // Agregar evento
-  button.addEventListener('click', resetExtension);
-  
-  // Agregar al DOM
-  document.body.appendChild(button);
-  console.log('Botón de emergencia agregado');
+  // Verificar si el botón de emergencia está habilitado en los ajustes
+  chrome.storage.local.get(['lmpSettings'], function(result) {
+    const settings = result.lmpSettings || { showEmergencyButton: true };
+    
+    // Solo mostrar el botón si está habilitado en los ajustes
+    if (!settings.showEmergencyButton) {
+      console.log('Botón de emergencia deshabilitado en ajustes');
+      return;
+    }
+    
+    // Crear botón
+    const button = document.createElement('div');
+    button.id = 'lmp-emergency-button';
+    button.textContent = '🔄 LMP';
+    button.style.cssText = `
+      position: fixed;
+      right: 10px;
+      bottom: 10px;
+      background: #ff5722;
+      color: white;
+      padding: 10px;
+      border-radius: 50%;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 99999;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    `;
+    
+    // Agregar evento
+    button.addEventListener('click', resetExtension);
+    
+    // Agregar al DOM
+    document.body.appendChild(button);
+    console.log('Botón de emergencia agregado');
+  });
 }
 
 // Función para restablecer la extensión
@@ -136,6 +147,30 @@ function resetExtension() {
     alert('Error al restablecer Lead Manager Pro. Intenta recargar la página manualmente.');
   }
 }
+
+// Listener para actualizar la configuración cuando cambie
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+  if (request.action === 'updateSettings') {
+    console.log('Actualizando configuración del botón de emergencia:', request.settings);
+    
+    // Si el botón de emergencia está deshabilitado, eliminarlo si existe
+    if (!request.settings.showEmergencyButton) {
+      const emergencyButton = document.getElementById('lmp-emergency-button');
+      if (emergencyButton) {
+        emergencyButton.remove();
+        console.log('Botón de emergencia eliminado');
+      }
+    } else {
+      // Si está habilitado y no existe, mostrarlo
+      if (!document.getElementById('lmp-emergency-button')) {
+        showEmergencyButton();
+      }
+    }
+    
+    sendResponse({ success: true });
+    return true;
+  }
+});
 
 // Auto-iniciar
 showEmergencyButton();

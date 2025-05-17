@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const searchSaveBtn = document.getElementById('search-save');
   const interactBtn = document.getElementById('interact');
   const reportsBtn = document.getElementById('reports');
+  const settingsBtn = document.getElementById('settings');
   const contactBtn = document.getElementById('contact');
   
   // Verificar si estamos en una página de grupo de Facebook
@@ -98,6 +99,13 @@ document.addEventListener('DOMContentLoaded', function() {
           showMessage('Esta extensión solo funciona en Facebook', 'error');
         }
       });
+    });
+  }
+  
+  // Evento para Ajustes de la extensión
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', function() {
+      window.location.href = 'settings.html';
     });
   }
   

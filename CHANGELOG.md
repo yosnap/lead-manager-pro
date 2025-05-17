@@ -1,5 +1,11 @@
 # Historial de Cambios - Lead Manager Pro
 
+## [1.4.0] - 2025-05-17
+
+### Nuevas funcionalidades
+- **Panel de ajustes**: Implementada nueva sección de ajustes en el popup principal de la extensión.
+- **Botón de emergencia configurable**: Ahora el botón de emergencia solo se muestra si está habilitado en los ajustes.
+
 ## [1.3.0] - 2025-05-17
 
 ### Mejoras
