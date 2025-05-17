@@ -464,6 +464,17 @@ class MemberInteractionUI {
       console.log('Tipo seleccionado:', selectedType);
       console.log('Selector completo:', this.selectors.sections[selectedType]?.container);
       
+      // Habilitar o deshabilitar el botón de inicio según si hay un tipo seleccionado
+      if (selectedType && this.startButton) {
+        this.startButton.disabled = false;
+        this.startButton.style.cursor = 'pointer';
+        this.startButton.style.opacity = '1';
+      } else if (this.startButton) {
+        this.startButton.disabled = true;
+        this.startButton.style.cursor = 'not-allowed';
+        this.startButton.style.opacity = '0.7';
+      }
+      
       try {
         if (!this.isInPeopleSection()) {
           await this.navigateToPeopleSection();
@@ -487,6 +498,13 @@ class MemberInteractionUI {
     // Valor 'newMembers' => 'Nuevos miembros del grupo'
     // Valor 'admins' => 'Administradores y moderadores'
     
+    // Opción placeholder
+    const placeholderOption = document.createElement('option');
+    placeholderOption.value = '';
+    placeholderOption.textContent = '-- Selecciona un tipo de miembros --';
+    placeholderOption.selected = true;
+    placeholderOption.disabled = true;
+    
     const commonMembersOption = document.createElement('option');
     commonMembersOption.value = 'common';
     commonMembersOption.textContent = 'Miembros con cosas en común';
@@ -500,6 +518,7 @@ class MemberInteractionUI {
     adminMembersOption.textContent = 'Administradores y moderadores';
     
     // Agregamos las opciones al selector en orden de mayor utilidad
+    memberSelector.appendChild(placeholderOption);
     memberSelector.appendChild(commonMembersOption);
     memberSelector.appendChild(newMembersOption);
     memberSelector.appendChild(adminMembersOption);
@@ -700,6 +719,7 @@ class MemberInteractionUI {
     const startButton = document.createElement('button');
     startButton.textContent = 'Iniciar Interacción';
     startButton.className = 'lead-manager-button primary';
+    startButton.disabled = true; // Deshabilitado por defecto hasta que se seleccione un tipo de miembros
     startButton.style.cssText = `
       flex: 1;
       padding: 8px 16px;
@@ -707,7 +727,8 @@ class MemberInteractionUI {
       color: white;
       border: none;
       border-radius: 4px;
-      cursor: pointer;
+      cursor: not-allowed;
+      opacity: 0.7;
       font-weight: bold;
     `;
     this.startButton = startButton;
