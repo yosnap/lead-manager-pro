@@ -92,6 +92,16 @@ async function initContentScript() {
     if (window.leadManagerPro.memberInteractionUI) {
       window.leadManagerPro.memberInteractionUI.init();
     }
+    
+    // Inicializar el sidebar de interacción con miembros
+    if (window.leadManagerPro.memberInteractionSidebar) {
+      window.leadManagerPro.memberInteractionSidebar.init();
+    }
+    
+    // Inicializar el controlador de interacción de grupos
+    if (window.leadManagerPro.groupInteractionController) {
+      window.leadManagerPro.groupInteractionController.init();
+    }
   }
   
   // Comprobar si estamos en una página de grupo para activar el extractor de miembros
@@ -216,23 +226,25 @@ async function initContentScript() {
           interactMembersButton.style.transform = 'scale(1)';
         }, 200);
         
-        // Inicializar la interfaz si no está inicializada
-        if (window.leadManagerPro.memberInteractionUI) {
+        // Mostrar el sidebar de interacción en vez de la interfaz flotante
+        if (window.leadManagerPro.memberInteractionSidebar) {
+          window.leadManagerPro.memberInteractionSidebar.show();
+        } else if (window.leadManagerPro.memberInteractionUI) {
+          // Como fallback, usar la antigua interfaz si existe
           window.leadManagerPro.memberInteractionUI.show();
         } else {
-          console.error('MemberInteractionUI no disponible');
+          console.error('Ninguna interfaz de interacción está disponible');
         }
       });
       
       // Agregar botones al contenedor
       floatingButtonsContainer.appendChild(countMembersButton);
-      floatingButtonsContainer.appendChild(extractMembersButton);
       floatingButtonsContainer.appendChild(interactMembersButton);
       
       // Agregar contenedor al cuerpo del documento
       document.body.appendChild(floatingButtonsContainer);
       
-      console.log('Lead Manager Pro: Botón de extracción de miembros agregado');
+      console.log('Lead Manager Pro: Botones flotantes agregados');
     } else {
       console.log('Lead Manager Pro: Módulos de extracción de miembros no disponibles');
     }

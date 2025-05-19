@@ -50,6 +50,8 @@
         "content/modules/memberInteraction.js",
         "content/modules/messagesAccordionComplete.js",
         "content/modules/memberInteractionUI.js",
+        "content/modules/memberInteractionSidebar/memberInteractionSidebar.js",
+        "content/modules/memberInteractionSidebar/groupInteractionController.js",
         "content/modules/n8nIntegration.js",
         "content/modules/n8nIntegrationUI.js",
         "content/modules/sidebar.js",

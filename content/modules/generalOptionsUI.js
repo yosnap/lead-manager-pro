@@ -25,9 +25,9 @@ class GeneralOptionsUI {
     // Obtener las opciones actuales
     const options = this.generalOptions.getAllOptions();
     
-    // Crear campo para maxScrolls
+    // Crear campo para maxScrollsToShowResults
     const maxScrollsLabel = document.createElement('label');
-    maxScrollsLabel.textContent = 'Scrolls máximos:';
+    maxScrollsLabel.textContent = 'Scrolls máximos para mostrar resultados:';
     maxScrollsLabel.style.display = 'block';
     maxScrollsLabel.style.marginBottom = '4px';
     maxScrollsLabel.style.fontWeight = 'normal';
@@ -35,33 +35,16 @@ class GeneralOptionsUI {
     const maxScrollsInput = document.createElement('input');
     maxScrollsInput.type = 'number';
     maxScrollsInput.min = '1';
-    maxScrollsInput.value = options.maxScrolls;
+    maxScrollsInput.value = options.maxScrollsToShowResults || options.maxScrolls;
     maxScrollsInput.style.width = '100%';
     maxScrollsInput.style.padding = '6px';
     maxScrollsInput.style.marginBottom = '12px';
     maxScrollsInput.style.borderRadius = '4px';
     maxScrollsInput.style.border = '1px solid #CED0D4';
     
-    // Crear campo para maxResultsPerScroll
-    const maxResultsLabel = document.createElement('label');
-    maxResultsLabel.textContent = 'Resultados máximos a mostrar:';
-    maxResultsLabel.style.display = 'block';
-    maxResultsLabel.style.marginBottom = '4px';
-    maxResultsLabel.style.fontWeight = 'normal';
-    
-    const maxResultsInput = document.createElement('input');
-    maxResultsInput.type = 'number';
-    maxResultsInput.min = '1';
-    maxResultsInput.value = options.maxResultsPerScroll;
-    maxResultsInput.style.width = '100%';
-    maxResultsInput.style.padding = '6px';
-    maxResultsInput.style.marginBottom = '12px';
-    maxResultsInput.style.borderRadius = '4px';
-    maxResultsInput.style.border = '1px solid #CED0D4';
-    
-    // Crear campo para scrollDelay
+    // Crear campo para waitTimeBetweenScrolls
     const scrollDelayLabel = document.createElement('label');
-    scrollDelayLabel.textContent = 'Tiempo entre scrolls (segundos):';
+    scrollDelayLabel.textContent = 'Tiempo de espera entre scroll (segundos):';
     scrollDelayLabel.style.display = 'block';
     scrollDelayLabel.style.marginBottom = '4px';
     scrollDelayLabel.style.fontWeight = 'normal';
@@ -70,7 +53,7 @@ class GeneralOptionsUI {
     scrollDelayInput.type = 'number';
     scrollDelayInput.min = '1';
     scrollDelayInput.step = '0.5';
-    scrollDelayInput.value = options.scrollDelay;
+    scrollDelayInput.value = options.waitTimeBetweenScrolls || options.scrollDelay;
     scrollDelayInput.style.width = '100%';
     scrollDelayInput.style.padding = '6px';
     scrollDelayInput.style.marginBottom = '12px';
@@ -96,16 +79,10 @@ class GeneralOptionsUI {
     saveButton.addEventListener('click', () => {
       // Obtener y validar valores
       const maxScrolls = parseInt(maxScrollsInput.value);
-      const maxResults = parseInt(maxResultsInput.value);
       const scrollDelay = parseFloat(scrollDelayInput.value);
       
       if (isNaN(maxScrolls) || maxScrolls < 1) {
         alert('Por favor, ingrese un número válido para Scrolls máximos');
-        return;
-      }
-      
-      if (isNaN(maxResults) || maxResults < 1) {
-        alert('Por favor, ingrese un número válido para Resultados máximos');
         return;
       }
       
@@ -116,9 +93,8 @@ class GeneralOptionsUI {
       
       // Guardar opciones
       const success = this.generalOptions.saveOptions({
-        maxScrolls: maxScrolls,
-        maxResultsPerScroll: maxResults,
-        scrollDelay: scrollDelay
+        maxScrollsToShowResults: maxScrolls,
+        waitTimeBetweenScrolls: scrollDelay
       });
       
       if (success) {
@@ -147,8 +123,6 @@ class GeneralOptionsUI {
     // Ensamblar el formulario
     formContainer.appendChild(maxScrollsLabel);
     formContainer.appendChild(maxScrollsInput);
-    formContainer.appendChild(maxResultsLabel);
-    formContainer.appendChild(maxResultsInput);
     formContainer.appendChild(scrollDelayLabel);
     formContainer.appendChild(scrollDelayInput);
     formContainer.appendChild(saveButton);

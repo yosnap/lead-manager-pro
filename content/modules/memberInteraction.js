@@ -43,16 +43,28 @@ class MemberInteraction {
     this.stopInteraction = false;
     this.currentMemberIndex = 0;
 
-    // Determinar cuántos miembros procesar
-    const membersToProcess = Math.min(this.members.length, this.maxMembersToInteract);
-    console.log(`MemberInteraction: Iniciando interacción con ${membersToProcess} miembros de un total de ${this.members.length}`);
-    
     // Obtener las últimas configuraciones desde Extension Storage
     await this.loadConfigFromStorage();
+    
+    // Asegurarse de que maxMembersToInteract sea un número válido
+    if (typeof this.maxMembersToInteract !== 'number' || isNaN(this.maxMembersToInteract) || this.maxMembersToInteract < 1) {
+      console.warn('MemberInteraction: maxMembersToInteract inválido, estableciendo valor por defecto a 10');
+      this.maxMembersToInteract = 10;
+    }
+    
+    // Determinar cuántos miembros procesar - asegurando que no exceda el máximo configurado
+    const membersToProcess = Math.min(this.members.length, this.maxMembersToInteract);
+    console.log(`MemberInteraction: Iniciando interacción con ${membersToProcess} miembros de un total de ${this.members.length} (límite máximo: ${this.maxMembersToInteract})`);
     
     let processedMembers = 0;
     
     for (let i = 0; i < membersToProcess; i++) {
+      // Verificar si se ha alcanzado el límite máximo de miembros
+      if (processedMembers >= this.maxMembersToInteract) {
+        console.log(`MemberInteraction: Se alcanzó el límite máximo de ${this.maxMembersToInteract} miembros`);
+        break;
+      }
+      
       if (this.stopInteraction && this.allowStopInteraction) {
         console.log('MemberInteraction: Interacción detenida por el usuario');
         break;
@@ -62,7 +74,7 @@ class MemberInteraction {
       const memberName = this.extractMemberName(member);
       
       try {
-        console.log(`Procesando miembro ${i+1}/${membersToProcess}: ${memberName}`);
+        console.log(`Procesando miembro ${i+1}/${membersToProcess}: ${memberName} (procesados hasta ahora: ${processedMembers}, límite máximo: ${this.maxMembersToInteract})`);
         
         // Notificar progreso
         if (callback) {
@@ -253,7 +265,9 @@ class MemberInteraction {
       callback({
         type: 'complete',
         processedMembers,
-        totalMembers: membersToProcess
+        totalMembers: membersToProcess,
+        maxMembersLimit: this.maxMembersToInteract,
+        limitReached: processedMembers >= this.maxMembersToInteract
       });
     }
     
@@ -272,6 +286,8 @@ class MemberInteraction {
       if (result && result.leadManagerGroupSettings) {
         const settings = result.leadManagerGroupSettings;
         
+        console.log('MemberInteraction: Cargando configuración:', settings);
+        
         // Cargar mensajes (si hay un array de mensajes, usarlo; si no, usar el mensaje único)
         if (settings.messages && Array.isArray(settings.messages) && settings.messages.length > 0) {
           this.messages = settings.messages;
@@ -282,9 +298,17 @@ class MemberInteraction {
           this.messages = [this.messageToSend];
         }
         
+        // Configuración del límite máximo de miembros
+        if (typeof settings.membersToInteract === 'number' && !isNaN(settings.membersToInteract)) {
+          this.maxMembersToInteract = settings.membersToInteract;
+          console.log(`MemberInteraction: Límite máximo de miembros establecido a ${this.maxMembersToInteract}`);
+        } else {
+          console.warn(`MemberInteraction: Valor no válido para membersToInteract en la configuración: ${settings.membersToInteract}, usando valor por defecto: 10`);
+          this.maxMembersToInteract = 10;
+        }
+        
         this.autoCloseChat = settings.autoCloseChat !== undefined ? settings.autoCloseChat : this.autoCloseChat;
         this.interactionDelay = settings.interactionDelay || this.interactionDelay;
-        this.maxMembersToInteract = settings.membersToInteract || this.maxMembersToInteract;
         
         // Verificar si la interacción proviene del popup
         if (settings.sourceType === "popup") {
