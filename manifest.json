@@ -47,17 +47,30 @@
         "content/modules/displayOptionsUI.js",
         "content/modules/groupSearchOptions.js",
         "content/modules/groupSearchOptionsUI.js",
+        "content/modules/interactionHistory.js",
         "content/modules/memberInteraction.js",
         "content/modules/messagesAccordionComplete.js",
         "content/modules/memberInteractionUI.js",
         "content/modules/memberInteractionSidebar/memberInteractionSidebar.js",
+        "content/modules/memberInteractionSidebar/memberInteractionSidebarUI.js",
         "content/modules/memberInteractionSidebar/groupInteractionController.js",
+        "content/modules/memberInteractionExtension.js",
+        "content/modules/randomMessageSender.js",
+        "content/modules/buttonStateCorrector.js",
+        "content/modules/historyManager.js",
         "content/modules/n8nIntegration.js",
         "content/modules/n8nIntegrationUI.js",
         "content/modules/sidebar.js",
+        "content/modules/sidebarEnsurer.js",
         "content/modules/errorHandler.js",
         "content/modules/emergency.js",
         "content/index.js"
+      ],
+      "css": [
+        "css/interaction-history.css",
+        "css/sidebar.css",
+        "css/progress.css",
+        "css/n8n-integration.css"
       ],
       "run_at": "document_idle"
     }
@@ -71,6 +84,8 @@
         "icons/*", 
         "content/modules/n8nIntegration.js",
         "content/modules/n8nIntegrationUI.js",
+        "content/modules/historyManager.js",
+        "content/modules/sidebarEnsurer.js",
         "popup/interaction.html"
       ],
       "matches": ["https://*.facebook.com/*"]
