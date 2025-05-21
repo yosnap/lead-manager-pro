@@ -64,6 +64,9 @@
         "content/modules/sidebarEnsurer.js",
         "content/modules/errorHandler.js",
         "content/modules/emergency.js",
+        "content/modules/cleanupOldComponents.js",
+        "content/modules/groupSearchFilterController.js",
+        "content/modules/groupSidebar.js",
         "content/index.js"
       ],
       "css": [

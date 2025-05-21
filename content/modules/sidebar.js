@@ -141,19 +141,26 @@ window.LeadManagerPro.modules.insertSidebar = function() {
     }
   };
   
-  // Por defecto, mostrar el sidebar excepto en páginas de grupo específicas
-  const wasHidden = localStorage.getItem('snap_lead_manager_sidebar_hidden') === 'true';
+  // Verificar si estamos en una página de grupo específica
   const inSpecificGroup = isSpecificGroupPage();
+  const inGroupsFeed = isGroupsFeedPage();
   
-  if (wasHidden || inSpecificGroup) {
-    // Ocultar el sidebar
-    sidebarContainer.classList.remove('visible');
-    toggleButton.style.right = '0';
-    toggleButton.innerHTML = '◄';
-    toggleButton.setAttribute('title', 'Mostrar Lead Manager');
-    adjustContent(false);
+  if (inSpecificGroup) {
+    // En página de grupo específica, mostrar el sidebar específico para grupos
+    if (window.leadManagerPro && window.leadManagerPro.groupSidebar) {
+      sidebarContainer.style.display = 'none';
+      toggleButton.style.display = 'none';
+      
+      // Iniciar y mostrar el sidebar específico para grupos
+      window.leadManagerPro.groupSidebar.show();
+      adjustContent(false);
+    } else {
+      console.log('GroupSidebar no disponible, ocultando sidebar principal');
+      sidebarContainer.style.display = 'none';
+      toggleButton.style.display = 'none';
+    }
   } else {
-    // Mostrar el sidebar
+    // En cualquier otra página, mostrar sidebar principal
     sidebarContainer.classList.add('visible');
     toggleButton.style.right = '320px';
     toggleButton.innerHTML = '►';
@@ -200,10 +207,20 @@ window.LeadManagerPro.modules.insertSidebar = function() {
         sidebarContainer.style.display = 'none';
         toggleButton.style.display = 'none';
         adjustContent(false);
+        
+        // Mostrar el sidebar específico para grupos
+        if (window.leadManagerPro && window.leadManagerPro.groupSidebar) {
+          window.leadManagerPro.groupSidebar.show();
+        }
       } else {
         // En cualquier otra página
         sidebarContainer.style.display = 'block';
         toggleButton.style.display = 'flex';
+        
+        // Ocultar el sidebar específico para grupos si existe
+        if (window.leadManagerPro && window.leadManagerPro.groupSidebar) {
+          window.leadManagerPro.groupSidebar.hide();
+        }
         
         // Restaurar estado anterior
         const wasHidden = localStorage.getItem('snap_lead_manager_sidebar_hidden') === 'true';

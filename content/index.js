@@ -37,7 +37,7 @@ async function initContentScript() {
     return;
   }
   
-  // Insertar el sidebar
+  // Inicializar el sidebar
   if (window.LeadManagerPro.modules.insertSidebar) {
     window.LeadManagerPro.modules.insertSidebar();
   } else {
@@ -56,6 +56,13 @@ async function initContentScript() {
     window.LeadManagerPro.modules.setupErrorDetection();
   } else {
     console.error('Lead Manager Pro: Función setupErrorDetection no disponible');
+  }
+  
+  // Inicializar sidebar de grupo si estamos en una página de grupo
+  if (window.location.href.includes('/groups/') && !window.location.href.includes('/groups/feed')) {
+    if (window.leadManagerPro && window.leadManagerPro.groupSidebar) {
+      window.leadManagerPro.groupSidebar.init();
+    }
   }
   
   // Manejar acciones para mensajes de Chrome
@@ -93,20 +100,30 @@ async function initContentScript() {
       window.leadManagerPro.memberInteractionUI.init();
     }
     
-    // Inicializar el sidebar de interacción con miembros
-    if (window.leadManagerPro.memberInteractionSidebar) {
-      window.leadManagerPro.memberInteractionSidebar.init();
+    // Inicializar el controlador de filtros para la búsqueda de grupos
+    if (window.leadManagerPro.groupSearchFilterController) {
+      window.leadManagerPro.groupSearchFilterController.init();
     }
     
-    // Inicializar el controlador de interacción de grupos
-    if (window.leadManagerPro.groupInteractionController) {
-      window.leadManagerPro.groupInteractionController.init();
+    // Inicializar el sidebar de grupos
+    if (window.leadManagerPro.groupSidebar) {
+      window.leadManagerPro.groupSidebar.init();
+    }
+    
+    // Inicializar el módulo de limpieza de componentes antiguos
+    if (window.leadManagerPro.cleanupOldComponents) {
+      window.leadManagerPro.cleanupOldComponents.init();
     }
   }
   
   // Comprobar si estamos en una página de grupo para activar el extractor de miembros
   if (window.location.href.includes('/groups/') && !window.location.href.includes('/groups/feed')) {
     console.log('Lead Manager Pro: Detectada página de grupo de Facebook');
+    
+    // Inicializar el módulo de limpieza de componentes antiguos
+    if (window.leadManagerPro && window.leadManagerPro.cleanupOldComponents) {
+      window.leadManagerPro.cleanupOldComponents.init();
+    }
     
     // Verificar si los módulos de extracción de miembros están disponibles
     if (window.leadManagerPro && window.leadManagerPro.groupMemberUI) {
@@ -237,14 +254,14 @@ async function initContentScript() {
         }
       });
       
-      // Agregar botones al contenedor
-      floatingButtonsContainer.appendChild(countMembersButton);
-      floatingButtonsContainer.appendChild(interactMembersButton);
+      // Agregar solo el contenedor sin botones al cuerpo del documento
+      // Comentado temporalmente: floatingButtonsContainer.appendChild(countMembersButton);
+      // Comentado temporalmente: floatingButtonsContainer.appendChild(interactMembersButton);
       
       // Agregar contenedor al cuerpo del documento
       document.body.appendChild(floatingButtonsContainer);
       
-      console.log('Lead Manager Pro: Botones flotantes agregados');
+      console.log('Lead Manager Pro: Contenedor de botones flotantes agregado (sin botones)');
     } else {
       console.log('Lead Manager Pro: Módulos de extracción de miembros no disponibles');
     }

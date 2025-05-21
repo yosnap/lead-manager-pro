@@ -1,0 +1,69 @@
+{
+  "name": "Lead Manager Pro",
+  "version": "1.4.0",
+  "description": "Herramienta para buscar y gestionar leads en Facebook",
+  "manifest_version": 3,
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "windows"
+  ],
+  "host_permissions": [
+    "https://*.facebook.com/*"
+  ],
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_popup": "popup/popup.html",
+    "default_title": "Lead Manager Pro"
+  },
+  "background": {
+    "service_worker": "js/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.facebook.com/*"],
+      "js": [
+        "content/utils/common.js",
+        "content/state.js",
+        "content/modules/initializeDefaults.js",
+        "content/modules/interactionHistory.js",
+        "content/modules/memberInteraction.js",
+        "content/modules/memberInteractionUI.js",
+        "content/modules/memberInteractionSidebar/memberInteractionSidebar.js",
+        "content/modules/memberInteractionSidebar/memberInteractionSidebarUI.js",
+        "content/modules/fixesLoader.js",
+        "content/index.js"
+      ],
+      "css": [
+        "css/interaction-history.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "sidebar.html", 
+        "js/*", 
+        "css/*", 
+        "icons/*", 
+        "content/modules/n8nIntegration.js",
+        "content/modules/n8nIntegrationUI.js",
+        "content/modules/floatingPanelHistoryFix.js",
+        "content/modules/memberInteractionSidebar/memberInteractionSidebar-fix.js",
+        "popup/interaction.html"
+      ],
+      "matches": ["https://*.facebook.com/*"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -3,12 +3,16 @@
 class GroupSearchOptions {
   constructor() {
     this.defaultOptions = {
-      publicGroups: true,
-      privateGroups: true,
-      minUsers: 0,
-      minPostsYear: 0,
-      minPostsMonth: 0,
-      minPostsDay: 0
+      groupTypes: {
+        public: true,
+        private: true
+      },
+      minMembers: 100,
+      minPosts: {
+        year: 50,
+        month: 10,
+        day: 1
+      }
     };
     
     this.options = this.loadOptions();
@@ -49,12 +53,9 @@ class GroupSearchOptions {
       // También guardar en chrome.storage para persistencia y acceso desde background
       try {
         chrome.storage.local.set({
-          'groupPublic': newOptions.publicGroups,
-          'groupPrivate': newOptions.privateGroups,
-          'minUsers': newOptions.minUsers,
-          'minPostsYear': newOptions.minPostsYear,
-          'minPostsMonth': newOptions.minPostsMonth,
-          'minPostsDay': newOptions.minPostsDay
+          'groupTypes': newOptions.groupTypes,
+          'minMembers': newOptions.minMembers,
+          'minPosts': newOptions.minPosts
         }, function() {
           console.log('Opciones de grupo guardadas en chrome.storage.local');
         });
@@ -99,27 +100,27 @@ class GroupSearchOptions {
     
     // Verificar tipo de grupo
     const isPublic = group.type === 'public';
-    if (isPublic && !this.options.publicGroups) return false;
-    if (!isPublic && !this.options.privateGroups) return false;
+    if (isPublic && !this.options.groupTypes.public) return false;
+    if (!isPublic && !this.options.groupTypes.private) return false;
     
     // Verificar número mínimo de miembros (SIEMPRE DEBE CUMPLIRSE)
-    if (this.options.minUsers && group.members < this.options.minUsers) return false;
+    if (this.options.minMembers && group.members < this.options.minMembers) return false;
     
     // Verificar publicaciones mínimas (debe cumplir al menos UNA de las condiciones)
-    const yearEmpty = this.options.minPostsYear === null || 
-                     this.options.minPostsYear === undefined || 
-                     this.options.minPostsYear === '' ||
-                     this.options.minPostsYear === 0;
+    const yearEmpty = this.options.minPosts.year === null || 
+                     this.options.minPosts.year === undefined || 
+                     this.options.minPosts.year === '' ||
+                     this.options.minPosts.year === 0;
                      
-    const monthEmpty = this.options.minPostsMonth === null || 
-                      this.options.minPostsMonth === undefined || 
-                      this.options.minPostsMonth === '' ||
-                      this.options.minPostsMonth === 0;
+    const monthEmpty = this.options.minPosts.month === null || 
+                      this.options.minPosts.month === undefined || 
+                      this.options.minPosts.month === '' ||
+                      this.options.minPosts.month === 0;
                       
-    const dayEmpty = this.options.minPostsDay === null || 
-                    this.options.minPostsDay === undefined || 
-                    this.options.minPostsDay === '' ||
-                    this.options.minPostsDay === 0;
+    const dayEmpty = this.options.minPosts.day === null || 
+                    this.options.minPosts.day === undefined || 
+                    this.options.minPosts.day === '' ||
+                    this.options.minPosts.day === 0;
     
     // Si todos los criterios de publicaciones están vacíos, se cumple automáticamente esta parte
     if (yearEmpty && monthEmpty && dayEmpty) {
@@ -127,9 +128,9 @@ class GroupSearchOptions {
     }
     
     // Verificar cada criterio individualmente
-    const yearCriteriaMet = yearEmpty || (group.postsYear >= this.options.minPostsYear);
-    const monthCriteriaMet = monthEmpty || (group.postsMonth >= this.options.minPostsMonth);
-    const dayCriteriaMet = dayEmpty || (group.postsDay >= this.options.minPostsDay);
+    const yearCriteriaMet = yearEmpty || (group.postsYear >= this.options.minPosts.year);
+    const monthCriteriaMet = monthEmpty || (group.postsMonth >= this.options.minPosts.month);
+    const dayCriteriaMet = dayEmpty || (group.postsDay >= this.options.minPosts.day);
     
     // El grupo debe cumplir AL MENOS UNO de los criterios de publicaciones si están definidos
     return yearCriteriaMet || monthCriteriaMet || dayCriteriaMet;

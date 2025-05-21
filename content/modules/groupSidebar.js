@@ -130,6 +130,21 @@ class GroupSidebar {
       
       <div class="lmp-sidebar-content" style="flex: 1; overflow-y: auto; padding: 15px;">
         <div class="lmp-section" style="margin-bottom: 20px;">
+          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Opciones generales</h3>
+          <div class="lmp-form-group" style="margin-bottom: 15px;">
+            <label for="lmp-max-scrolls" style="display: block; margin-bottom: 5px; font-weight: 500;">Scrolls máximos para mostrar resultados:</label>
+            <input type="number" id="lmp-max-scrolls" value="50" min="1" max="500" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Número máximo de scrolls para cargar resultados (por defecto 50)</small>
+          </div>
+          
+          <div class="lmp-form-group" style="margin-bottom: 15px;">
+            <label for="lmp-scroll-delay" style="display: block; margin-bottom: 5px; font-weight: 500;">Tiempo de espera entre scroll (segundos):</label>
+            <input type="number" id="lmp-scroll-delay" value="2" min="0.5" step="0.5" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Tiempo de espera en segundos entre cada scroll (por defecto 2)</small>
+          </div>
+        </div>
+
+        <div class="lmp-section" style="margin-bottom: 20px;">
           <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Herramientas</h3>
           <div style="display: flex; flex-direction: column; gap: 10px;">
             <button id="lmp-count-members-btn" class="lmp-btn" style="padding: 8px 12px; background-color: #4267B2; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 5px;">
@@ -140,6 +155,48 @@ class GroupSidebar {
               <span style="font-size: 16px;">💬</span>
               <span>Interactuar con miembros</span>
             </button>
+          </div>
+        </div>
+        
+        <div class="lmp-section" style="margin-bottom: 20px;">
+          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Opciones para búsqueda de grupos</h3>
+          
+          <div class="lmp-form-group" style="margin-bottom: 15px;">
+            <label for="lmp-group-types" style="display: block; margin-bottom: 5px; font-weight: 500;">Tipos de grupo:</label>
+            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
+              <label style="display: flex; align-items: center; gap: 5px;">
+                <input type="checkbox" id="lmp-group-type-public" checked style="margin: 0;">
+                <span>Público</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 5px;">
+                <input type="checkbox" id="lmp-group-type-private" checked style="margin: 0;">
+                <span>Privado</span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="lmp-form-group" style="margin-bottom: 15px;">
+            <label for="lmp-min-members" style="display: block; margin-bottom: 5px; font-weight: 500;">Cantidad mínima de usuarios:</label>
+            <input type="number" id="lmp-min-members" value="100" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          </div>
+          
+          <div class="lmp-form-group" style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Cantidad mínima de publicaciones:</label>
+            
+            <div style="margin-bottom: 10px;">
+              <label style="display: block; margin-bottom: 5px;">Por año:</label>
+              <input type="number" id="lmp-min-posts-year" value="50" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            
+            <div style="margin-bottom: 10px;">
+              <label style="display: block; margin-bottom: 5px;">Por mes:</label>
+              <input type="number" id="lmp-min-posts-month" value="10" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            
+            <div>
+              <label style="display: block; margin-bottom: 5px;">Por día:</label>
+              <input type="number" id="lmp-min-posts-day" value="1" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
           </div>
         </div>
         
@@ -239,6 +296,66 @@ class GroupSidebar {
       input.addEventListener('input', handler);
       this.addEventListenerRef(input, 'input', handler);
     });
+    
+    // Cargar opciones generales guardadas
+    this.loadGeneralOptions();
+  }
+  
+  // Cargar opciones generales guardadas
+  loadGeneralOptions() {
+    try {
+      if (window.leadManagerPro && window.leadManagerPro.generalOptions) {
+        const generalOptions = window.leadManagerPro.generalOptions.getAllOptions();
+        
+        // Establecer opciones generales
+        const maxScrollsInput = this.container.querySelector('#lmp-max-scrolls');
+        const scrollDelayInput = this.container.querySelector('#lmp-scroll-delay');
+        
+        if (maxScrollsInput && generalOptions.maxScrolls) {
+          maxScrollsInput.value = generalOptions.maxScrolls;
+        }
+        
+        if (scrollDelayInput && generalOptions.scrollDelay) {
+          scrollDelayInput.value = generalOptions.scrollDelay;
+        }
+        
+        // Establecer opciones de búsqueda de grupos
+        const groupTypePublic = this.container.querySelector('#lmp-group-type-public');
+        const groupTypePrivate = this.container.querySelector('#lmp-group-type-private');
+        const minMembersInput = this.container.querySelector('#lmp-min-members');
+        const minPostsYearInput = this.container.querySelector('#lmp-min-posts-year');
+        const minPostsMonthInput = this.container.querySelector('#lmp-min-posts-month');
+        const minPostsDayInput = this.container.querySelector('#lmp-min-posts-day');
+        
+        if (groupTypePublic && generalOptions.groupTypes && generalOptions.groupTypes.public !== undefined) {
+          groupTypePublic.checked = generalOptions.groupTypes.public;
+        }
+        
+        if (groupTypePrivate && generalOptions.groupTypes && generalOptions.groupTypes.private !== undefined) {
+          groupTypePrivate.checked = generalOptions.groupTypes.private;
+        }
+        
+        if (minMembersInput && generalOptions.minMembers) {
+          minMembersInput.value = generalOptions.minMembers;
+        }
+        
+        if (minPostsYearInput && generalOptions.minPosts && generalOptions.minPosts.year !== undefined) {
+          minPostsYearInput.value = generalOptions.minPosts.year;
+        }
+        
+        if (minPostsMonthInput && generalOptions.minPosts && generalOptions.minPosts.month !== undefined) {
+          minPostsMonthInput.value = generalOptions.minPosts.month;
+        }
+        
+        if (minPostsDayInput && generalOptions.minPosts && generalOptions.minPosts.day !== undefined) {
+          minPostsDayInput.value = generalOptions.minPosts.day;
+        }
+        
+        console.log('Opciones generales cargadas en el sidebar:', generalOptions);
+      }
+    } catch (error) {
+      console.error('Error al cargar opciones generales en el sidebar:', error);
+    }
   }
   
   // Agregar referencia de event listener para poder limpiarlos después
@@ -257,7 +374,7 @@ class GroupSidebar {
   // Actualizar configuraciones desde los inputs
   updateSettings() {
     try {
-      // Obtener valores de los campos
+      // Obtener valores de los campos para interacción con miembros
       const membersCount = parseInt(this.container.querySelector('#lmp-members-count').value, 10);
       const interactionDelay = parseInt(this.container.querySelector('#lmp-interaction-delay').value, 10);
       const messageText = this.container.querySelector('#lmp-message-text').value;
@@ -274,13 +391,73 @@ class GroupSidebar {
         return false;
       }
       
-      // Actualizar configuraciones
+      // Actualizar configuraciones de interacción de miembros
       this.settings.membersToInteract = membersCount;
       this.settings.interactionDelay = interactionDelay;
       this.settings.messageToSend = messageText;
       this.settings.autoCloseChat = autoCloseChat;
       
-      // Guardar configuraciones
+      // Obtener valores de opciones generales
+      const maxScrolls = parseInt(this.container.querySelector('#lmp-max-scrolls').value, 10);
+      const scrollDelay = parseFloat(this.container.querySelector('#lmp-scroll-delay').value);
+      
+      // Obtener valores de búsqueda de grupos
+      const groupTypePublic = this.container.querySelector('#lmp-group-type-public').checked;
+      const groupTypePrivate = this.container.querySelector('#lmp-group-type-private').checked;
+      const minMembers = parseInt(this.container.querySelector('#lmp-min-members').value, 10);
+      const minPostsYear = parseInt(this.container.querySelector('#lmp-min-posts-year').value, 10);
+      const minPostsMonth = parseInt(this.container.querySelector('#lmp-min-posts-month').value, 10);
+      const minPostsDay = parseInt(this.container.querySelector('#lmp-min-posts-day').value, 10);
+      
+      // Validar valores generales
+      if (isNaN(maxScrolls) || maxScrolls < 1) {
+        alert('Por favor, introduce un número válido de scrolls máximos (mínimo 1)');
+        return false;
+      }
+      
+      if (isNaN(scrollDelay) || scrollDelay < 0.5) {
+        alert('Por favor, introduce un tiempo de espera válido entre scrolls (mínimo 0.5 segundos)');
+        return false;
+      }
+      
+      // Validar valores de búsqueda de grupos
+      if (isNaN(minMembers) || minMembers < 0) {
+        alert('Por favor, introduce un número válido para la cantidad mínima de usuarios');
+        return false;
+      }
+      
+      if (isNaN(minPostsYear) || minPostsYear < 0 || 
+          isNaN(minPostsMonth) || minPostsMonth < 0 || 
+          isNaN(minPostsDay) || minPostsDay < 0) {
+        alert('Por favor, introduce números válidos para las cantidades mínimas de publicaciones');
+        return false;
+      }
+      
+      // Crear y guardar opciones generales
+      if (window.leadManagerPro && window.leadManagerPro.generalOptions) {
+        const generalOptions = {
+          maxScrolls: maxScrolls,
+          scrollDelay: scrollDelay,
+          maxScrollsToShowResults: maxScrolls, // Para mantener coherencia
+          waitTimeBetweenScrolls: scrollDelay, // Para mantener coherencia
+          groupTypes: {
+            public: groupTypePublic,
+            private: groupTypePrivate
+          },
+          minMembers: minMembers,
+          minPosts: {
+            year: minPostsYear,
+            month: minPostsMonth,
+            day: minPostsDay
+          }
+        };
+        
+        // Guardar opciones generales
+        window.leadManagerPro.generalOptions.saveOptions(generalOptions);
+        console.log('Opciones generales guardadas:', generalOptions);
+      }
+      
+      // Guardar configuraciones de interacción
       this.saveSettings();
       
       // Mostrar mensaje de éxito
