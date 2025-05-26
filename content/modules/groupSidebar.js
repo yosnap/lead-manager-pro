@@ -9,9 +9,11 @@ class GroupSidebar {
       membersToInteract: 10,
       interactionDelay: 3000,
       messageToSend: 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!',
+      messages: ['Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!'],
       autoCloseChat: true
     };
     this.eventListeners = [];
+    this.messageTextareas = []; // Para almacenar referencias a los textareas de mensajes
   }
 
   // Inicializar el sidebar
@@ -29,38 +31,62 @@ class GroupSidebar {
     try {
       // Intentar obtener configuraciones del Extension Storage
       const result = await new Promise(resolve => {
-        chrome.storage.local.get(['leadManagerGroupSettings'], (result) => {
-          resolve(result);
-        });
+        chrome.storage.local.get(['leadManagerGroupSettings'], result => resolve(result));
       });
-
-      // Si hay configuraciones guardadas, usar esas
+      
       if (result && result.leadManagerGroupSettings) {
         this.settings = { ...this.settings, ...result.leadManagerGroupSettings };
-        console.log('GroupSidebar: Configuraciones cargadas desde Extension Storage:', this.settings);
-      } else {
-        // Si no hay configuraciones guardadas, usar las predeterminadas
-        this.saveSettings();
-        console.log('GroupSidebar: Usando configuraciones predeterminadas');
+        
+        // Asegurarse de que messages sea un array
+        if (!Array.isArray(this.settings.messages)) {
+          // Si no existe messages pero existe messageToSend, usarlo como primer mensaje
+          if (this.settings.messageToSend) {
+            this.settings.messages = [this.settings.messageToSend];
+          } else {
+            this.settings.messages = [];
+          }
+        }
+        
+        // Si messages está vacío pero hay messageToSend, añadirlo
+        if (this.settings.messages.length === 0 && this.settings.messageToSend) {
+          this.settings.messages.push(this.settings.messageToSend);
+        }
+        
+        // Si hay messages pero no hay messageToSend, usar el primero
+        if (this.settings.messages.length > 0 && !this.settings.messageToSend) {
+          this.settings.messageToSend = this.settings.messages[0];
+        }
       }
+      
+      console.log('GroupSidebar: Configuraciones cargadas:', this.settings);
+      return this.settings;
     } catch (error) {
       console.error('GroupSidebar: Error al cargar configuraciones:', error);
+      return this.settings;
     }
   }
 
   // Guardar configuraciones en Extension Storage
   async saveSettings() {
     try {
-      // Guardar en Extension Storage
+      // Asegurarse de que messages sea un array
+      if (!Array.isArray(this.settings.messages)) {
+        this.settings.messages = [];
+      }
+      
+      // Filtrar mensajes vacíos
+      this.settings.messages = this.settings.messages.filter(msg => msg && msg.trim() !== '');
+      
+      // Asegurarse de que messageToSend esté actualizado (para compatibilidad)
+      if (this.settings.messages.length > 0) {
+        this.settings.messageToSend = this.settings.messages[0];
+      }
+      
       await new Promise(resolve => {
-        chrome.storage.local.set({ 'leadManagerGroupSettings': this.settings }, resolve);
+        chrome.storage.local.set({ leadManagerGroupSettings: this.settings }, resolve);
       });
       
-      console.log('GroupSidebar: Configuraciones guardadas en Extension Storage:', this.settings);
-      
-      // Opcionalmente, también guardar en localStorage como respaldo
-      localStorage.setItem('lead_manager_group_settings', JSON.stringify(this.settings));
-      
+      console.log('GroupSidebar: Configuraciones guardadas:', this.settings);
       return true;
     } catch (error) {
       console.error('GroupSidebar: Error al guardar configuraciones:', error);
@@ -70,133 +96,58 @@ class GroupSidebar {
 
   // Mostrar el sidebar
   show() {
-    if (this.isVisible) return;
+    if (!this.container) {
+      this.createSidebar();
+    }
     
-    this.createSidebar();
-    this.isVisible = true;
-    
-    return this;
+    if (this.container) {
+      this.container.style.right = '0';
+      this.isVisible = true;
+    }
   }
 
   // Ocultar el sidebar
   hide() {
-    if (!this.isVisible || !this.container) return;
-    
-    document.body.removeChild(this.container);
-    this.container = null;
-    this.isVisible = false;
-    
-    // Limpiar event listeners
-    this.clearEventListeners();
-    
-    return this;
+    if (this.container) {
+      this.container.style.right = '-350px';
+      this.isVisible = false;
+    }
   }
 
   // Crear el sidebar y sus elementos
   createSidebar() {
-    // Si ya existe, no crear otro
-    if (this.container) return;
-    
-    // Crear elemento contenedor
+    // Crear contenedor principal
     this.container = document.createElement('div');
-    this.container.id = 'lmp-group-sidebar';
-    this.container.className = 'lmp-sidebar-container';
+    this.container.id = 'lead-manager-group-sidebar';
+    this.container.style.cssText = `
+      position: fixed;
+      top: 0;
+      right: -350px;
+      width: 300px;
+      height: 100vh;
+      background-color: white;
+      box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+      z-index: 9999;
+      transition: right 0.3s ease;
+      padding: 20px;
+      overflow-y: auto;
+      font-family: Arial, sans-serif;
+    `;
     
-    // Estilos del contenedor
-    Object.assign(this.container.style, {
-      position: 'fixed',
-      top: '50px',
-      right: '0',
-      width: '300px',
-      height: 'calc(100vh - 50px)',
-      backgroundColor: 'white',
-      boxShadow: '-2px 0 10px rgba(0, 0, 0, 0.1)',
-      zIndex: '9998',
-      display: 'flex',
-      flexDirection: 'column',
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '14px',
-      color: '#333',
-      borderLeft: '1px solid #ddd',
-      transition: 'transform 0.3s ease'
-    });
-    
-    // Estructura interna
+    // Crear contenido HTML del sidebar
     this.container.innerHTML = `
-      <div class="lmp-sidebar-header" style="padding: 15px; background: #4267B2; color: white; display: flex; justify-content: space-between; align-items: center;">
-        <span>Lead Manager Pro - Grupo</span>
-        <button id="lmp-close-sidebar" style="background: none; border: none; color: white; cursor: pointer; font-size: 16px;">&times;</button>
-      </div>
-      
-      <div class="lmp-sidebar-content" style="flex: 1; overflow-y: auto; padding: 15px;">
-        <div class="lmp-section" style="margin-bottom: 20px;">
-          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Opciones generales</h3>
-          <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label for="lmp-max-scrolls" style="display: block; margin-bottom: 5px; font-weight: 500;">Scrolls máximos para mostrar resultados:</label>
-            <input type="number" id="lmp-max-scrolls" value="50" min="1" max="500" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Número máximo de scrolls para cargar resultados (por defecto 50)</small>
-          </div>
-          
-          <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label for="lmp-scroll-delay" style="display: block; margin-bottom: 5px; font-weight: 500;">Tiempo de espera entre scroll (segundos):</label>
-            <input type="number" id="lmp-scroll-delay" value="2" min="0.5" step="0.5" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Tiempo de espera en segundos entre cada scroll (por defecto 2)</small>
-          </div>
-        </div>
-
-        <div class="lmp-section" style="margin-bottom: 20px;">
-          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Herramientas</h3>
-          <div style="display: flex; flex-direction: column; gap: 10px;">
-            <button id="lmp-count-members-btn" class="lmp-btn" style="padding: 8px 12px; background-color: #4267B2; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 5px;">
-              <span style="font-size: 16px;">👥</span>
-              <span>Contar miembros</span>
-            </button>
-            <button id="lmp-interact-members-btn" class="lmp-btn" style="padding: 8px 12px; background-color: #4267B2; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 5px;">
-              <span style="font-size: 16px;">💬</span>
-              <span>Interactuar con miembros</span>
-            </button>
-          </div>
+      <div class="lmp-sidebar-content">
+        <div class="lmp-sidebar-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h2 style="margin: 0; color: #4267B2;">Lead Manager Pro</h2>
+          <button id="lmp-close-sidebar" style="background: none; border: none; cursor: pointer; font-size: 20px;">×</button>
         </div>
         
         <div class="lmp-section" style="margin-bottom: 20px;">
-          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Opciones para búsqueda de grupos</h3>
-          
-          <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label for="lmp-group-types" style="display: block; margin-bottom: 5px; font-weight: 500;">Tipos de grupo:</label>
-            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
-              <label style="display: flex; align-items: center; gap: 5px;">
-                <input type="checkbox" id="lmp-group-type-public" checked style="margin: 0;">
-                <span>Público</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 5px;">
-                <input type="checkbox" id="lmp-group-type-private" checked style="margin: 0;">
-                <span>Privado</span>
-              </label>
-            </div>
-          </div>
-          
-          <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label for="lmp-min-members" style="display: block; margin-bottom: 5px; font-weight: 500;">Cantidad mínima de usuarios:</label>
-            <input type="number" id="lmp-min-members" value="100" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-          </div>
-          
-          <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Cantidad mínima de publicaciones:</label>
-            
-            <div style="margin-bottom: 10px;">
-              <label style="display: block; margin-bottom: 5px;">Por año:</label>
-              <input type="number" id="lmp-min-posts-year" value="50" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            </div>
-            
-            <div style="margin-bottom: 10px;">
-              <label style="display: block; margin-bottom: 5px;">Por mes:</label>
-              <input type="number" id="lmp-min-posts-month" value="10" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            </div>
-            
-            <div>
-              <label style="display: block; margin-bottom: 5px;">Por día:</label>
-              <input type="number" id="lmp-min-posts-day" value="1" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            </div>
+          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Acciones</h3>
+          <div class="lmp-actions" style="display: flex; flex-direction: column; gap: 10px;">
+            <button id="lmp-interact-members-btn" class="lmp-btn" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+              Interactuar con miembros
+            </button>
           </div>
         </div>
         
@@ -204,7 +155,7 @@ class GroupSidebar {
           <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Configuración de interacción</h3>
           
           <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label for="lmp-members-count" style="display: block; margin-bottom: 5px; font-weight: 500;">Número de miembros a interactuar:</label>
+            <label for="lmp-members-count" style="display: block; margin-bottom: 5px; font-weight: 500;">Número de miembros:</label>
             <input type="number" id="lmp-members-count" value="${this.settings.membersToInteract}" min="1" max="100" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Número máximo de miembros con los que interactuar en una sesión</small>
           </div>
@@ -216,9 +167,11 @@ class GroupSidebar {
           </div>
           
           <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label for="lmp-message-text" style="display: block; margin-bottom: 5px; font-weight: 500;">Mensaje a enviar:</label>
-            <textarea id="lmp-message-text" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; height: 80px; resize: vertical;">${this.settings.messageToSend}</textarea>
-            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Mensaje que se enviará a cada miembro</small>
+            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Mensajes personalizados (se enviarán aleatoriamente):</label>
+            <div class="lmp-messages-container" style="border: 1px solid #ddd; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+              ${this.createMessagesAccordion()}
+            </div>
+            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Puedes configurar hasta 5 mensajes diferentes que se enviarán aleatoriamente</small>
           </div>
           
           <div class="lmp-form-group" style="margin-bottom: 15px;">
@@ -255,6 +208,78 @@ class GroupSidebar {
     this.updateGroupInfo();
   }
   
+  // Crear el acordeón de mensajes
+  createMessagesAccordion() {
+    // Limpiar las referencias anteriores a textareas
+    this.messageTextareas = [];
+    
+    // Crear HTML para el acordeón
+    let accordionHtml = '';
+    
+    // Mensaje por defecto
+    const defaultMessage = 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!';
+    
+    // Asegurarse de que messages sea un array
+    if (!Array.isArray(this.settings.messages)) {
+      this.settings.messages = [defaultMessage];
+    }
+    
+    // Si el array está vacío, agregar el mensaje por defecto
+    if (this.settings.messages.length === 0) {
+      this.settings.messages.push(defaultMessage);
+    }
+    
+    console.log('Mensajes cargados para el acordeón:', this.settings.messages);
+    
+    // Crear 5 paneles de acordeón para los mensajes
+    for (let i = 0; i < 5; i++) {
+      // Obtener el mensaje del array o usar string vacío si no existe
+      const message = this.settings.messages[i] || '';
+      
+      // Estado inicial del panel (abierto o cerrado)
+      const isActive = message !== '';
+      const iconSymbol = isActive ? '-' : '+';
+      
+      accordionHtml += `
+        <div class="lmp-accordion-panel" style="border-bottom: ${i < 4 ? '1px solid #ddd' : 'none'};">
+          <button class="lmp-accordion-button ${isActive ? 'active' : ''}" data-index="${i}" style="
+            width: 100%;
+            background-color: #F0F2F5;
+            border: none;
+            padding: 10px 15px;
+            text-align: left;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          ">
+            Mensaje ${i + 1}
+            <span class="lmp-accordion-icon" style="font-size: 16px;">${iconSymbol}</span>
+          </button>
+          <div class="lmp-accordion-content" style="
+            max-height: ${isActive ? '500px' : '0'};
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            background-color: white;
+          ">
+            <textarea class="lmp-message-textarea" data-index="${i}" style="
+              width: calc(100% - 20px);
+              padding: 8px;
+              margin: 10px;
+              border-radius: 4px;
+              border: 1px solid #ddd;
+              min-height: 80px;
+              resize: vertical;
+            ">${message}</textarea>
+          </div>
+        </div>
+      `;
+    }
+    
+    return accordionHtml;
+  }
+  
   // Configurar los event listeners de los elementos del sidebar
   setupEventListeners() {
     // Botón de cerrar
@@ -263,14 +288,6 @@ class GroupSidebar {
       const handler = () => this.hide();
       closeBtn.addEventListener('click', handler);
       this.addEventListenerRef(closeBtn, 'click', handler);
-    }
-    
-    // Botón de contar miembros
-    const countMembersBtn = this.container.querySelector('#lmp-count-members-btn');
-    if (countMembersBtn) {
-      const handler = () => this.countMembers();
-      countMembersBtn.addEventListener('click', handler);
-      this.addEventListenerRef(countMembersBtn, 'click', handler);
     }
     
     // Botón de interactuar con miembros
@@ -289,8 +306,11 @@ class GroupSidebar {
       this.addEventListenerRef(saveSettingsBtn, 'click', handler);
     }
     
+    // Inicializar el acordeón de mensajes
+    this.initializeAccordion();
+    
     // Inputs de configuración (para actualizar en tiempo real)
-    const allInputs = this.container.querySelectorAll('input, textarea');
+    const allInputs = this.container.querySelectorAll('input:not(.lmp-message-textarea)');
     allInputs.forEach(input => {
       const handler = () => this.updateSettingPreview(input);
       input.addEventListener('input', handler);
@@ -299,6 +319,113 @@ class GroupSidebar {
     
     // Cargar opciones generales guardadas
     this.loadGeneralOptions();
+    
+    // Intentar cargar mensajes desde el sidebar flotante si existe
+    this.loadMessagesFromFloatingSidebar();
+  }
+  
+  // Inicializar el acordeón después de crear el DOM
+  initializeAccordion() {
+    // Obtener todos los botones del acordeón
+    const accordionButtons = this.container.querySelectorAll('.lmp-accordion-button');
+    
+    // Añadir event listeners a los botones
+    accordionButtons.forEach(button => {
+      const handler = () => {
+        // Toggle active class
+        button.classList.toggle('active');
+        
+        // Cambiar el icono
+        const icon = button.querySelector('.lmp-accordion-icon');
+        if (icon) {
+          icon.textContent = button.classList.contains('active') ? '-' : '+';
+        }
+        
+        // Toggle panel de contenido
+        const content = button.nextElementSibling;
+        if (content) {
+          if (content.style.maxHeight !== '0px' && content.style.maxHeight !== '') {
+            content.style.maxHeight = '0px';
+          } else {
+            const textarea = content.querySelector('textarea');
+            if (textarea) {
+              content.style.maxHeight = textarea.scrollHeight + 40 + 'px';
+            }
+          }
+        }
+      };
+      
+      button.addEventListener('click', handler);
+      this.addEventListenerRef(button, 'click', handler);
+    });
+    
+    // Abrir el primer panel por defecto
+    setTimeout(() => {
+      const firstButton = this.container.querySelector('.lmp-accordion-button');
+      if (firstButton) firstButton.click();
+    }, 100);
+    
+    // Guardar referencias a los textareas
+    const textareas = this.container.querySelectorAll('.lmp-message-textarea');
+    this.messageTextareas = Array.from(textareas);
+    
+    // Añadir event listeners a los textareas para actualizar en tiempo real
+    this.messageTextareas.forEach(textarea => {
+      const handler = () => this.updateSettingPreview(textarea);
+      textarea.addEventListener('input', handler);
+      this.addEventListenerRef(textarea, 'input', handler);
+    });
+  }
+  
+  // Cargar mensajes desde el sidebar flotante
+  loadMessagesFromFloatingSidebar() {
+    try {
+      // Buscar el sidebar flotante
+      const floatingSidebar = document.querySelector('.lead-manager-interaction-ui');
+      if (!floatingSidebar) {
+        console.log('Sidebar flotante no encontrado');
+        return;
+      }
+      
+      // Buscar los textareas de mensajes en el sidebar flotante
+      const floatingTextareas = floatingSidebar.querySelectorAll('[class^="message-textarea-"]');
+      if (!floatingTextareas || floatingTextareas.length === 0) {
+        console.log('No se encontraron textareas de mensajes en el sidebar flotante');
+        return;
+      }
+      
+      // Obtener los mensajes del sidebar flotante
+      const messages = [];
+      floatingTextareas.forEach(textarea => {
+        const text = textarea.value.trim();
+        if (text) {
+          messages.push(text);
+        }
+      });
+      
+      // Si hay mensajes, actualizar los textareas en este sidebar
+      if (messages.length > 0) {
+        console.log('Cargando mensajes desde el sidebar flotante:', messages);
+        
+        // Actualizar los textareas en este sidebar
+        this.messageTextareas.forEach((textarea, index) => {
+          if (index < messages.length) {
+            textarea.value = messages[index];
+          } else {
+            textarea.value = '';
+          }
+        });
+        
+        // Actualizar la configuración
+        this.settings.messages = messages;
+        this.settings.messageToSend = messages[0]; // Para compatibilidad
+        
+        // Guardar la configuración
+        this.saveSettings();
+      }
+    } catch (error) {
+      console.error('Error al cargar mensajes desde el sidebar flotante:', error);
+    }
   }
   
   // Cargar opciones generales guardadas
@@ -306,55 +433,10 @@ class GroupSidebar {
     try {
       if (window.leadManagerPro && window.leadManagerPro.generalOptions) {
         const generalOptions = window.leadManagerPro.generalOptions.getAllOptions();
-        
-        // Establecer opciones generales
-        const maxScrollsInput = this.container.querySelector('#lmp-max-scrolls');
-        const scrollDelayInput = this.container.querySelector('#lmp-scroll-delay');
-        
-        if (maxScrollsInput && generalOptions.maxScrolls) {
-          maxScrollsInput.value = generalOptions.maxScrolls;
-        }
-        
-        if (scrollDelayInput && generalOptions.scrollDelay) {
-          scrollDelayInput.value = generalOptions.scrollDelay;
-        }
-        
-        // Establecer opciones de búsqueda de grupos
-        const groupTypePublic = this.container.querySelector('#lmp-group-type-public');
-        const groupTypePrivate = this.container.querySelector('#lmp-group-type-private');
-        const minMembersInput = this.container.querySelector('#lmp-min-members');
-        const minPostsYearInput = this.container.querySelector('#lmp-min-posts-year');
-        const minPostsMonthInput = this.container.querySelector('#lmp-min-posts-month');
-        const minPostsDayInput = this.container.querySelector('#lmp-min-posts-day');
-        
-        if (groupTypePublic && generalOptions.groupTypes && generalOptions.groupTypes.public !== undefined) {
-          groupTypePublic.checked = generalOptions.groupTypes.public;
-        }
-        
-        if (groupTypePrivate && generalOptions.groupTypes && generalOptions.groupTypes.private !== undefined) {
-          groupTypePrivate.checked = generalOptions.groupTypes.private;
-        }
-        
-        if (minMembersInput && generalOptions.minMembers) {
-          minMembersInput.value = generalOptions.minMembers;
-        }
-        
-        if (minPostsYearInput && generalOptions.minPosts && generalOptions.minPosts.year !== undefined) {
-          minPostsYearInput.value = generalOptions.minPosts.year;
-        }
-        
-        if (minPostsMonthInput && generalOptions.minPosts && generalOptions.minPosts.month !== undefined) {
-          minPostsMonthInput.value = generalOptions.minPosts.month;
-        }
-        
-        if (minPostsDayInput && generalOptions.minPosts && generalOptions.minPosts.day !== undefined) {
-          minPostsDayInput.value = generalOptions.minPosts.day;
-        }
-        
-        console.log('Opciones generales cargadas en el sidebar:', generalOptions);
+        console.log('GroupSidebar: Opciones generales cargadas:', generalOptions);
       }
     } catch (error) {
-      console.error('Error al cargar opciones generales en el sidebar:', error);
+      console.error('GroupSidebar: Error al cargar opciones generales:', error);
     }
   }
   
@@ -377,8 +459,16 @@ class GroupSidebar {
       // Obtener valores de los campos para interacción con miembros
       const membersCount = parseInt(this.container.querySelector('#lmp-members-count').value, 10);
       const interactionDelay = parseInt(this.container.querySelector('#lmp-interaction-delay').value, 10);
-      const messageText = this.container.querySelector('#lmp-message-text').value;
       const autoCloseChat = this.container.querySelector('#lmp-auto-close-chat').checked;
+      
+      // Obtener mensajes de los textareas
+      const messages = [];
+      this.messageTextareas.forEach(textarea => {
+        const text = textarea.value.trim();
+        if (text) {
+          messages.push(text);
+        }
+      });
       
       // Validar valores
       if (isNaN(membersCount) || membersCount < 1) {
@@ -391,175 +481,158 @@ class GroupSidebar {
         return false;
       }
       
+      if (messages.length === 0) {
+        alert('Por favor, introduce al menos un mensaje para enviar a los miembros');
+        return false;
+      }
+      
       // Actualizar configuraciones de interacción de miembros
       this.settings.membersToInteract = membersCount;
       this.settings.interactionDelay = interactionDelay;
-      this.settings.messageToSend = messageText;
+      this.settings.messages = messages;
+      this.settings.messageToSend = messages[0]; // Para compatibilidad
       this.settings.autoCloseChat = autoCloseChat;
-      
-      // Obtener valores de opciones generales
-      const maxScrolls = parseInt(this.container.querySelector('#lmp-max-scrolls').value, 10);
-      const scrollDelay = parseFloat(this.container.querySelector('#lmp-scroll-delay').value);
-      
-      // Obtener valores de búsqueda de grupos
-      const groupTypePublic = this.container.querySelector('#lmp-group-type-public').checked;
-      const groupTypePrivate = this.container.querySelector('#lmp-group-type-private').checked;
-      const minMembers = parseInt(this.container.querySelector('#lmp-min-members').value, 10);
-      const minPostsYear = parseInt(this.container.querySelector('#lmp-min-posts-year').value, 10);
-      const minPostsMonth = parseInt(this.container.querySelector('#lmp-min-posts-month').value, 10);
-      const minPostsDay = parseInt(this.container.querySelector('#lmp-min-posts-day').value, 10);
-      
-      // Validar valores generales
-      if (isNaN(maxScrolls) || maxScrolls < 1) {
-        alert('Por favor, introduce un número válido de scrolls máximos (mínimo 1)');
-        return false;
-      }
-      
-      if (isNaN(scrollDelay) || scrollDelay < 0.5) {
-        alert('Por favor, introduce un tiempo de espera válido entre scrolls (mínimo 0.5 segundos)');
-        return false;
-      }
-      
-      // Validar valores de búsqueda de grupos
-      if (isNaN(minMembers) || minMembers < 0) {
-        alert('Por favor, introduce un número válido para la cantidad mínima de usuarios');
-        return false;
-      }
-      
-      if (isNaN(minPostsYear) || minPostsYear < 0 || 
-          isNaN(minPostsMonth) || minPostsMonth < 0 || 
-          isNaN(minPostsDay) || minPostsDay < 0) {
-        alert('Por favor, introduce números válidos para las cantidades mínimas de publicaciones');
-        return false;
-      }
-      
-      // Crear y guardar opciones generales
-      if (window.leadManagerPro && window.leadManagerPro.generalOptions) {
-        const generalOptions = {
-          maxScrolls: maxScrolls,
-          scrollDelay: scrollDelay,
-          maxScrollsToShowResults: maxScrolls, // Para mantener coherencia
-          waitTimeBetweenScrolls: scrollDelay, // Para mantener coherencia
-          groupTypes: {
-            public: groupTypePublic,
-            private: groupTypePrivate
-          },
-          minMembers: minMembers,
-          minPosts: {
-            year: minPostsYear,
-            month: minPostsMonth,
-            day: minPostsDay
-          }
-        };
-        
-        // Guardar opciones generales
-        window.leadManagerPro.generalOptions.saveOptions(generalOptions);
-        console.log('Opciones generales guardadas:', generalOptions);
-      }
       
       // Guardar configuraciones de interacción
       this.saveSettings();
+      
+      // Actualizar también el sidebar flotante si existe
+      this.updateFloatingSidebar(messages);
       
       // Mostrar mensaje de éxito
       this.showToast('Configuración guardada correctamente');
       
       return true;
     } catch (error) {
-      console.error('GroupSidebar: Error al actualizar configuraciones:', error);
+      console.error('Error al actualizar configuraciones:', error);
+      this.showToast('Error al guardar la configuración', true);
       return false;
+    }
+  }
+  
+  // Actualizar el sidebar flotante con los mensajes
+  updateFloatingSidebar(messages) {
+    try {
+      // Buscar el sidebar flotante
+      const floatingSidebar = document.querySelector('.lead-manager-interaction-ui');
+      if (!floatingSidebar) {
+        console.log('Sidebar flotante no encontrado para actualizar');
+        return;
+      }
+      
+      // Buscar los textareas de mensajes en el sidebar flotante
+      const floatingTextareas = floatingSidebar.querySelectorAll('[class^="message-textarea-"]');
+      if (!floatingTextareas || floatingTextareas.length === 0) {
+        console.log('No se encontraron textareas de mensajes en el sidebar flotante');
+        return;
+      }
+      
+      // Actualizar los textareas en el sidebar flotante
+      floatingTextareas.forEach((textarea, index) => {
+        if (index < messages.length) {
+          textarea.value = messages[index];
+        } else {
+          textarea.value = '';
+        }
+      });
+      
+      console.log('Sidebar flotante actualizado con los mensajes:', messages);
+      
+      // Si existe la instancia de MemberInteractionUI, actualizar su configuración
+      if (window.leadManagerPro && window.leadManagerPro.memberInteractionUI) {
+        const memberInteractionUI = window.leadManagerPro.memberInteractionUI;
+        
+        // Actualizar la configuración
+        if (memberInteractionUI.memberInteraction) {
+          memberInteractionUI.memberInteraction.messages = messages;
+          memberInteractionUI.memberInteraction.messageToSend = messages[0];
+        }
+        
+        console.log('MemberInteractionUI actualizado con los mensajes');
+      }
+    } catch (error) {
+      console.error('Error al actualizar el sidebar flotante:', error);
     }
   }
   
   // Actualizar previsualización de configuraciones
   updateSettingPreview(input) {
-    // No hacer nada por ahora, solo para futuras funcionalidades
-    // Podría usarse para mostrar una vista previa del mensaje, etc.
-  }
-  
-  // Función para contar miembros
-  countMembers() {
-    console.log('GroupSidebar: Contando miembros del grupo');
-    
-    if (window.leadManagerPro && window.leadManagerPro.groupMemberUI) {
-      // Inicializar UI de conteo de miembros
-      if (!window.leadManagerPro.groupMemberUI.container) {
-        window.leadManagerPro.groupMemberUI.init();
-      }
-      
-      // Mostrar UI
-      window.leadManagerPro.groupMemberUI.show();
-      
-      // Iniciar conteo
-      window.leadManagerPro.groupMemberUI.countMembers()
-        .then(result => {
-          if (result && result.totalCount) {
-            // Actualizar estadísticas
-            const totalMembersElement = this.container.querySelector('#lmp-total-members');
-            if (totalMembersElement) {
-              totalMembersElement.textContent = result.totalCount.toLocaleString();
-            }
-            
-            // Guardar en chrome.storage
-            chrome.storage.local.set({ 
-              'leadManagerCurrentGroupStats': {
-                totalMembers: result.totalCount,
-                lastCountDate: new Date().toISOString()
-              }
-            });
-          }
-        })
-        .catch(error => {
-          console.error('GroupSidebar: Error al contar miembros:', error);
-        });
-    } else {
-      console.error('GroupSidebar: módulo groupMemberUI no disponible');
-      alert('Error: No se pudo iniciar el conteo de miembros. Módulo no disponible.');
-    }
+    // Actualizar la previsualización de la configuración en tiempo real
+    // Por ahora, no hacemos nada aquí
   }
   
   // Función para interactuar con miembros
   interactWithMembers() {
-    console.log('GroupSidebar: Iniciando interacción con miembros');
-    
-    if (window.leadManagerPro && window.leadManagerPro.memberInteractionUI) {
-      // Abrir la interfaz de interacción con miembros
-      window.leadManagerPro.memberInteractionUI.show();
-      
-      // Actualizar configuraciones de interacción
-      if (window.leadManagerPro.memberInteraction) {
-        // Pasar la configuración actual al módulo de interacción
-        window.leadManagerPro.memberInteraction.messageToSend = this.settings.messageToSend;
-        window.leadManagerPro.memberInteraction.autoCloseChat = this.settings.autoCloseChat;
-        window.leadManagerPro.memberInteraction.interactionDelay = this.settings.interactionDelay;
-        window.leadManagerPro.memberInteraction.maxMembersToInteract = this.settings.membersToInteract;
+    try {
+      // Verificar si existe la instancia de memberInteractionUI
+      if (!window.leadManagerPro || !window.leadManagerPro.memberInteractionUI) {
+        this.showToast('No se ha encontrado el módulo de interacción con miembros', true);
+        return;
       }
-    } else {
-      console.error('GroupSidebar: módulo memberInteractionUI no disponible');
-      alert('Error: No se pudo iniciar la interacción con miembros. Módulo no disponible.');
+      
+      // Obtener la instancia de memberInteractionUI
+      const memberInteractionUI = window.leadManagerPro.memberInteractionUI;
+      
+      // Actualizar configuraciones en memberInteractionUI
+      if (memberInteractionUI.memberInteraction) {
+        memberInteractionUI.memberInteraction.membersToInteract = this.settings.membersToInteract;
+        memberInteractionUI.memberInteraction.interactionDelay = this.settings.interactionDelay;
+        memberInteractionUI.memberInteraction.messages = this.settings.messages;
+        memberInteractionUI.memberInteraction.messageToSend = this.settings.messageToSend;
+        memberInteractionUI.memberInteraction.autoCloseChat = this.settings.autoCloseChat;
+      }
+      
+      // Buscar el sidebar flotante
+      let floatingSidebar = document.querySelector('.lead-manager-interaction-ui');
+      
+      // Si no existe, crearlo
+      if (!floatingSidebar && memberInteractionUI.show) {
+        // Mostrar el sidebar flotante
+        memberInteractionUI.show();
+        
+        // Obtener referencia después de crearlo
+        floatingSidebar = document.querySelector('.lead-manager-interaction-ui');
+      }
+      
+      // Si existe, asegurarse de que sea visible
+      if (floatingSidebar) {
+        // Hacer visible el sidebar flotante
+        floatingSidebar.style.display = 'block';
+        floatingSidebar.style.opacity = '1';
+        
+        // Ocultar este sidebar
+        this.hide();
+        
+        // Mostrar mensaje de éxito
+        this.showToast('Panel de interacción abierto');
+      } else {
+        // Si no se pudo encontrar o crear, intentar iniciar la interacción directamente
+        memberInteractionUI.startInteraction();
+        this.showToast('Interacción con miembros iniciada');
+      }
+    } catch (error) {
+      console.error('Error al abrir panel de interacción:', error);
+      this.showToast('Error al abrir panel de interacción', true);
     }
   }
   
   // Función para mostrar una notificación toast
   showToast(message, isError = false) {
+    // Crear elemento toast
     const toast = document.createElement('div');
-    toast.className = 'lmp-toast';
+    toast.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: ${isError ? '#f44336' : '#4CAF50'};
+      color: white;
+      padding: 10px 20px;
+      border-radius: 4px;
+      z-index: 10000;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    `;
     toast.textContent = message;
-    
-    // Estilos del toast
-    Object.assign(toast.style, {
-      position: 'fixed',
-      bottom: '20px',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      backgroundColor: isError ? '#f44336' : '#4CAF50',
-      color: 'white',
-      padding: '10px 20px',
-      borderRadius: '4px',
-      zIndex: '10000',
-      boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '14px'
-    });
     
     // Agregar al DOM
     document.body.appendChild(toast);

@@ -128,21 +128,35 @@ class MemberInteraction {
           'div[aria-label="Message"][contenteditable="true"]'
         ];
         
+        // Intentar encontrar el campo de mensaje con varios intentos
         let messageField = null;
-        for (const selector of messageFieldSelectors) {
-          try {
-            messageField = await this.waitForElement(selector, 2000);
-            if (messageField) {
-              console.log(`Campo de mensaje encontrado con selector: ${selector}`);
-              break;
-            }
-          } catch (error) {
-            // Continuar con el siguiente selector
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        while (!messageField && retryCount < maxRetries) {
+          if (retryCount > 0) {
+            console.log(`Reintento ${retryCount}/${maxRetries} para encontrar el campo de mensaje...`);
+            // Esperar un poco más en cada reintento
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
           }
+          
+          for (const selector of messageFieldSelectors) {
+            try {
+              messageField = await this.waitForElement(selector, 2000);
+              if (messageField) {
+                console.log(`Campo de mensaje encontrado con selector: ${selector}`);
+                break;
+              }
+            } catch (error) {
+              // Continuar con el siguiente selector
+            }
+          }
+          
+          retryCount++;
         }
         
         if (!messageField) {
-          console.error(`No se encontró el campo de mensaje para ${memberName}`);
+          console.error(`No se encontró el campo de mensaje para ${memberName} después de ${maxRetries} intentos`);
           continue;
         }
 
@@ -327,9 +341,11 @@ class MemberInteraction {
   
   // Detener la interacción
   stopInteractionProcess() {
-    console.log('MemberInteraction: Se recibió solicitud para detener interacción, pero se ignora para la interacción desde popup');
-    // No hacemos nada, simplemente devolvemos false para que no se interrumpa la interacción
-    return false;
+    console.log('MemberInteraction: Se recibió solicitud para detener interacción');
+    // Marcar la bandera para detener la interacción
+    this.stopInteraction = true;
+    this.isInteracting = false;
+    return true;
   }
   
   // Realizar hover sobre un elemento de miembro
