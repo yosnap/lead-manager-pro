@@ -196,6 +196,26 @@ input[type="text"], select {
   color: var(--success-color);
 }
 
+/* Estilos específicos para el mensaje de estado en la configuración global */
+#global-settings-status {
+  padding: 8px;
+  border-radius: 4px;
+  margin-top: 10px;
+  font-weight: 500;
+  text-align: center;
+  min-height: 20px;
+}
+
+#global-settings-status.success {
+  background-color: rgba(76, 175, 80, 0.1);
+  border: 1px solid var(--success-color);
+}
+
+#global-settings-status.error {
+  background-color: rgba(244, 67, 54, 0.1);
+  border: 1px solid var(--error-color);
+}
+
 .progress-container {
   height: 8px;
   background-color: var(--light-gray);

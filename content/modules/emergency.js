@@ -95,7 +95,7 @@ function resetExtension() {
     
     // Eliminar elementos DOM existentes
     const elementsToRemove = [
-      'snap-lead-manager-container',
+      'snap-lead-manager-searcher',
       'snap-lead-manager-toggle',
       'snap-lead-manager-iframe',
       'lmp-simple-group-ui',

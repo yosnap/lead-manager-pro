@@ -1,5 +1,5 @@
 /* Estilos para el contenedor del sidebar */
-#snap-lead-manager-container {
+#snap-lead-manager-searcher {
   position: fixed;
   top: 0;
   right: 0;
@@ -43,16 +43,16 @@
 }
 
 /* Ocultar el sidebar mientras se carga la página para evitar interferencias */
-#snap-lead-manager-container.loading {
+#snap-lead-manager-searcher.loading {
   opacity: 0;
 }
 
 /* Estado oculto */
-#snap-lead-manager-container.hidden {
+#snap-lead-manager-searcher.hidden {
   transform: translateX(100%);
 }
 
 /* Estado visible */
-#snap-lead-manager-container.visible {
+#snap-lead-manager-searcher.visible {
   transform: translateX(0);
 }

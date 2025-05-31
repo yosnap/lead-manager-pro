@@ -17,10 +17,10 @@ style.textContent = `
   }
 
   /* Contenedor principal del sidebar */
-  .snap-lead-manager-container {
+  .snap-lead-manager-searcher {
     position: fixed;
     top: 0;
-    right: -320px; /* Cambiado para iniciar oculto */
+    right: -320px; /* Iniciar oculto */
     width: 320px;
     height: 100vh;
     background: white;
@@ -29,10 +29,12 @@ style.textContent = `
     overflow: hidden;
     transition: transform 0.3s ease;
     z-index: 9999;
+    display: none; /* Oculto por defecto */
   }
   
-  .snap-lead-manager-container.visible {
+  .snap-lead-manager-searcher.visible {
     transform: translateX(-320px);
+    display: block; /* Mostrar cuando tenga la clase visible */
   }
   
   .snap-lead-manager-iframe {
@@ -92,6 +94,54 @@ function isGroupsFeedPage() {
 }
 
 /**
+ * Abre la página de login de la extensión
+ */
+function openLoginPage() {
+  console.log('Lead Manager Pro: Abriendo página de login');
+  // Usar un enfoque alternativo para abrir el popup
+  chrome.runtime.sendMessage({ 
+    action: 'openLoginPage',
+    forceNewTab: true
+  });
+}
+
+/**
+ * Verifica el estado de autenticación del usuario
+ * @param {Function} callback - Función a llamar con el resultado de la verificación
+ */
+function checkAuthStatus(callback) {
+  console.log('Lead Manager Pro: Verificando estado de autenticación');
+  
+  // Verificar si el módulo de autenticación está disponible
+  if (window.LeadManagerPro && window.LeadManagerPro.Auth) {
+    // Usar el módulo centralizado de autenticación
+    window.LeadManagerPro.Auth.isAuthenticated(function(isAuthenticated) {
+      console.log('Lead Manager Pro: Estado de autenticación:', isAuthenticated);
+      callback(isAuthenticated);
+    });
+  } else {
+    // Fallback al método anterior si el módulo no está disponible
+    console.log('Lead Manager Pro: Módulo Auth no disponible, usando método alternativo');
+    
+    // Primero verificamos en chrome.storage.local
+    chrome.storage.local.get(['lmp_auth'], function(localResult) {
+      if (localResult.lmp_auth === true) {
+        console.log('Lead Manager Pro: Usuario autenticado en storage.local');
+        callback(true);
+        return;
+      }
+      
+      // Si no está en local, verificamos en chrome.storage.sync
+      chrome.storage.sync.get(['lmp_auth'], function(syncResult) {
+        const isAuthenticated = syncResult.lmp_auth === true;
+        console.log('Lead Manager Pro: Estado de autenticación en storage.sync:', isAuthenticated);
+        callback(isAuthenticated);
+      });
+    });
+  }
+}
+
+/**
  * Inserta el sidebar en la página
  * @returns {HTMLElement} - El contenedor del sidebar
  */
@@ -99,7 +149,7 @@ window.LeadManagerPro.modules.insertSidebar = function() {
   console.log('Lead Manager Pro: Insertando sidebar');
   
   // Verificar si ya existe el sidebar
-  const existingSidebar = document.getElementById('snap-lead-manager-container');
+  const existingSidebar = document.getElementById('snap-lead-manager-searcher');
   const existingToggle = document.getElementById('snap-lead-manager-toggle');
   
   if (existingSidebar && existingToggle) {
@@ -109,8 +159,8 @@ window.LeadManagerPro.modules.insertSidebar = function() {
   
   // Crear contenedor para el sidebar
   const sidebarContainer = document.createElement('div');
-  sidebarContainer.id = 'snap-lead-manager-container';
-  sidebarContainer.className = 'snap-lead-manager-container';
+  sidebarContainer.id = 'snap-lead-manager-searcher';
+  sidebarContainer.className = 'snap-lead-manager-searcher';
   
   // Crear iframe para el sidebar
   const iframe = document.createElement('iframe');
@@ -160,12 +210,13 @@ window.LeadManagerPro.modules.insertSidebar = function() {
       toggleButton.style.display = 'none';
     }
   } else {
-    // En cualquier otra página, mostrar sidebar principal
-    sidebarContainer.classList.add('visible');
-    toggleButton.style.right = '320px';
-    toggleButton.innerHTML = '►';
-    toggleButton.setAttribute('title', 'Ocultar Lead Manager');
-    adjustContent(true);
+    // En cualquier otra página, mantener el sidebar oculto por defecto
+    sidebarContainer.classList.remove('visible');
+    toggleButton.style.right = '0';
+    toggleButton.innerHTML = '◄';
+    toggleButton.setAttribute('title', 'Mostrar Lead Manager');
+    adjustContent(false);
+    localStorage.setItem('snap_lead_manager_sidebar_hidden', 'true');
   }
   
   // Manejar clic en el botón de toggle
@@ -222,13 +273,22 @@ window.LeadManagerPro.modules.insertSidebar = function() {
           window.leadManagerPro.groupSidebar.hide();
         }
         
-        // Restaurar estado anterior
-        const wasHidden = localStorage.getItem('snap_lead_manager_sidebar_hidden') === 'true';
-        if (!wasHidden) {
+        // Mantener el estado anterior o mantener oculto por defecto
+        const wasHidden = localStorage.getItem('snap_lead_manager_sidebar_hidden');
+        
+        // Si hay un estado guardado, restaurarlo; si no, mantener oculto
+        if (wasHidden === 'false') {
+          // El usuario lo tenía visible
           sidebarContainer.classList.add('visible');
           toggleButton.style.right = '320px';
           toggleButton.innerHTML = '►';
           adjustContent(true);
+        } else {
+          // Por defecto o si estaba oculto, mantenerlo oculto
+          sidebarContainer.classList.remove('visible');
+          toggleButton.style.right = '0';
+          toggleButton.innerHTML = '◄';
+          adjustContent(false);
         }
       }
     }
@@ -253,6 +313,12 @@ window.LeadManagerPro.modules.insertSidebar = function() {
     if (iframe && iframe.contentWindow) {
       iframe.contentWindow.postMessage({
         action: 'sidebar_ready',
+        from: 'content_script'
+      }, '*');
+      
+      // También refrescar el estado de autenticación
+      iframe.contentWindow.postMessage({
+        action: 'refresh_auth',
         from: 'content_script'
       }, '*');
     }
@@ -296,7 +362,7 @@ window.LeadManagerPro.modules.ensureToggleButtonVisible = function() {
     
     // Agregar manejador de clic para mostrar/ocultar el sidebar
     toggleButton.addEventListener('click', function() {
-      const sidebarContainer = document.getElementById('snap-lead-manager-container');
+      const sidebarContainer = document.getElementById('snap-lead-manager-searcher');
       if (!sidebarContainer) {
         // Si no existe el sidebar, crearlo
         window.LeadManagerPro.modules.insertSidebar();
@@ -338,11 +404,50 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
     console.error("Error al asegurar visibilidad del botón toggle:", error);
   }
   // Escuchar mensajes del iframe del sidebar
-  window.addEventListener('message', (event) => {
-    // Verificar que el mensaje tiene datos
-    if (!event.data) return;
+  window.addEventListener('message', function(event) {
+    // Verificar origen del mensaje (solo aceptar mensajes del iframe)
+    const iframe = document.getElementById('snap-lead-manager-iframe');
+    if (iframe && event.source !== iframe.contentWindow) {
+      return;
+    }
     
+    // Procesar mensaje según su acción
     const message = event.data;
+    if (!message || !message.action) {
+      return;
+    }
+    
+    // Manejar acción para abrir página de login
+    if (message.action === 'openLoginPage') {
+      openLoginPage();
+      return;
+    }
+    
+    // Manejar acción para verificar estado de autenticación
+    if (message.action === 'checkAuthStatus') {
+      checkAuthStatus(function(isAuthenticated) {
+        // Responder al iframe con el estado de autenticación
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({
+            action: 'authStatusResponse',
+            isAuthenticated: isAuthenticated
+          }, '*');
+        }
+      });
+      return;
+    }
+    
+    // Manejar acción para refrescar el estado de autenticación
+    if (message.action === 'refreshAuthStatus') {
+      // Enviar mensaje al iframe para refrescar el estado de autenticación
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({
+          action: 'refresh_auth',
+          from: 'content_script'
+        }, '*');
+      }
+      return;
+    }
     
     // Logging reducido para evitar spam en consola
     if (message.action !== 'status_update') {
@@ -490,20 +595,59 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
     }
     
     else if (message.action === 'openSidebar') {
+      console.log('Lead Manager Pro: Recibida solicitud para abrir el sidebar');
       // Mostrar el sidebar cuando se solicita desde el popup
-      const sidebarContainer = document.getElementById('snap-lead-manager-container');
+      let sidebarContainer = document.getElementById('snap-lead-manager-searcher');
+      
+      if (!sidebarContainer) {
+        // Si no existe el sidebar, crearlo
+        console.log('Lead Manager Pro: Creando nuevo sidebar');
+        sidebarContainer = window.LeadManagerPro.modules.insertSidebar();
+      }
+      
       if (sidebarContainer) {
+        console.log('Lead Manager Pro: Mostrando sidebar');
+        // Asegurarse de que el sidebar esté visible
+        sidebarContainer.style.display = 'block';
         sidebarContainer.classList.add('visible');
+        
+        // Ajustar el botón de toggle
         const toggleButton = document.getElementById('snap-lead-manager-toggle');
         if (toggleButton) {
           toggleButton.innerHTML = '►';
           toggleButton.style.right = '320px';
           toggleButton.setAttribute('title', 'Ocultar Lead Manager');
+          toggleButton.style.display = 'flex';
         }
+        
+        // Ajustar el contenido de la página
+        document.body.classList.add('snap-lead-manager-body-shift');
+        
+        // Guardar estado en localStorage
         localStorage.setItem('snap_lead_manager_sidebar_hidden', 'false');
+        
+        // Notificar al iframe que el sidebar está abierto
+        const iframe = document.getElementById('snap-lead-manager-iframe');
+        if (iframe && iframe.contentWindow) {
+          setTimeout(() => {
+            iframe.contentWindow.postMessage({
+              action: 'sidebar_opened',
+              from: 'content_script'
+            }, '*');
+            
+            // También refrescar el estado de autenticación
+            iframe.contentWindow.postMessage({
+              action: 'refresh_auth',
+              from: 'content_script'
+            }, '*');
+          }, 500);
+        }
+        
+        // Devolver respuesta exitosa
+        sendResponse({ success: true });
       } else {
-        // Si no existe el sidebar, crearlo
-        window.LeadManagerPro.modules.insertSidebar();
+        console.error('Lead Manager Pro: No se pudo crear/encontrar el sidebar');
+        sendResponse({ success: false, error: 'No se pudo crear el sidebar' });
       }
     }
     
@@ -524,7 +668,7 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
       console.log('Iniciando búsqueda directamente con opciones:', message.options);
       
       // Primero, asegurarse de que el sidebar esté visible
-      const sidebarContainer = document.getElementById('snap-lead-manager-container');
+      const sidebarContainer = document.getElementById('snap-lead-manager-searcher');
       if (sidebarContainer) {
         sidebarContainer.classList.add('visible');
         const toggleButton = document.getElementById('snap-lead-manager-toggle');
@@ -718,10 +862,10 @@ function sendMessageToSidebar(action, data = {}) {
 (function initializeSidebar() {
   // Esperar a que el DOM esté completamente cargado
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      window.LeadManagerPro.modules.insertSidebar();
+    document.addEventListener('DOMContentLoaded', function() {
+      window.LeadManagerPro.modules.setupSidebarListeners();
     });
   } else {
-    window.LeadManagerPro.modules.insertSidebar();
+    window.LeadManagerPro.modules.setupSidebarListeners();
   }
 })();

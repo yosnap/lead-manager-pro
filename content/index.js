@@ -343,7 +343,7 @@ function setupChromeMessagesListener() {
       console.log('Lead Manager Pro: Recibida solicitud para restablecer el sidebar');
       
       // Eliminar el sidebar anterior si existe
-      const oldSidebar = document.getElementById('snap-lead-manager-container');
+      const oldSidebar = document.getElementById('snap-lead-manager-searcher');
       if (oldSidebar) {
         try {
           document.body.removeChild(oldSidebar);
@@ -842,7 +842,7 @@ function setupChromeMessagesListener() {
       // Configurar el sidebar para búsqueda directa
       if (window.LeadManagerPro.modules.insertSidebar) {
         // Mostrar el sidebar si no está visible
-        const sidebarContainer = document.getElementById('snap-lead-manager-container');
+        const sidebarContainer = document.getElementById('snap-lead-manager-searcher');
         if (sidebarContainer) {
           sidebarContainer.style.transform = 'translateX(0)';
           const toggleButton = document.getElementById('snap-lead-manager-toggle');

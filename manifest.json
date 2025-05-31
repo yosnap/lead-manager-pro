@@ -18,7 +18,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_popup": "popup/popup.html",
+    "default_popup": "popup/login.html",
     "default_title": "Lead Manager Pro"
   },
   "background": {
@@ -61,6 +61,7 @@
         "content/modules/n8nIntegration.js",
         "content/modules/n8nIntegrationUI.js",
         "content/modules/sidebar.js",
+        "content/modules/sidebarController.js",
         "content/modules/sidebarEnsurer.js",
         "content/modules/errorHandler.js",
         "content/modules/emergency.js",
@@ -89,7 +90,14 @@
         "content/modules/n8nIntegrationUI.js",
         "content/modules/historyManager.js",
         "content/modules/sidebarEnsurer.js",
-        "popup/interaction.html"
+        "content/modules/sidebarController.js",
+        "popup/interaction.html",
+        "popup/login.html",
+        "popup/js/login.js",
+        "popup/css/login.css",
+        "popup/css/user-info.css",
+        "js/auth.js",
+        "js/sidebar-auth.js"
       ],
       "matches": ["https://*.facebook.com/*"]
     }

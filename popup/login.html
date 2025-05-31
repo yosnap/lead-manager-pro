@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lead Manager Pro - Login</title>
+  <link rel="stylesheet" href="css/popup.css">
+  <link rel="stylesheet" href="css/login.css">
+</head>
+<body>
+  <div class="popup-container">
+    <header>
+      <h1>Lead Manager Pro</h1>
+      <div class="version">v1.0.0</div>
+    </header>
+    
+    <main>
+      <div class="login-container">
+        <h2>Iniciar Sesión</h2>
+        <form id="login-form">
+          <div class="form-group">
+            <label for="username">Usuario</label>
+            <input type="text" id="username" name="username" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="password">Contraseña</label>
+            <input type="password" id="password" name="password" required>
+          </div>
+          
+          <div class="form-group remember-me">
+            <input type="checkbox" id="remember" name="remember">
+            <label for="remember">Recordarme</label>
+          </div>
+          
+          <div id="login-error" class="error-message"></div>
+          
+          <button type="submit" class="login-btn">Acceder</button>
+        </form>
+        
+        <div class="login-footer">
+          <a href="#" id="forgot-password">¿Olvidaste tu contraseña?</a>
+        </div>
+      </div>
+    </main>
+    
+    <footer>
+      Lead Manager Pro v1.0.0
+    </footer>
+  </div>
+  
+  <script src="../js/auth.js"></script>
+  <script src="js/login.js"></script>
+</body>
+</html>

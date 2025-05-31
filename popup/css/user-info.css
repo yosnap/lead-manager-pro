@@ -1,0 +1,29 @@
+/* Estilos para la información de usuario y botón de cerrar sesión */
+
+.user-info {
+  margin-top: 5px;
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.username {
+  font-weight: 600;
+  color: #E7F3FF;
+}
+
+.user-info a {
+  color: #E7F3FF;
+  text-decoration: none;
+  font-size: 11px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background-color: rgba(255, 255, 255, 0.1);
+  transition: background-color 0.2s;
+}
+
+.user-info a:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  text-decoration: none;
+}

@@ -25,6 +25,20 @@
       ensureSidebarExists();
     }).catch(error => {
       console.warn('No se pudieron cargar los módulos necesarios:', error);
+      // Intentar recuperar mostrando el error en la consola
+      console.error('Error detallado:', error);
+      
+      // Verificar los namespaces disponibles
+      console.log('LeadManagerPro disponible:', !!window.LeadManagerPro);
+      console.log('leadManagerPro disponible:', !!window.leadManagerPro);
+      
+      if (window.LeadManagerPro && window.LeadManagerPro.modules) {
+        console.log('Módulos disponibles en LeadManagerPro:', Object.keys(window.LeadManagerPro.modules));
+      }
+      
+      if (window.leadManagerPro) {
+        console.log('Propiedades disponibles en leadManagerPro:', Object.keys(window.leadManagerPro));
+      }
     });
   }
   
@@ -35,7 +49,7 @@
       const maxAttempts = 10;
       
       const checkModules = () => {
-        if (window.leadManagerPro && window.leadManagerPro.sidebar) {
+        if (window.LeadManagerPro && window.LeadManagerPro.modules) {
           resolve();
           return;
         }
@@ -56,27 +70,27 @@
   // Asegurar que el sidebar existe
   function ensureSidebarExists() {
     // Verificar si ya existe el sidebar
-    if (document.getElementById('snap-lead-manager-container')) {
+    if (document.getElementById('snap-lead-manager-searcher')) {
       console.log('El sidebar ya existe');
       return;
     }
     
     // Si no existe, intentar crearlo
-    if (window.leadManagerPro && window.leadManagerPro.sidebar && typeof window.leadManagerPro.sidebar.insert === 'function') {
+    if (window.LeadManagerPro && window.LeadManagerPro.modules && typeof window.LeadManagerPro.modules.insertSidebar === 'function') {
       console.log('Insertando sidebar de búsqueda...');
-      window.leadManagerPro.sidebar.insert();
+      window.LeadManagerPro.modules.insertSidebar();
     } else {
       console.warn('No se puede insertar el sidebar porque la función no está disponible');
     }
     
     // Verificar periódicamente
     const intervalId = setInterval(() => {
-      if (document.getElementById('snap-lead-manager-container')) {
+      if (document.getElementById('snap-lead-manager-searcher')) {
         console.log('El sidebar se ha insertado correctamente');
         clearInterval(intervalId);
-      } else if (window.leadManagerPro && window.leadManagerPro.sidebar && typeof window.leadManagerPro.sidebar.insert === 'function') {
+      } else if (window.LeadManagerPro && window.LeadManagerPro.modules && typeof window.LeadManagerPro.modules.insertSidebar === 'function') {
         console.log('Reintentando insertar sidebar...');
-        window.leadManagerPro.sidebar.insert();
+        window.LeadManagerPro.modules.insertSidebar();
       }
     }, 2000);
     

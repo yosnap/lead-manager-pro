@@ -13,6 +13,7 @@ let state = {
   restored: false,  // Indicador de si el estado fue restaurado
   
   // Opciones generales con valores por defecto
+  // Estos valores se sobrescribirán con los valores de chrome.storage.local
   maxScrolls: 50,
   scrollDelay: 2,
   
@@ -1337,6 +1338,38 @@ function initializeEvents() {
   debugLog('Todos los eventos inicializados correctamente');
 }
 
+// Cargar configuraciones globales desde chrome.storage.local
+async function loadGlobalConfig() {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get(['generalOptions'], (result) => {
+        if (result && result.generalOptions) {
+          // Actualizar estado con las configuraciones globales
+          state.maxScrolls = result.generalOptions.maxScrolls || state.maxScrolls;
+          state.scrollDelay = result.generalOptions.scrollDelay || state.scrollDelay;
+          
+          // Actualizar los campos del formulario si existen
+          if (maxScrollsInput) {
+            maxScrollsInput.value = state.maxScrolls;
+          }
+          
+          if (scrollDelayInput) {
+            scrollDelayInput.value = state.scrollDelay;
+          }
+          
+          debugLog('Configuraciones globales cargadas desde Extension Storage:', result.generalOptions);
+        } else {
+          debugLog('No se encontraron configuraciones globales en Extension Storage, usando valores por defecto');
+        }
+        resolve();
+      });
+    } catch (error) {
+      console.error('Error al cargar configuraciones globales:', error);
+      resolve();
+    }
+  });
+}
+
 // Modificar la función initializeSidebar para incluir la inicialización de eventos
 async function initializeSidebar() {
   debugLog('Iniciando sidebar...');
@@ -1349,6 +1382,10 @@ async function initializeSidebar() {
     // Inicializar eventos
     initializeEvents();
     debugLog('Eventos inicializados');
+    
+    // Cargar configuraciones globales
+    await loadGlobalConfig();
+    debugLog('Configuraciones globales cargadas');
     
     // Cargar estado guardado
     await loadSavedState();

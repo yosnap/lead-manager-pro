@@ -126,7 +126,7 @@ class MemberInteractionUI {
   // Función para cerrar el sidebar flotante
   closeSidebar() {
     console.log('MemberInteractionUI: Cerrando sidebar flotante durante la interacción');
-    const sidebarContainer = document.getElementById('snap-lead-manager-container');
+    const sidebarContainer = document.getElementById('snap-lead-manager-searcher');
     if (sidebarContainer && sidebarContainer.classList.contains('visible')) {
       // Guardar el estado actual para poder restaurarlo después
       localStorage.setItem('snap_lead_manager_sidebar_was_visible', 'true');
@@ -160,7 +160,7 @@ class MemberInteractionUI {
     const wasVisible = localStorage.getItem('snap_lead_manager_sidebar_was_visible') === 'true';
     
     if (wasVisible) {
-      const sidebarContainer = document.getElementById('snap-lead-manager-container');
+      const sidebarContainer = document.getElementById('snap-lead-manager-searcher');
       if (sidebarContainer && !sidebarContainer.classList.contains('visible')) {
         // Simular clic en el botón de toggle para abrir el sidebar
         const toggleButton = document.getElementById('snap-lead-manager-toggle');

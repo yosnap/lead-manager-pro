@@ -39,7 +39,7 @@ window.LeadManagerPro.modules.navigateToSearchPage = async function(searchState)
     console.log(`Lead Manager Pro: Navegando a ${searchUrl}`);
     
     // Ocultar el sidebar antes de navegar
-    const sidebarContainer = document.getElementById('snap-lead-manager-container');
+    const sidebarContainer = document.getElementById('snap-lead-manager-searcher');
     if (sidebarContainer) {
       sidebarContainer.style.transform = 'translateX(100%)';
       const toggleButton = document.getElementById('snap-lead-manager-toggle');

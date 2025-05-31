@@ -4,6 +4,48 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Background script recibió mensaje:', message);
   
+  // Si el mensaje es para abrir la página de login
+  if (message.action === 'openLoginPage') {
+    // Verificar si debemos forzar la apertura en una nueva pestaña
+    if (message.forceNewTab) {
+      // Abrir la página de login en una nueva pestaña
+      chrome.tabs.create({ url: chrome.runtime.getURL('popup/login.html') });
+    } else {
+      // Intentar abrir el popup (puede no funcionar desde un content script)
+      try {
+        chrome.action.openPopup();
+      } catch (error) {
+        console.error('Error al abrir popup:', error);
+        // Fallback: abrir en nueva pestaña
+        chrome.tabs.create({ url: chrome.runtime.getURL('popup/login.html') });
+      }
+    }
+    return true;
+  }
+  
+  // Si el mensaje es para notificar al sidebar sobre cambios en la autenticación
+  if (message.action === 'notifySidebarAuthChange') {
+    console.log('Background: Notificando cambio de autenticación a las pestañas activas');
+    
+    // Enviar mensaje a todas las pestañas activas de Facebook
+    chrome.tabs.query({url: "*://*.facebook.com/*"}, function(tabs) {
+      tabs.forEach(function(tab) {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'refreshAuthStatus'
+        }, function(response) {
+          // Ignorar errores de comunicación (algunas pestañas pueden no tener el content script)
+          if (chrome.runtime.lastError) {
+            console.log('Background: No se pudo notificar a la pestaña', tab.id);
+          } else {
+            console.log('Background: Notificación enviada a la pestaña', tab.id);
+          }
+        });
+      });
+    });
+    
+    return true;
+  }
+  
   // Si el mensaje es para iniciar la interacción desde el popup
   if (message.action === 'startInteractionFromPopup') {
     // Obtener la pestaña activa donde queremos ejecutar la interacción

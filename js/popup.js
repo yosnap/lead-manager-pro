@@ -1,4 +1,43 @@
 document.addEventListener('DOMContentLoaded', function() {
+  // Verificar si el usuario está autenticado usando nuestro módulo Auth
+  window.LeadManagerPro.Auth.isAuthenticated(function(isAuthenticated) {
+    // Si no está autenticado, redirigir a la página de login
+    if (!isAuthenticated) {
+      console.log('Usuario no autenticado, redirigiendo a login...');
+      window.location.href = 'login.html';
+      return;
+    }
+    
+    // Obtener información del usuario
+    window.LeadManagerPro.Auth.getUserInfo(function(userInfo) {
+      if (userInfo && userInfo.username) {
+        const headerElement = document.querySelector('header');
+        if (headerElement) {
+          const userInfoElement = document.createElement('div');
+          userInfoElement.className = 'user-info';
+          userInfoElement.innerHTML = `<span class="username">${userInfo.username}</span> <a href="#" id="logout">Cerrar sesión</a>`;
+          headerElement.appendChild(userInfoElement);
+          
+          // Añadir evento para cerrar sesión
+          document.getElementById('logout').addEventListener('click', function(event) {
+            event.preventDefault();
+            // Usar nuestro módulo Auth para cerrar sesión
+            window.LeadManagerPro.Auth.logout(function() {
+              console.log('Sesión cerrada correctamente');
+              window.location.href = 'login.html';
+            });
+          });
+        }
+      }
+      
+      // Continuar con la inicialización de la UI
+      initializeUI();
+    });
+  });
+  
+  // Función para inicializar la UI después de verificar autenticación
+  function initializeUI() {
+
   // Referencias a los elementos del menú
   const accountSettingsBtn = document.getElementById('account-settings');
   const searchSaveBtn = document.getElementById('search-save');
@@ -208,4 +247,5 @@ document.addEventListener('DOMContentLoaded', function() {
       showMessage('Esta función estará disponible próximamente', 'info');
     });
   }
+  } // Fin de initializeUI
 });
