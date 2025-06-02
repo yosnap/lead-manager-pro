@@ -12,6 +12,26 @@ window.LeadManagerPro.state = window.LeadManagerPro.state || {};
 window.LeadManagerPro.utils = window.LeadManagerPro.utils || {};
 window.LeadManagerPro.modules = window.LeadManagerPro.modules || {};
 
+// Cargar módulos de autenticación críticos primero
+function loadAuthenticationModules() {
+  const authModules = [
+    'content/modules/AuthenticationWrapper.js',
+    'content/modules/AuthMassApplier.js'
+  ];
+  
+  authModules.forEach(modulePath => {
+    const script = document.createElement('script');
+    script.src = chrome.runtime.getURL(modulePath);
+    script.async = false; // Cargar en orden
+    document.head.appendChild(script);
+  });
+  
+  console.log('Lead Manager Pro: Módulos de autenticación cargados');
+}
+
+// Cargar módulos de autenticación inmediatamente
+loadAuthenticationModules();
+
 // Inicialización del script de contenido
 async function initContentScript() {
   console.log('Lead Manager Pro: Script de contenido inicializado');
@@ -61,7 +81,24 @@ async function initContentScript() {
   // Inicializar sidebar de grupo si estamos en una página de grupo
   if (window.location.href.includes('/groups/') && !window.location.href.includes('/groups/feed')) {
     if (window.leadManagerPro && window.leadManagerPro.groupSidebar) {
-      window.leadManagerPro.groupSidebar.init();
+      // Verificar autenticación antes de inicializar
+      setTimeout(() => {
+        if (window.LeadManagerPro?.Auth) {
+          window.LeadManagerPro.Auth.isAuthenticated((isAuth) => {
+            if (isAuth) {
+              console.log('Inicializando GroupSidebar - usuario autenticado');
+              window.leadManagerPro.groupSidebar.init();
+            } else {
+              console.log('GroupSidebar - esperando autenticación');
+              // Inicializar de todas formas para mostrar formulario de login
+              window.leadManagerPro.groupSidebar.init();
+            }
+          });
+        } else {
+          // Si no hay módulo de auth disponible, inicializar normalmente
+          window.leadManagerPro.groupSidebar.init();
+        }
+      }, 1000); // Delay para asegurar que Auth esté cargado
     }
   }
   

@@ -1,0 +1,5 @@
+Login,
+  testGroupSidebarLogout,
+  testGroupSidebarRecreate,
+  groupSidebarTestHelp
+};

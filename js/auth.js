@@ -2,6 +2,7 @@
  * Módulo de autenticación para Lead Manager Pro
  * Este archivo centraliza todas las funciones relacionadas con la autenticación
  * para asegurar consistencia entre los diferentes componentes de la extensión.
+ * SOLO utiliza chrome.storage como método de almacenamiento.
  */
 
 // Claves para el almacenamiento
@@ -14,6 +15,12 @@ const AUTH_KEYS = {
   PASSWORD: 'lmp_password'
 };
 
+// Configuración de almacenamiento: SOLO chrome.storage
+const STORAGE_CONFIG = {
+  PRIMARY: chrome.storage.local,   // Almacenamiento primario
+  BACKUP: chrome.storage.sync      // Respaldo para sincronización
+};
+
 // Objeto global para autenticación
 const Auth = {
   /**
@@ -21,19 +28,17 @@ const Auth = {
    * @param {Function} callback - Función a llamar con el resultado (boolean)
    */
   isAuthenticated: function(callback) {
-    // Verificar en ambos almacenamientos
-    chrome.storage.local.get([AUTH_KEYS.AUTH], function(localResult) {
-      if (localResult[AUTH_KEYS.AUTH] === true) {
-        console.log('Auth: Usuario autenticado en storage.local');
-        callback(true);
+    // Verificar solo en chrome.storage.local (primario)
+    STORAGE_CONFIG.PRIMARY.get([AUTH_KEYS.AUTH], function(result) {
+      if (chrome.runtime.lastError) {
+        console.error('Error al verificar autenticación:', chrome.runtime.lastError);
+        callback(false);
         return;
       }
       
-      chrome.storage.sync.get([AUTH_KEYS.AUTH], function(syncResult) {
-        const isAuth = syncResult[AUTH_KEYS.AUTH] === true;
-        console.log('Auth: Estado de autenticación en storage.sync:', isAuth);
-        callback(isAuth);
-      });
+      const isAuth = result[AUTH_KEYS.AUTH] === true;
+      console.log('Auth: Estado de autenticación:', isAuth);
+      callback(isAuth);
     });
   },
   
@@ -42,21 +47,17 @@ const Auth = {
    * @param {Function} callback - Función a llamar con la información del usuario
    */
   getUserInfo: function(callback) {
-    // Verificar en ambos almacenamientos
-    chrome.storage.local.get([AUTH_KEYS.USER, AUTH_KEYS.TIMESTAMP], function(localResult) {
-      if (localResult[AUTH_KEYS.USER]) {
-        callback({
-          username: localResult[AUTH_KEYS.USER],
-          timestamp: localResult[AUTH_KEYS.TIMESTAMP] || Date.now()
-        });
+    // Verificar solo en chrome.storage.local (primario)
+    STORAGE_CONFIG.PRIMARY.get([AUTH_KEYS.USER, AUTH_KEYS.TIMESTAMP], function(result) {
+      if (chrome.runtime.lastError) {
+        console.error('Error al obtener información del usuario:', chrome.runtime.lastError);
+        callback({ username: null, timestamp: null });
         return;
       }
       
-      chrome.storage.sync.get([AUTH_KEYS.USER, AUTH_KEYS.TIMESTAMP], function(syncResult) {
-        callback({
-          username: syncResult[AUTH_KEYS.USER] || null,
-          timestamp: syncResult[AUTH_KEYS.TIMESTAMP] || null
-        });
+      callback({
+        username: result[AUTH_KEYS.USER] || null,
+        timestamp: result[AUTH_KEYS.TIMESTAMP] || null
       });
     });
   },
@@ -78,30 +79,39 @@ const Auth = {
         [AUTH_KEYS.TIMESTAMP]: Date.now()
       };
       
-      // Guardar en ambos almacenamientos
-      chrome.storage.local.set(authData, function() {
-        console.log('Auth: Estado de autenticación guardado en local');
+      // Guardar en almacenamiento primario
+      STORAGE_CONFIG.PRIMARY.set(authData, function() {
+        if (chrome.runtime.lastError) {
+          console.error('Error al guardar autenticación:', chrome.runtime.lastError);
+          callback(false);
+          return;
+        }
         
-        chrome.storage.sync.set(authData, function() {
-          console.log('Auth: Estado de autenticación guardado en sync');
-          
-          // Si se debe recordar, guardar credenciales
-          if (remember) {
-            const credentialData = {
-              [AUTH_KEYS.REMEMBER]: true,
-              [AUTH_KEYS.USERNAME]: username,
-              [AUTH_KEYS.PASSWORD]: password
-            };
-            
-            chrome.storage.local.set(credentialData);
-            chrome.storage.sync.set(credentialData);
+        console.log('Auth: Estado de autenticación guardado correctamente');
+        
+        // También guardar en respaldo para sincronización
+        STORAGE_CONFIG.BACKUP.set(authData, function() {
+          if (chrome.runtime.lastError) {
+            console.warn('Auth: Error al sincronizar autenticación:', chrome.runtime.lastError);
           }
-          
-          // Notificar al sidebar sobre el cambio de estado de autenticación
-          Auth.notifySidebarAuthChange();
-          
-          callback(true);
         });
+        
+        // Si se debe recordar, guardar credenciales
+        if (remember) {
+          const credentialData = {
+            [AUTH_KEYS.REMEMBER]: true,
+            [AUTH_KEYS.USERNAME]: username,
+            [AUTH_KEYS.PASSWORD]: password
+          };
+          
+          STORAGE_CONFIG.PRIMARY.set(credentialData);
+          STORAGE_CONFIG.BACKUP.set(credentialData);
+        }
+        
+        // Notificar al sidebar y otros componentes sobre el cambio
+        Auth.notifyAuthChange();
+        
+        callback(true);
       });
     } else {
       callback(false);
@@ -109,14 +119,26 @@ const Auth = {
   },
   
   /**
-   * Notifica al sidebar sobre cambios en el estado de autenticación
+   * Notifica a todos los componentes sobre cambios en el estado de autenticación
    */
-  notifySidebarAuthChange: function() {
-    // Intentar comunicarse con el sidebar a través del content script
+  notifyAuthChange: function() {
     try {
-      // Enviar mensaje al background script para que notifique al content script
+      // Enviar mensaje al background script
       chrome.runtime.sendMessage({
-        action: 'notifySidebarAuthChange'
+        action: 'auth_state_changed',
+        authenticated: true
+      });
+      
+      // Notificar a content scripts
+      chrome.tabs.query({}, function(tabs) {
+        tabs.forEach(tab => {
+          chrome.tabs.sendMessage(tab.id, {
+            action: 'auth_state_changed',
+            authenticated: true
+          }).catch(error => {
+            // Ignorar errores de tabs que no tienen content script
+          });
+        });
       });
       
       console.log('Auth: Notificación de cambio de autenticación enviada');
@@ -133,15 +155,26 @@ const Auth = {
     // Eliminar datos de autenticación de ambos almacenamientos
     const keysToRemove = [AUTH_KEYS.AUTH, AUTH_KEYS.USER, AUTH_KEYS.TIMESTAMP];
     
-    chrome.storage.local.remove(keysToRemove, function() {
-      chrome.storage.sync.remove(keysToRemove, function() {
-        console.log('Auth: Sesión cerrada correctamente');
-        
-        // Notificar al sidebar sobre el cambio de estado de autenticación
-        Auth.notifySidebarAuthChange();
-        
-        callback && callback();
+    STORAGE_CONFIG.PRIMARY.remove(keysToRemove, function() {
+      if (chrome.runtime.lastError) {
+        console.error('Error al cerrar sesión:', chrome.runtime.lastError);
+        callback && callback(false);
+        return;
+      }
+      
+      // También eliminar del respaldo
+      STORAGE_CONFIG.BACKUP.remove(keysToRemove, function() {
+        if (chrome.runtime.lastError) {
+          console.warn('Error al limpiar respaldo:', chrome.runtime.lastError);
+        }
       });
+      
+      console.log('Auth: Sesión cerrada correctamente');
+      
+      // Notificar el cambio
+      Auth.notifyAuthChange();
+      
+      callback && callback(true);
     });
   },
   
@@ -152,27 +185,22 @@ const Auth = {
   loadSavedCredentials: function(callback) {
     const keys = [AUTH_KEYS.REMEMBER, AUTH_KEYS.USERNAME, AUTH_KEYS.PASSWORD];
     
-    chrome.storage.local.get(keys, function(localResult) {
-      if (localResult[AUTH_KEYS.REMEMBER] === true) {
-        callback({
-          username: localResult[AUTH_KEYS.USERNAME],
-          password: localResult[AUTH_KEYS.PASSWORD],
-          remember: true
-        });
+    STORAGE_CONFIG.PRIMARY.get(keys, function(result) {
+      if (chrome.runtime.lastError) {
+        console.error('Error al cargar credenciales:', chrome.runtime.lastError);
+        callback(null);
         return;
       }
       
-      chrome.storage.sync.get(keys, function(syncResult) {
-        if (syncResult[AUTH_KEYS.REMEMBER] === true) {
-          callback({
-            username: syncResult[AUTH_KEYS.USERNAME],
-            password: syncResult[AUTH_KEYS.PASSWORD],
-            remember: true
-          });
-        } else {
-          callback(null);
-        }
-      });
+      if (result[AUTH_KEYS.REMEMBER] === true) {
+        callback({
+          username: result[AUTH_KEYS.USERNAME],
+          password: result[AUTH_KEYS.PASSWORD],
+          remember: true
+        });
+      } else {
+        callback(null);
+      }
     });
   },
   
@@ -183,11 +211,22 @@ const Auth = {
   clearSavedCredentials: function(callback) {
     const keysToRemove = [AUTH_KEYS.REMEMBER, AUTH_KEYS.USERNAME, AUTH_KEYS.PASSWORD];
     
-    chrome.storage.local.remove(keysToRemove, function() {
-      chrome.storage.sync.remove(keysToRemove, function() {
-        console.log('Auth: Credenciales eliminadas correctamente');
-        callback && callback();
+    STORAGE_CONFIG.PRIMARY.remove(keysToRemove, function() {
+      if (chrome.runtime.lastError) {
+        console.error('Error al limpiar credenciales:', chrome.runtime.lastError);
+        callback && callback(false);
+        return;
+      }
+      
+      // También limpiar del respaldo
+      STORAGE_CONFIG.BACKUP.remove(keysToRemove, function() {
+        if (chrome.runtime.lastError) {
+          console.warn('Error al limpiar respaldo de credenciales:', chrome.runtime.lastError);
+        }
       });
+      
+      console.log('Auth: Credenciales eliminadas correctamente');
+      callback && callback(true);
     });
   }
 };

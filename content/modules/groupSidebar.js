@@ -14,16 +14,71 @@ class GroupSidebar {
     };
     this.eventListeners = [];
     this.messageTextareas = []; // Para almacenar referencias a los textareas de mensajes
+    this.authenticationRequired = true; // Marcar como requiere autenticación
+    this.loginComponent = null; // Para el componente de login
+  }
+
+  // Verificar autenticación antes de ejecutar métodos críticos
+  checkAuthentication() {
+    if (!this.authenticationRequired) return true;
+    
+    const authWrapper = window.LeadManagerPro?.AuthenticationWrapper;
+    if (authWrapper && !authWrapper.canModuleExecute('groupSidebar')) {
+      return false;
+    }
+    
+    return true;
   }
 
   // Inicializar el sidebar
   async init() {
     console.log('GroupSidebar: Inicializando sidebar para páginas de grupo');
     
+    // Configurar listener para cambios de autenticación
+    this.setupAuthListener();
+    
+    // Verificar autenticación antes de mostrar contenido
+    if (!this.checkAuthentication()) {
+      console.log('GroupSidebar: Inicialización bloqueada - autenticación requerida');
+      this.showAuthenticationRequired();
+      return this;
+    }
+    
     // Cargar configuraciones desde Extension Storage
     await this.loadSettings();
     
     return this;
+  }
+  
+  // Configurar listener para cambios de autenticación
+  setupAuthListener() {
+    // Listener para mensajes de cambio de autenticación
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === 'auth_state_changed') {
+          console.log('GroupSidebar: Cambio de autenticación detectado:', message.authenticated);
+          
+          if (message.authenticated) {
+            // Re-inicializar con contenido completo
+            this.handleSuccessfulAuth();
+          } else {
+            // Mostrar formulario de autenticación
+            this.showAuthenticationRequired();
+          }
+        }
+      });
+    }
+    
+    // Listener para eventos de ventana
+    window.addEventListener('message', (event) => {
+      if (event.data?.action === 'auth_state_changed') {
+        if (event.data.authenticated) {
+          this.handleSuccessfulAuth();
+        } else {
+          this.showAuthenticationRequired();
+        }
+      }
+    });
   }
 
   // Cargar configuraciones desde Extension Storage
@@ -96,6 +151,12 @@ class GroupSidebar {
 
   // Mostrar el sidebar
   show() {
+    // Verificar autenticación antes de mostrar contenido
+    if (!this.checkAuthentication()) {
+      this.showAuthenticationRequired();
+      return;
+    }
+    
     if (!this.container) {
       this.createSidebar();
     }
@@ -104,6 +165,133 @@ class GroupSidebar {
       this.container.style.right = '0';
       this.isVisible = true;
     }
+  }
+
+  // Mostrar formulario de autenticación requerida
+  showAuthenticationRequired() {
+    console.log('GroupSidebar: Mostrando formulario de autenticación');
+    
+    // Crear container si no existe
+    if (!this.container) {
+      this.container = document.createElement('div');
+      this.container.id = 'lead-manager-group-sidebar';
+      this.container.style.cssText = `
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 350px;
+        height: 100vh;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        border-left: 1px solid #e1e5e9;
+        box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+        z-index: 10000;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        overflow-y: auto;
+        transition: right 0.3s ease;
+      `;
+      document.body.appendChild(this.container);
+    }
+    
+    // Limpiar contenido existente
+    this.container.innerHTML = '';
+    
+    // Crear contenedor para el login
+    const authContainer = document.createElement('div');
+    authContainer.id = 'group-sidebar-auth-container';
+    authContainer.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      padding: 40px 30px;
+      text-align: center;
+    `;
+    
+    // Agregar header
+    const header = document.createElement('div');
+    header.innerHTML = `
+      <div style="margin-bottom: 30px;">
+        <div style="width: 80px; height: 80px; margin: 0 auto 20px auto; background: #4267B2; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="white">
+            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+          </svg>
+        </div>
+        <h2 style="margin: 0 0 8px 0; color: #1c1e21; font-size: 20px; font-weight: 600;">Herramientas de Grupo</h2>
+        <p style="margin: 0; color: #65676b; font-size: 14px; line-height: 1.4;">Inicia sesión para acceder a las herramientas de interacción con miembros del grupo</p>
+      </div>
+    `;
+    
+    authContainer.appendChild(header);
+    
+    // Intentar usar el LoginComponent si está disponible
+    if (window.LeadManagerPro?.LoginComponent) {
+      const loginContainer = document.createElement('div');
+      loginContainer.id = 'group-sidebar-login-container';
+      loginContainer.style.width = '100%';
+      authContainer.appendChild(loginContainer);
+      
+      // Crear instancia del LoginComponent
+      this.loginComponent = new window.LeadManagerPro.LoginComponent('group-sidebar-login-container');
+      this.loginComponent.onSuccess(() => {
+        console.log('GroupSidebar: Login exitoso, reinicializando...');
+        this.handleSuccessfulAuth();
+      });
+      
+    } else {
+      // Fallback: mensaje básico
+      const fallbackMessage = document.createElement('div');
+      fallbackMessage.innerHTML = `
+        <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 20px;">
+          <p style="margin: 0 0 15px 0; color: #1c1e21; font-weight: 500;">Autenticación Requerida</p>
+          <p style="margin: 0 0 15px 0; color: #65676b; font-size: 13px;">Para usar las herramientas de grupo, inicia sesión haciendo clic en el icono de la extensión en tu navegador.</p>
+          <button id="group-sidebar-open-popup" style="background: #4267B2; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px;">
+            Iniciar Sesión
+          </button>
+        </div>
+      `;
+      authContainer.appendChild(fallbackMessage);
+      
+      // Event listener para el botón fallback
+      const openPopupBtn = fallbackMessage.querySelector('#group-sidebar-open-popup');
+      if (openPopupBtn) {
+        openPopupBtn.addEventListener('click', () => {
+          try {
+            chrome.runtime.sendMessage({ action: 'open_popup' });
+          } catch (error) {
+            console.error('Error al abrir popup:', error);
+          }
+        });
+      }
+    }
+    
+    this.container.appendChild(authContainer);
+    
+    // Mostrar el sidebar
+    this.container.style.right = '0';
+    this.isVisible = true;
+  }
+  
+  // Manejar autenticación exitosa
+  handleSuccessfulAuth() {
+    // Limpiar el componente de login
+    if (this.loginComponent) {
+      this.loginComponent.destroy();
+      this.loginComponent = null;
+    }
+    
+    // Reinicializar el sidebar con contenido completo
+    setTimeout(() => {
+      this.init().then(() => {
+        // Recrear el sidebar con el contenido normal
+        if (this.container) {
+          this.container.remove();
+          this.container = null;
+        }
+        this.createSidebar();
+        this.show();
+      });
+    }, 500);
   }
 
   // Ocultar el sidebar
@@ -116,6 +304,12 @@ class GroupSidebar {
 
   // Crear el sidebar y sus elementos
   createSidebar() {
+    // Verificar autenticación antes de crear contenido
+    if (!this.checkAuthentication()) {
+      this.showAuthenticationRequired();
+      return;
+    }
+    
     // Crear contenedor principal
     this.container = document.createElement('div');
     this.container.id = 'lead-manager-group-sidebar';

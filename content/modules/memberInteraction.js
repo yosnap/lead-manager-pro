@@ -14,10 +14,30 @@ class MemberInteraction {
     this.maxMembersToInteract = 10; // número máximo de miembros para interactuar
     this.currentGroupInfo = null; // información del grupo actual
     this.lastStatsUpdate = null; // última actualización de estadísticas
+    this.authenticationRequired = true; // Marcar como requiere autenticación
+  }
+  
+  // Verificar autenticación antes de ejecutar métodos críticos
+  checkAuthentication() {
+    if (!this.authenticationRequired) return true;
+    
+    const authWrapper = window.LeadManagerPro?.AuthenticationWrapper;
+    if (authWrapper && !authWrapper.canModuleExecute('memberInteraction')) {
+      authWrapper.showAuthRequiredMessage('memberInteraction', 'interact');
+      return false;
+    }
+    
+    return true;
   }
   
   // Inicializar interacción con una lista de miembros
   init(memberElements, options = {}) {
+    // Verificar autenticación
+    if (!this.checkAuthentication()) {
+      console.log('MemberInteraction: Inicialización bloqueada - autenticación requerida');
+      return Promise.reject(new Error('Autenticación requerida'));
+    }
+    
     this.members = Array.from(memberElements);
     this.currentMemberIndex = 0;
     this.interactionDelay = options.delay || 2000;
@@ -30,6 +50,12 @@ class MemberInteraction {
   
   // Iniciar interacción con miembros
   async startInteraction(callback) {
+    // Verificar autenticación
+    if (!this.checkAuthentication()) {
+      console.log('MemberInteraction: Interacción bloqueada - autenticación requerida');
+      return Promise.reject(new Error('Autenticación requerida'));
+    }
+    
     // Si hay una interacción en progreso, limpiarla primero
     if (this.isInteracting) {
       console.log('MemberInteraction: Ya hay una interacción en progreso, reiniciando');

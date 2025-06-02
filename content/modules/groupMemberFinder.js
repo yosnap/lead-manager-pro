@@ -13,10 +13,30 @@ class GroupMemberFinder {
     this.observer = null;
     this.progressCallback = null;
     this.currentSection = null; // Sección actual que se está procesando
+    this.authenticationRequired = true; // Marcar como requiere autenticación
+  }
+
+  // Verificar autenticación antes de ejecutar métodos críticos
+  checkAuthentication() {
+    if (!this.authenticationRequired) return true;
+    
+    const authWrapper = window.LeadManagerPro?.AuthenticationWrapper;
+    if (authWrapper && !authWrapper.canModuleExecute('groupMemberFinder')) {
+      authWrapper.showAuthRequiredMessage('groupMemberFinder', 'extract');
+      return false;
+    }
+    
+    return true;
   }
 
   // Inicializar con opciones
   init(options, progressCallback = null) {
+    // Verificar autenticación
+    if (!this.checkAuthentication()) {
+      console.log('GroupMemberFinder: Inicialización bloqueada - autenticación requerida');
+      return Promise.reject(new Error('Autenticación requerida'));
+    }
+    
     console.log("INITIALIZING GROUP MEMBER FINDER");
     console.log("Options received from parameters:", options);
     
@@ -332,6 +352,12 @@ class GroupMemberFinder {
 
   // Iniciar la extracción de miembros
   async startExtraction() {
+    // Verificar autenticación
+    if (!this.checkAuthentication()) {
+      console.log('GroupMemberFinder: Extracción bloqueada - autenticación requerida');
+      return Promise.reject(new Error('Autenticación requerida'));
+    }
+    
     if (this.isExtracting) {
       console.log('GroupMemberFinder: Ya hay una extracción en progreso');
       return false;

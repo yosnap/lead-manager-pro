@@ -13,10 +13,30 @@ class GroupFinder {
     this.progressCallback = null;
     this._scrollTimeout = null;
     this.noChangeCount = 0;
+    this.authenticationRequired = true; // Marcar como requiere autenticación
+  }
+
+  // Verificar autenticación antes de ejecutar métodos críticos
+  checkAuthentication() {
+    if (!this.authenticationRequired) return true;
+    
+    const authWrapper = window.LeadManagerPro?.AuthenticationWrapper;
+    if (authWrapper && !authWrapper.canModuleExecute('groupFinder')) {
+      authWrapper.showAuthRequiredMessage('groupFinder', 'search');
+      return false;
+    }
+    
+    return true;
   }
 
   // Inicializar con opciones
   init(options, progressCallback = null) {
+    // Verificar autenticación
+    if (!this.checkAuthentication()) {
+      console.log('GroupFinder: Inicialización bloqueada - autenticación requerida');
+      return Promise.reject(new Error('Autenticación requerida'));
+    }
+    
     console.log("INITIALIZING GROUP FINDER WITH OPTIONS:", options);
     
     this.options = options || {};
@@ -76,6 +96,12 @@ class GroupFinder {
 
   // Iniciar la búsqueda de grupos
   async startSearch() {
+    // Verificar autenticación
+    if (!this.checkAuthentication()) {
+      console.log('GroupFinder: Búsqueda bloqueada - autenticación requerida');
+      return Promise.reject(new Error('Autenticación requerida'));
+    }
+    
     try {
       console.log('GroupFinder: Iniciando búsqueda');
       

@@ -11,17 +11,15 @@
   <!-- Cargar directamente los scripts de n8n -->
   <script src="content/modules/n8nIntegration.js"></script>
   <script src="content/modules/n8nIntegrationUI.js"></script>
+  
+  <!-- Cargar nuevos módulos centralizados -->
+  <script src="content/modules/OptionsManager.js"></script>
+  <script src="content/modules/LoginComponent.js"></script>
+  <script src="content/modules/SidebarOptionsController.js"></script>
 </head>
 <body>
-  <div id="auth-check-container" style="display: none; height: 100vh; width: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #f0f2f5; color: #1c1e21; padding: 20px; text-align: center;">
-    <div style="width: 80px; height: 80px; margin-bottom: 20px;">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#4267B2">
-        <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
-      </svg>
-    </div>
-    <h2 style="font-size: 18px; margin-bottom: 10px;">Acceso Restringido</h2>
-    <p style="font-size: 14px; margin-bottom: 15px;">Debes iniciar sesión en la extensión para acceder a esta funcionalidad.</p>
-    <button id="login-redirect-btn" style="background-color: #4267B2; color: white; border: none; padding: 10px 15px; border-radius: 4px; font-size: 14px; cursor: pointer;">Iniciar Sesión</button>
+  <div id="auth-check-container" style="display: none; height: 100vh; width: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #f0f2f5;">
+    <!-- El contenido se generará dinámicamente por sidebar-auth.js -->
   </div>
 
   <div class="sidebar-container" id="sidebar-content" style="display: none;">
