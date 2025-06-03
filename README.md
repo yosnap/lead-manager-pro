@@ -1,6 +1,6 @@
 # Lead Manager Pro - Extensión para Facebook con integración N8N
 
-## Versión 1.1.0
+## Versión 0.5.0
 
 ### Novedades
 - **Mejora en la interacción con miembros**: Sistema robusto para enviar mensajes automáticamente a miembros de grupos.

@@ -1,5 +1,5 @@
 /**
- * Script de depuración para Lead Manager Pro
+ * Script de depuración para Lead Manager Pro v0.5.0
  * Versión compatible con CSP
  */
 

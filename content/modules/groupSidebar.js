@@ -337,8 +337,11 @@ class GroupSidebar {
         </div>
         
         <div class="lmp-section" style="margin-bottom: 20px;">
-          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Acciones</h3>
+          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Herramientas</h3>
           <div class="lmp-actions" style="display: flex; flex-direction: column; gap: 10px;">
+            <button id="lmp-count-members-btn" class="lmp-btn" style="padding: 8px 12px; background-color: #42b883; color: white; border: none; border-radius: 4px; cursor: pointer;">
+              Contar miembros
+            </button>
             <button id="lmp-interact-members-btn" class="lmp-btn" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
               Interactuar con miembros
             </button>
@@ -349,7 +352,7 @@ class GroupSidebar {
           <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Configuración de interacción</h3>
           
           <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label for="lmp-members-count" style="display: block; margin-bottom: 5px; font-weight: 500;">Número de miembros:</label>
+            <label for="lmp-members-count" style="display: block; margin-bottom: 5px; font-weight: 500;">Número de miembros a interactuar:</label>
             <input type="number" id="lmp-members-count" value="${this.settings.membersToInteract}" min="1" max="100" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Número máximo de miembros con los que interactuar en una sesión</small>
           </div>
@@ -361,11 +364,9 @@ class GroupSidebar {
           </div>
           
           <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Mensajes personalizados (se enviarán aleatoriamente):</label>
-            <div class="lmp-messages-container" style="border: 1px solid #ddd; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
-              ${this.createMessagesAccordion()}
-            </div>
-            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Puedes configurar hasta 5 mensajes diferentes que se enviarán aleatoriamente</small>
+            <label for="lmp-message-to-send" style="display: block; margin-bottom: 5px; font-weight: 500;">Mensaje a enviar en el chat:</label>
+            <textarea id="lmp-message-to-send" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px; resize: vertical;">${this.settings.messageToSend}</textarea>
+            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Mensaje que se enviará a cada miembro en el chat privado</small>
           </div>
           
           <div class="lmp-form-group" style="margin-bottom: 15px;">
@@ -402,78 +403,6 @@ class GroupSidebar {
     this.updateGroupInfo();
   }
   
-  // Crear el acordeón de mensajes
-  createMessagesAccordion() {
-    // Limpiar las referencias anteriores a textareas
-    this.messageTextareas = [];
-    
-    // Crear HTML para el acordeón
-    let accordionHtml = '';
-    
-    // Mensaje por defecto
-    const defaultMessage = 'Hola, este es un mensaje de prueba desde la plataforma, has caso omiso ya que solo sirve para pruebas. !Un saludo!';
-    
-    // Asegurarse de que messages sea un array
-    if (!Array.isArray(this.settings.messages)) {
-      this.settings.messages = [defaultMessage];
-    }
-    
-    // Si el array está vacío, agregar el mensaje por defecto
-    if (this.settings.messages.length === 0) {
-      this.settings.messages.push(defaultMessage);
-    }
-    
-    console.log('Mensajes cargados para el acordeón:', this.settings.messages);
-    
-    // Crear 5 paneles de acordeón para los mensajes
-    for (let i = 0; i < 5; i++) {
-      // Obtener el mensaje del array o usar string vacío si no existe
-      const message = this.settings.messages[i] || '';
-      
-      // Estado inicial del panel (abierto o cerrado)
-      const isActive = message !== '';
-      const iconSymbol = isActive ? '-' : '+';
-      
-      accordionHtml += `
-        <div class="lmp-accordion-panel" style="border-bottom: ${i < 4 ? '1px solid #ddd' : 'none'};">
-          <button class="lmp-accordion-button ${isActive ? 'active' : ''}" data-index="${i}" style="
-            width: 100%;
-            background-color: #F0F2F5;
-            border: none;
-            padding: 10px 15px;
-            text-align: left;
-            font-weight: bold;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          ">
-            Mensaje ${i + 1}
-            <span class="lmp-accordion-icon" style="font-size: 16px;">${iconSymbol}</span>
-          </button>
-          <div class="lmp-accordion-content" style="
-            max-height: ${isActive ? '500px' : '0'};
-            overflow: hidden;
-            transition: max-height 0.3s ease-out;
-            background-color: white;
-          ">
-            <textarea class="lmp-message-textarea" data-index="${i}" style="
-              width: calc(100% - 20px);
-              padding: 8px;
-              margin: 10px;
-              border-radius: 4px;
-              border: 1px solid #ddd;
-              min-height: 80px;
-              resize: vertical;
-            ">${message}</textarea>
-          </div>
-        </div>
-      `;
-    }
-    
-    return accordionHtml;
-  }
-  
   // Configurar los event listeners de los elementos del sidebar
   setupEventListeners() {
     // Botón de cerrar
@@ -482,6 +411,14 @@ class GroupSidebar {
       const handler = () => this.hide();
       closeBtn.addEventListener('click', handler);
       this.addEventListenerRef(closeBtn, 'click', handler);
+    }
+    
+    // Botón de contar miembros
+    const countMembersBtn = this.container.querySelector('#lmp-count-members-btn');
+    if (countMembersBtn) {
+      const handler = () => this.countMembers();
+      countMembersBtn.addEventListener('click', handler);
+      this.addEventListenerRef(countMembersBtn, 'click', handler);
     }
     
     // Botón de interactuar con miembros
@@ -500,11 +437,8 @@ class GroupSidebar {
       this.addEventListenerRef(saveSettingsBtn, 'click', handler);
     }
     
-    // Inicializar el acordeón de mensajes
-    this.initializeAccordion();
-    
     // Inputs de configuración (para actualizar en tiempo real)
-    const allInputs = this.container.querySelectorAll('input:not(.lmp-message-textarea)');
+    const allInputs = this.container.querySelectorAll('input, textarea');
     allInputs.forEach(input => {
       const handler = () => this.updateSettingPreview(input);
       input.addEventListener('input', handler);
@@ -513,9 +447,6 @@ class GroupSidebar {
     
     // Cargar opciones generales guardadas
     this.loadGeneralOptions();
-    
-    // Intentar cargar mensajes desde el sidebar flotante si existe
-    this.loadMessagesFromFloatingSidebar();
   }
   
   // Inicializar el acordeón después de crear el DOM
@@ -541,87 +472,6 @@ class GroupSidebar {
           if (content.style.maxHeight !== '0px' && content.style.maxHeight !== '') {
             content.style.maxHeight = '0px';
           } else {
-            const textarea = content.querySelector('textarea');
-            if (textarea) {
-              content.style.maxHeight = textarea.scrollHeight + 40 + 'px';
-            }
-          }
-        }
-      };
-      
-      button.addEventListener('click', handler);
-      this.addEventListenerRef(button, 'click', handler);
-    });
-    
-    // Abrir el primer panel por defecto
-    setTimeout(() => {
-      const firstButton = this.container.querySelector('.lmp-accordion-button');
-      if (firstButton) firstButton.click();
-    }, 100);
-    
-    // Guardar referencias a los textareas
-    const textareas = this.container.querySelectorAll('.lmp-message-textarea');
-    this.messageTextareas = Array.from(textareas);
-    
-    // Añadir event listeners a los textareas para actualizar en tiempo real
-    this.messageTextareas.forEach(textarea => {
-      const handler = () => this.updateSettingPreview(textarea);
-      textarea.addEventListener('input', handler);
-      this.addEventListenerRef(textarea, 'input', handler);
-    });
-  }
-  
-  // Cargar mensajes desde el sidebar flotante
-  loadMessagesFromFloatingSidebar() {
-    try {
-      // Buscar el sidebar flotante
-      const floatingSidebar = document.querySelector('.lead-manager-interaction-ui');
-      if (!floatingSidebar) {
-        console.log('Sidebar flotante no encontrado');
-        return;
-      }
-      
-      // Buscar los textareas de mensajes en el sidebar flotante
-      const floatingTextareas = floatingSidebar.querySelectorAll('[class^="message-textarea-"]');
-      if (!floatingTextareas || floatingTextareas.length === 0) {
-        console.log('No se encontraron textareas de mensajes en el sidebar flotante');
-        return;
-      }
-      
-      // Obtener los mensajes del sidebar flotante
-      const messages = [];
-      floatingTextareas.forEach(textarea => {
-        const text = textarea.value.trim();
-        if (text) {
-          messages.push(text);
-        }
-      });
-      
-      // Si hay mensajes, actualizar los textareas en este sidebar
-      if (messages.length > 0) {
-        console.log('Cargando mensajes desde el sidebar flotante:', messages);
-        
-        // Actualizar los textareas en este sidebar
-        this.messageTextareas.forEach((textarea, index) => {
-          if (index < messages.length) {
-            textarea.value = messages[index];
-          } else {
-            textarea.value = '';
-          }
-        });
-        
-        // Actualizar la configuración
-        this.settings.messages = messages;
-        this.settings.messageToSend = messages[0]; // Para compatibilidad
-        
-        // Guardar la configuración
-        this.saveSettings();
-      }
-    } catch (error) {
-      console.error('Error al cargar mensajes desde el sidebar flotante:', error);
-    }
-  }
-  
   // Cargar opciones generales guardadas
   loadGeneralOptions() {
     try {
@@ -653,16 +503,8 @@ class GroupSidebar {
       // Obtener valores de los campos para interacción con miembros
       const membersCount = parseInt(this.container.querySelector('#lmp-members-count').value, 10);
       const interactionDelay = parseInt(this.container.querySelector('#lmp-interaction-delay').value, 10);
+      const messageToSend = this.container.querySelector('#lmp-message-to-send').value.trim();
       const autoCloseChat = this.container.querySelector('#lmp-auto-close-chat').checked;
-      
-      // Obtener mensajes de los textareas
-      const messages = [];
-      this.messageTextareas.forEach(textarea => {
-        const text = textarea.value.trim();
-        if (text) {
-          messages.push(text);
-        }
-      });
       
       // Validar valores
       if (isNaN(membersCount) || membersCount < 1) {
@@ -675,23 +517,23 @@ class GroupSidebar {
         return false;
       }
       
-      if (messages.length === 0) {
-        alert('Por favor, introduce al menos un mensaje para enviar a los miembros');
+      if (!messageToSend) {
+        alert('Por favor, introduce un mensaje para enviar a los miembros');
         return false;
       }
       
       // Actualizar configuraciones de interacción de miembros
       this.settings.membersToInteract = membersCount;
       this.settings.interactionDelay = interactionDelay;
-      this.settings.messages = messages;
-      this.settings.messageToSend = messages[0]; // Para compatibilidad
+      this.settings.messageToSend = messageToSend;
+      this.settings.messages = [messageToSend]; // Para compatibilidad con el sistema anterior
       this.settings.autoCloseChat = autoCloseChat;
       
       // Guardar configuraciones de interacción
       this.saveSettings();
       
       // Actualizar también el sidebar flotante si existe
-      this.updateFloatingSidebar(messages);
+      this.updateFloatingSidebar([messageToSend]);
       
       // Mostrar mensaje de éxito
       this.showToast('Configuración guardada correctamente');
@@ -714,24 +556,6 @@ class GroupSidebar {
         return;
       }
       
-      // Buscar los textareas de mensajes en el sidebar flotante
-      const floatingTextareas = floatingSidebar.querySelectorAll('[class^="message-textarea-"]');
-      if (!floatingTextareas || floatingTextareas.length === 0) {
-        console.log('No se encontraron textareas de mensajes en el sidebar flotante');
-        return;
-      }
-      
-      // Actualizar los textareas en el sidebar flotante
-      floatingTextareas.forEach((textarea, index) => {
-        if (index < messages.length) {
-          textarea.value = messages[index];
-        } else {
-          textarea.value = '';
-        }
-      });
-      
-      console.log('Sidebar flotante actualizado con los mensajes:', messages);
-      
       // Si existe la instancia de MemberInteractionUI, actualizar su configuración
       if (window.leadManagerPro && window.leadManagerPro.memberInteractionUI) {
         const memberInteractionUI = window.leadManagerPro.memberInteractionUI;
@@ -740,9 +564,12 @@ class GroupSidebar {
         if (memberInteractionUI.memberInteraction) {
           memberInteractionUI.memberInteraction.messages = messages;
           memberInteractionUI.memberInteraction.messageToSend = messages[0];
+          memberInteractionUI.memberInteraction.membersToInteract = this.settings.membersToInteract;
+          memberInteractionUI.memberInteraction.interactionDelay = this.settings.interactionDelay;
+          memberInteractionUI.memberInteraction.autoCloseChat = this.settings.autoCloseChat;
         }
         
-        console.log('MemberInteractionUI actualizado con los mensajes');
+        console.log('MemberInteractionUI actualizado con la configuración');
       }
     } catch (error) {
       console.error('Error al actualizar el sidebar flotante:', error);
@@ -753,6 +580,36 @@ class GroupSidebar {
   updateSettingPreview(input) {
     // Actualizar la previsualización de la configuración en tiempo real
     // Por ahora, no hacemos nada aquí
+  }
+  
+  // Función para contar miembros del grupo
+  countMembers() {
+    try {
+      // Verificar si existe la instancia de groupMemberFinder
+      if (!window.leadManagerPro || !window.leadManagerPro.groupMemberFinder) {
+        this.showToast('No se ha encontrado el módulo de conteo de miembros', true);
+        return;
+      }
+      
+      // Obtener la instancia de groupMemberFinder
+      const groupMemberFinder = window.leadManagerPro.groupMemberFinder;
+      
+      // Iniciar el conteo de miembros
+      if (groupMemberFinder.findMembers) {
+        groupMemberFinder.findMembers();
+        this.showToast('Conteo de miembros iniciado');
+        
+        // Actualizar estadísticas después de un tiempo
+        setTimeout(() => {
+          this.updateMemberCount();
+        }, 2000);
+      } else {
+        this.showToast('Función de conteo no disponible', true);
+      }
+    } catch (error) {
+      console.error('Error al contar miembros:', error);
+      this.showToast('Error al contar miembros', true);
+    }
   }
   
   // Función para interactuar con miembros
@@ -837,6 +694,65 @@ class GroupSidebar {
         document.body.removeChild(toast);
       }
     }, 3000);
+  }
+  
+  // Actualizar conteo de miembros en las estadísticas
+  updateMemberCount() {
+    try {
+      // Buscar elementos del DOM que contengan información de miembros
+      const memberCountElement = this.container.querySelector('#lmp-total-members');
+      if (!memberCountElement) return;
+      
+      // Intentar obtener el conteo desde diferentes fuentes
+      let memberCount = 0;
+      
+      // Método 1: Desde el módulo groupMemberFinder
+      if (window.leadManagerPro && window.leadManagerPro.groupMemberFinder) {
+        const finder = window.leadManagerPro.groupMemberFinder;
+        if (finder.memberCount || finder.totalMembers) {
+          memberCount = finder.memberCount || finder.totalMembers;
+        }
+      }
+      
+      // Método 2: Buscar en la página elementos que contengan el número de miembros
+      if (memberCount === 0) {
+        const memberSelectors = [
+          '[aria-label*="miembro"]',
+          '[aria-label*="member"]',
+          'a[href*="/members"]',
+          'span:contains("miembros")',
+          'span:contains("members")'
+        ];
+        
+        for (const selector of memberSelectors) {
+          try {
+            const element = document.querySelector(selector);
+            if (element && element.textContent) {
+              const match = element.textContent.match(/[\d,.\s]+/);
+              if (match) {
+                const cleanNumber = match[0].replace(/[,.\s]/g, '');
+                const parsed = parseInt(cleanNumber);
+                if (!isNaN(parsed) && parsed > memberCount) {
+                  memberCount = parsed;
+                }
+              }
+            }
+          } catch (e) {
+            // Continuar con el siguiente selector
+          }
+        }
+      }
+      
+      // Actualizar la UI
+      if (memberCount > 0) {
+        memberCountElement.textContent = memberCount.toLocaleString();
+        console.log('GroupSidebar: Conteo de miembros actualizado:', memberCount);
+      } else {
+        memberCountElement.textContent = 'Contando...';
+      }
+    } catch (error) {
+      console.error('GroupSidebar: Error al actualizar conteo de miembros:', error);
+    }
   }
   
   // Actualizar información del grupo actual

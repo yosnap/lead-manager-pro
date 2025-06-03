@@ -144,47 +144,78 @@ document.addEventListener('DOMContentLoaded', function() {
   // Evento para Buscar y guardar
   if (searchSaveBtn) {
     searchSaveBtn.addEventListener('click', function() {
-      isOnFacebook((isFacebook, activeTab) => {
-        if (isFacebook) {
-          // Ya estamos en Facebook, abrimos directamente el sidebar
-          chrome.tabs.sendMessage(activeTab.id, {
-            action: 'openSidebar'
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        const activeTab = tabs[0];
+        
+        // Función para abrir el sidebar de búsqueda de grupos
+        const openGroupSearchSidebar = (tabId) => {
+          chrome.tabs.sendMessage(tabId, {
+            action: 'openGroupSearchSidebar'
           }, function(response) {
-            // Si hay un error o no hay respuesta
+            console.log('Sidebar de búsqueda de grupos abierto:', response);
             if (!response || response.error) {
               console.error('Error al abrir el sidebar:', response?.error || 'No hay respuesta');
-              showMessage('Error al abrir el panel lateral', 'error');
+              showMessage('Error al abrir las herramientas de búsqueda', 'error');
+            } else {
+              console.log('Herramientas de búsqueda de grupos abiertas correctamente');
+              // Mostrar mensaje de éxito cuando se complete exitosamente
+              setTimeout(() => {
+                showMessage('🔍 ¡Herramientas de búsqueda de grupos abiertas!', 'info');
+              }, 1500);
             }
-            window.close();
           });
+        };
+        
+        // Verificar si ya estamos en Facebook
+        if (activeTab.url && activeTab.url.includes('facebook.com')) {
+          console.log('Ya estamos en Facebook, verificando si estamos en la home...');
+          
+          // Si estamos en la home de Facebook o en una página principal
+          if (activeTab.url.includes('facebook.com') && 
+              (activeTab.url === 'https://www.facebook.com/' || 
+               activeTab.url === 'https://www.facebook.com' ||
+               activeTab.url.includes('facebook.com/?') ||
+               activeTab.url.includes('facebook.com/home'))) {
+            // Ya estamos en la home, abrir sidebar directamente
+            openGroupSearchSidebar(activeTab.id);
+            window.close();
+          } else {
+            // Estamos en Facebook pero no en la home, redirigir a la home
+            console.log('Redirigiendo a la home de Facebook...');
+            chrome.tabs.update(activeTab.id, { url: 'https://www.facebook.com/' }, function() {
+              // Esperar a que la página se cargue completamente
+              chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, tab) {
+                if (tabId === activeTab.id && changeInfo.status === 'complete') {
+                  chrome.tabs.onUpdated.removeListener(listener);
+                  
+                  // Esperar un momento para que la interfaz esté lista
+                  setTimeout(() => {
+                    openGroupSearchSidebar(tabId);
+                  }, 2000);
+                }
+              });
+            });
+            window.close();
+          }
         } else {
-          // No estamos en Facebook, primero navegamos a Facebook
-          console.log('Navegando a Facebook...');
-          chrome.tabs.update(activeTab.id, { url: 'https://www.facebook.com' }, function() {
+          // No estamos en Facebook, navegar a la home de Facebook
+          console.log('Navegando a la home de Facebook...');
+          chrome.tabs.update(activeTab.id, { url: 'https://www.facebook.com/' }, function() {
+            showMessage('📱 Abriendo Facebook con herramientas de búsqueda...', 'info');
+            
             // Esperar a que la página se cargue completamente
             chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, tab) {
-              // Verificar que es la pestaña correcta y que ha terminado de cargar
               if (tabId === activeTab.id && changeInfo.status === 'complete') {
-                // Eliminar el listener para evitar múltiples llamadas
                 chrome.tabs.onUpdated.removeListener(listener);
                 
-                // Esperar un momento adicional para asegurar que la interfaz esté lista
+                // Esperar un momento adicional para que la interfaz esté lista
                 setTimeout(() => {
-                  // Intentar abrir el sidebar
-                  chrome.tabs.sendMessage(tabId, {
-                    action: 'openSidebar'
-                  }, function(response) {
-                    // Si hay un error o no hay respuesta, mostrar mensaje
-                    if (!response || response.error) {
-                      console.error('Error al abrir el sidebar después de navegar:', response?.error || 'No hay respuesta');
-                      showMessage('Error al abrir el panel lateral', 'error');
-                    }
-                  });
-                }, 1500); // Esperar 1.5 segundos adicionales
-                
-                window.close();
+                  openGroupSearchSidebar(tabId);
+                }, 2500);
               }
             });
+            
+            window.close();
           });
         }
       });

@@ -1,4 +1,50 @@
-# Historial de Cambios - Lead Manager Pro
+# Changelog - Lead Manager Pro
+
+## [0.5.0] - 2025-06-04
+
+### ✨ Nuevas Funcionalidades
+
+#### Menú Principal Mejorado
+- **"Buscar y guardar" inteligente**: Navegación automática a Facebook home y apertura del sidebar
+- **Detección de ubicación**: Comportamiento adaptativo según la página actual
+- **Mensajes informativos**: Feedback visual durante las transiciones
+- **Experiencia optimizada**: Tiempos de espera calculados para mejor UX
+
+#### Opciones Generales Mejoradas
+- **Scrolls máximos para mostrar resultados**: Control del número máximo de scrolls automáticos
+- **Tiempo de espera entre scrolls**: Configuración del delay entre scrolls en segundos
+- Valores por defecto: 50 scrolls máximos, 2 segundos de espera
+
+#### Sistema de Filtros para Búsqueda de Grupos
+- **Tipos de grupo**: Checkboxes para seleccionar grupos públicos y/o privados
+- **Cantidad mínima de miembros**: Campo numérico para filtrar por número de miembros
+- **Cantidad mínima de publicaciones**: Sistema flexible con tres criterios:
+  - Por año (mínimo de publicaciones anuales)
+  - Por mes (mínimo de publicaciones mensuales) 
+  - Por día (mínimo de publicaciones diarias)
+- **Lógica de validación**: Grupos válidos si cumplen con miembros mínimos Y al menos uno de los criterios de publicaciones
+
+#### Sidebar de Grupos Renovado
+- **Herramienta "Contar miembros"**: Conteo automático de miembros del grupo actual
+- **Herramienta "Interactuar con miembros"**: Acceso directo a la funcionalidad de interacción
+- **Configuración simplificada**: 
+  - Número de miembros a interactuar
+  - Tiempo entre interacciones (ms)
+  - Mensaje personalizado para chat
+  - Opción de cerrar chat automáticamente
+- **Estadísticas en tiempo real**: Información del grupo actual y contadores
+
+### 🔧 Mejoras Técnicas
+
+#### Almacenamiento de Datos
+- Migración completa a `chrome.storage.local` para mayor persistencia
+- Estructura de datos preparada para integración con n8n
+- Claves de almacenamiento organizadas
+
+#### Nuevos Módulos
+- `groupSearchFilters.js`: Lógica de filtrado y validación de grupos
+- `groupSearchFiltersUI.js`: Interfaz de usuario para configurar filtros
+- `new-features-tests.js`: Suite de pruebas para las nuevas funcionalidades
 
 ## [1.4.0] - 2025-05-17
 
@@ -66,3 +112,11 @@
 - Interfaz de usuario para interactuar con miembros de grupos.
 - Extracción de perfiles y datos de contacto.
 - Integración con n8n para automatización de flujos de trabajo.
+ reportes
+- Exportación de datos en múltiples formatos
+- Mejoras en la UI basadas en feedback de usuarios
+- Optimizaciones de rendimiento
+
+---
+
+*Para más detalles técnicos, consultar `NUEVAS_FUNCIONALIDADES.md`*

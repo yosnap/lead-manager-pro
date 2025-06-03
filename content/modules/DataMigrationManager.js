@@ -5,7 +5,7 @@
 
 class DataMigrationManager {
   constructor() {
-    this.MIGRATION_VERSION = '1.0.0';
+    this.MIGRATION_VERSION = '0.5.0';
     this.MIGRATION_KEY = 'lmp_migration_completed';
     
     // Mapeo de claves de localStorage a chrome.storage

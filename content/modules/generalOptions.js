@@ -7,17 +7,6 @@ class GeneralOptions {
       scrollDelay: 2, // en segundos
       maxScrollsToShowResults: 50, // Máximo de scrolls para mostrar resultados
       waitTimeBetweenScrolls: 2, // Tiempo de espera entre scrolls (en segundos)
-      // Nuevas opciones para búsqueda de grupos
-      groupTypes: {
-        public: true,
-        private: true
-      },
-      minMembers: 100,
-      minPosts: {
-        year: 50,
-        month: 10,
-        day: 1
-      }
     };
     
     this.options = this.loadOptions();
@@ -60,11 +49,7 @@ class GeneralOptions {
           'maxScrolls': newOptions.maxScrolls,
           'scrollDelay': newOptions.scrollDelay,
           'maxScrollsToShowResults': newOptions.maxScrollsToShowResults,
-          'waitTimeBetweenScrolls': newOptions.waitTimeBetweenScrolls,
-          // Nuevas opciones para búsqueda de grupos
-          'groupTypes': newOptions.groupTypes,
-          'minMembers': newOptions.minMembers,
-          'minPosts': newOptions.minPosts
+          'waitTimeBetweenScrolls': newOptions.waitTimeBetweenScrolls
         }, function() {
           console.log('Opciones generales guardadas en chrome.storage.local');
         });

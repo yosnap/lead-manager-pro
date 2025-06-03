@@ -1,4 +1,4 @@
-# Manual de Usuario - Lead Manager Pro v1.4.0
+# Manual de Usuario - Lead Manager Pro v0.5.0
 
 ## Índice
 1. [Introducción](#introducción)

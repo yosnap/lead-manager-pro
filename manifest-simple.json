@@ -1,6 +1,6 @@
 {
   "name": "Lead Manager Pro",
-  "version": "1.4.0",
+  "version": "0.5.0",
   "description": "Herramienta para buscar y gestionar leads en Facebook",
   "manifest_version": 3,
   "permissions": [

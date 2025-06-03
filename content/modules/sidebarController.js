@@ -74,6 +74,52 @@ window.LeadManagerPro.controllers.showSidebar = function() {
   return false;
 };
 
+/**
+ * Función específica para mostrar el sidebar con opciones de búsqueda de grupos
+ * @returns {boolean} - true si se pudo mostrar el sidebar, false en caso contrario
+ */
+window.LeadManagerPro.controllers.showGroupSearchSidebar = function() {
+  console.log('Lead Manager Pro: Intentando mostrar sidebar de búsqueda de grupos');
+  
+  // Primero, mostrar el sidebar normal
+  const sidebarShown = window.LeadManagerPro.controllers.showSidebar();
+  
+  if (sidebarShown) {
+    // Esperar un momento para que el sidebar se cargue completamente
+    setTimeout(() => {
+      // Intentar activar automáticamente las opciones de búsqueda de grupos
+      const iframe = document.getElementById('snap-lead-manager-iframe');
+      if (iframe && iframe.contentWindow) {
+        // Enviar mensaje al iframe para activar la pestaña de búsqueda de grupos
+        iframe.contentWindow.postMessage({
+          action: 'activate_group_search_tab'
+        }, '*');
+        
+        console.log('Lead Manager Pro: Mensaje enviado para activar pestaña de búsqueda de grupos');
+      }
+      
+      // También intentar activar directamente si el módulo está disponible
+      if (window.leadManagerPro && window.leadManagerPro.groupSearchOptionsUI) {
+        try {
+          // Si existe un método para mostrar las opciones de búsqueda de grupos, llamarlo
+          if (typeof window.leadManagerPro.groupSearchOptionsUI.show === 'function') {
+            window.leadManagerPro.groupSearchOptionsUI.show();
+          }
+        } catch (error) {
+          console.log('Lead Manager Pro: Error al activar opciones de grupo:', error);
+        }
+      }
+      
+      // Mostrar mensaje informativo
+      console.log('Lead Manager Pro: Sidebar de búsqueda de grupos activado');
+    }, 1000);
+    
+    return true;
+  }
+  
+  return false;
+};
+
 // Listener para mensajes del runtime (popup, background, etc.)
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   console.log('Lead Manager Pro: Mensaje recibido en sidebarController:', message);
@@ -83,6 +129,13 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     const success = window.LeadManagerPro.controllers.showSidebar();
     sendResponse({ success: success });
     return true; // Mantener el canal de comunicación abierto para respuesta asíncrona
+  }
+  
+  if (message.action === 'openGroupSearchSidebar') {
+    console.log('Lead Manager Pro: Recibida solicitud para abrir el sidebar de búsqueda de grupos');
+    const success = window.LeadManagerPro.controllers.showGroupSearchSidebar();
+    sendResponse({ success: success });
+    return true;
   }
 });
 

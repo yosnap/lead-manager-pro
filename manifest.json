@@ -1,6 +1,6 @@
 {
   "name": "Lead Manager Pro",
-  "version": "1.4.0",
+  "version": "0.5.0",
   "description": "Herramienta para buscar y gestionar leads en Facebook",
   "manifest_version": 3,
   "permissions": [
@@ -55,6 +55,8 @@
         "content/modules/displayOptionsUI.js",
         "content/modules/groupSearchOptions.js",
         "content/modules/groupSearchOptionsUI.js",
+        "content/modules/groupSearchFilters.js",
+        "content/modules/groupSearchFiltersUI.js",
         "content/modules/interactionHistory.js",
         "content/modules/memberInteraction.js",
         "content/modules/messagesAccordionComplete.js",
@@ -115,7 +117,8 @@
         "js/auth.js",
         "js/sidebar-auth.js",
         "debug/auth-tests.js",
-        "debug/group-sidebar-tests.js"
+        "debug/group-sidebar-tests.js",
+        "debug/new-features-tests.js"
       ],
       "matches": ["https://*.facebook.com/*"]
     }
