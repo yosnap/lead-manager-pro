@@ -5,8 +5,8 @@ class GeneralOptions {
     this.defaultOptions = {
       maxScrolls: 50,
       scrollDelay: 2, // en segundos
-      maxScrollsToShowResults: 50, // Máximo de scrolls para mostrar resultados
-      waitTimeBetweenScrolls: 2, // Tiempo de espera entre scrolls (en segundos)
+      maxScrollsToShowResults: 50, // Máximo de scrolls para mostrar resultados (por defecto 50)
+      waitTimeBetweenScrolls: 2, // Tiempo de espera entre scrolls (por defecto 2 segundos)
     };
     
     this.options = this.loadOptions();

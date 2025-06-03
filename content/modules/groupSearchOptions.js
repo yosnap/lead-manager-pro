@@ -12,6 +12,13 @@ class GroupSearchOptions {
         year: 50,
         month: 10,
         day: 1
+      },
+      // Nuevas opciones para interacción con miembros de grupo
+      memberInteraction: {
+        membersToInteract: 10,
+        interactionDelay: 3000, // 3 segundos en milisegundos
+        messageToSend: 'Hola, este es un mensaje de prueba.',
+        autoCloseChat: true
       }
     };
     

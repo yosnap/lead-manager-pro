@@ -17,39 +17,88 @@ class GeneralOptionsUI {
   }
 
   // Crear el formulario de opciones generales
-      
-    // Botón de guardar
-    const saveButton = document.createElement('button');
-    saveButton.textContent = 'Guardar opciones';
-    saveButton.className = 'lead-manager-button';
-    saveButton.style.cssText = `
-      padding: 8px 16px;
-      background-color: #4267B2;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: bold;
-      margin-top: 8px;
+  createOptionsForm() {
+    // Contenedor principal
+    const formContainer = document.createElement('div');
+    formContainer.style.cssText = `
+      padding: 16px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin: 8px 0;
+      background-color: white;
     `;
-    
-    // Agregar evento de clic al botón
-    saveButton.addEventListener('click', () => {
-      // Obtener y validar valores
-      const maxScrolls = parseInt(maxScrollsInput.value);
-      const scrollDelay = parseFloat(scrollDelayInput.value);
-      
-      if (isNaN(maxScrolls) || maxScrolls < 1) {
-        alert('Por favor, ingrese un número válido para Scrolls máximos');
-        return;
-      }
-      
-      if (isNaN(scrollDelay) || scrollDelay < 0.5) {
-        alert('Por favor, ingrese un número válido para Tiempo entre scrolls');
-        return;
-      }
-      
-      // Guardar opciones
+
+    // Título
+    const title = document.createElement('h3');
+    title.textContent = 'Opciones Generales';
+    title.style.cssText = `
+      margin: 0 0 16px 0;
+      color: #333;
+      font-size: 16px;
+      font-weight: bold;
+    `;
+
+    // Obtener opciones actuales
+    const currentOptions = this.generalOptions.getAllOptions();
+
+    // Campo para scrolls máximos
+    const maxScrollsLabel = document.createElement('label');
+    maxScrollsLabel.textContent = 'Scrolls máximos para mostrar resultados:';
+    maxScrollsLabel.style.cssText = `
+      display: block;
+      margin: 8px 0 4px 0;
+      font-weight: bold;
+      color: #333;
+    `;
+
+    const maxScrollsInput = document.createElement('input');
+    maxScrollsInput.type = 'number';
+    maxScrollsInput.min = '1';
+    maxScrollsInput.max = '200';
+    maxScrollsInput.value = currentOptions.maxScrollsToShowResults || 50;
+    maxScrollsInput.style.cssText = `
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    `;
+
+    const maxScrollsHelp = document.createElement('small');
+    maxScrollsHelp.textContent = 'Número máximo de scrolls que realizará la extensión antes de mostrar resultados (por defecto: 50)';
+    maxScrollsHelp.style.cssText = `
+      display: block;
+      color: #666;
+      margin: 4px 0 8px 0;
+      font-size: 12px;
+    `;
+
+    // Campo para tiempo de espera entre scrolls
+    const scrollDelayLabel = document.createElement('label');
+    scrollDelayLabel.textContent = 'Tiempo de espera entre scrolls (segundos):';
+    scrollDelayLabel.style.cssText = `
+      display: block;
+      margin: 8px 0 4px 0;
+      font-weight: bold;
+      color: #333;
+    `;
+
+    const scrollDelayInput = document.createElement('input');
+    scrollDelayInput.type = 'number';
+    scrollDelayInput.min = '0.5';
+    scrollDelayInput.max = '10';
+    scrollDelayInput.step = '0.5';
+    scrollDelayInput.value = currentOptions.waitTimeBetweenScrolls || 2;
+    scrollDelayInput.style.cssText = `
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    `;
+
+    const scrollDelayHelp = document.createElement('small');
+    scrollDelayHelp.textContent = 'Tiempo en segundos que esperará entre cada scroll para no sobrecargar la página (por defecto: 2 segundos)';
       const success = this.generalOptions.saveOptions({
         maxScrollsToShowResults: maxScrolls,
         waitTimeBetweenScrolls: scrollDelay

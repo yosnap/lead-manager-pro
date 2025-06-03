@@ -16,6 +16,27 @@ class GroupSidebar {
     this.messageTextareas = []; // Para almacenar referencias a los textareas de mensajes
     this.authenticationRequired = true; // Marcar como requiere autenticación
     this.loginComponent = null; // Para el componente de login
+    this.toggleButton = null; // Para el botón toggle unificado
+  }
+
+  // Establecer el toggle button desde el sistema unificado
+  setToggle(toggleButton) {
+    this.toggleButton = toggleButton;
+    if (this.toggleButton) {
+      // Agregar event listener para el toggle
+      const clickHandler = () => this.toggleSidebar();
+      this.toggleButton.addEventListener('click', clickHandler);
+      this.addEventListenerRef(this.toggleButton, 'click', clickHandler);
+    }
+  }
+
+  // Toggle del sidebar
+  toggleSidebar() {
+    if (this.isVisible) {
+      this.hide();
+    } else {
+      this.show();
+    }
   }
 
   // Verificar autenticación antes de ejecutar métodos críticos
@@ -270,6 +291,12 @@ class GroupSidebar {
     // Mostrar el sidebar
     this.container.style.right = '0';
     this.isVisible = true;
+    
+    // Actualizar el toggle
+    const toggleManager = window.leadManagerPro?.unifiedToggleManager;
+    if (toggleManager) {
+      toggleManager.updateToggleState(true);
+    }
   }
   
   // Manejar autenticación exitosa
@@ -299,6 +326,12 @@ class GroupSidebar {
     if (this.container) {
       this.container.style.right = '-350px';
       this.isVisible = false;
+      
+      // Actualizar el toggle usando el sistema unificado
+      const toggleManager = window.leadManagerPro?.unifiedToggleManager;
+      if (toggleManager) {
+        toggleManager.updateToggleState(false);
+      }
     }
   }
 
@@ -328,70 +361,59 @@ class GroupSidebar {
       font-family: Arial, sans-serif;
     `;
     
-    // Crear contenido HTML del sidebar
-    this.container.innerHTML = `
-      <div class="lmp-sidebar-content">
-        <div class="lmp-sidebar-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-          <h2 style="margin: 0; color: #4267B2;">Lead Manager Pro</h2>
-          <button id="lmp-close-sidebar" style="background: none; border: none; cursor: pointer; font-size: 20px;">×</button>
-        </div>
-        
-        <div class="lmp-section" style="margin-bottom: 20px;">
-          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Herramientas</h3>
-          <div class="lmp-actions" style="display: flex; flex-direction: column; gap: 10px;">
-            <button id="lmp-count-members-btn" class="lmp-btn" style="padding: 8px 12px; background-color: #42b883; color: white; border: none; border-radius: 4px; cursor: pointer;">
-              Contar miembros
-            </button>
-            <button id="lmp-interact-members-btn" class="lmp-btn" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
-              Interactuar con miembros
-            </button>
-          </div>
-        </div>
-        
-        <div class="lmp-section" style="margin-bottom: 20px;">
-          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Configuración de interacción</h3>
-          
-          <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label for="lmp-members-count" style="display: block; margin-bottom: 5px; font-weight: 500;">Número de miembros a interactuar:</label>
-            <input type="number" id="lmp-members-count" value="${this.settings.membersToInteract}" min="1" max="100" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Número máximo de miembros con los que interactuar en una sesión</small>
-          </div>
-          
-          <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label for="lmp-interaction-delay" style="display: block; margin-bottom: 5px; font-weight: 500;">Tiempo entre interacciones (ms):</label>
-            <input type="number" id="lmp-interaction-delay" value="${this.settings.interactionDelay}" min="1000" step="500" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Tiempo de espera en milisegundos entre cada interacción</small>
-          </div>
-          
-          <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label for="lmp-message-to-send" style="display: block; margin-bottom: 5px; font-weight: 500;">Mensaje a enviar en el chat:</label>
-            <textarea id="lmp-message-to-send" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px; resize: vertical;">${this.settings.messageToSend}</textarea>
-            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px;">Mensaje que se enviará a cada miembro en el chat privado</small>
-          </div>
-          
-          <div class="lmp-form-group" style="margin-bottom: 15px;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-              <input type="checkbox" id="lmp-auto-close-chat" ${this.settings.autoCloseChat ? 'checked' : ''} style="margin: 0;">
-              <span>Cerrar ventana de chat automáticamente</span>
-            </label>
-            <small style="color: #777; font-size: 12px; display: block; margin-top: 4px; margin-left: 24px;">Si está marcado, se cerrará la ventana de chat después de enviar el mensaje</small>
-          </div>
-          
-          <button id="lmp-save-settings" class="lmp-btn" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
-            Guardar configuración
-          </button>
-        </div>
-        
-        <div class="lmp-section" style="margin-bottom: 20px;">
-          <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Estadísticas</h3>
-          <div id="lmp-stats-container" style="padding: 10px; background-color: #f5f6f7; border-radius: 4px;">
-            <p><strong>Grupo actual:</strong> <span id="lmp-current-group-name">Cargando...</span></p>
-            <p><strong>Miembros totales:</strong> <span id="lmp-total-members">-</span></p>
-            <p><strong>Interacciones realizadas:</strong> <span id="lmp-interactions-count">0</span></p>
-          </div>
-        </div>
+    // Crear contenido HTML del sidebar usando el nuevo patrón modular
+    this.container.innerHTML = '';
+    
+    // Crear header del sidebar
+    const header = document.createElement('div');
+    header.className = 'lmp-sidebar-header';
+    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;';
+    header.innerHTML = `
+      <h2 style="margin: 0; color: #4267B2;">Lead Manager Pro - Grupos</h2>
+      <button id="lmp-close-sidebar" style="background: none; border: none; cursor: pointer; font-size: 20px;">×</button>
+    `;
+    this.container.appendChild(header);
+    
+    // Crear sección de herramientas
+    const toolsSection = document.createElement('div');
+    toolsSection.className = 'lmp-section';
+    toolsSection.style.cssText = 'margin-bottom: 20px;';
+    toolsSection.innerHTML = `
+      <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Herramientas</h3>
+      <div class="lmp-actions" style="display: flex; flex-direction: column; gap: 10px;">
+        <button id="lmp-count-members-btn" class="lmp-btn" style="padding: 8px 12px; background-color: #42b883; color: white; border: none; border-radius: 4px; cursor: pointer;">
+          Contar miembros
+        </button>
+        <button id="lmp-interact-members-btn" class="lmp-btn" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+          Interactuar con miembros
+        </button>
       </div>
     `;
+    this.container.appendChild(toolsSection);
+    
+    // Crear contenedor para opciones de interacción
+    const interactionOptionsContainer = document.createElement('div');
+    interactionOptionsContainer.id = 'lmp-interaction-options-container';
+    interactionOptionsContainer.className = 'lmp-section';
+    interactionOptionsContainer.style.cssText = 'margin-bottom: 20px;';
+    this.container.appendChild(interactionOptionsContainer);
+    
+    // Cargar opciones de interacción usando el nuevo módulo
+    this.loadInteractionOptions(interactionOptionsContainer);
+    
+    // Crear sección de estadísticas
+    const statsSection = document.createElement('div');
+    statsSection.className = 'lmp-section';
+    statsSection.style.cssText = 'margin-bottom: 20px;';
+    statsSection.innerHTML = `
+      <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Estadísticas</h3>
+      <div id="lmp-stats-container" style="padding: 10px; background-color: #f5f6f7; border-radius: 4px;">
+        <p><strong>Grupo actual:</strong> <span id="lmp-current-group-name">Cargando...</span></p>
+        <p><strong>Miembros totales:</strong> <span id="lmp-total-members">-</span></p>
+        <p><strong>Interacciones realizadas:</strong> <span id="lmp-interactions-count">0</span></p>
+      </div>
+    `;
+    this.container.appendChild(statsSection);
     
     // Agregar al DOM
     document.body.appendChild(this.container);
@@ -401,6 +423,55 @@ class GroupSidebar {
     
     // Obtener información del grupo actual
     this.updateGroupInfo();
+  }
+  
+  // Cargar opciones de interacción usando el nuevo módulo
+  loadInteractionOptions(container) {
+    try {
+      // Inicializar el módulo de opciones UI si no existe
+      if (!window.leadManagerPro.groupMemberInteractionOptionsUI) {
+        console.log('GroupSidebar: Inicializando módulo de opciones de interacción UI');
+        // El módulo se cargará automáticamente si está incluido en el manifest
+      }
+      
+      // Si el módulo está disponible, usarlo
+      if (window.leadManagerPro.groupMemberInteractionOptionsUI) {
+        window.leadManagerPro.groupMemberInteractionOptionsUI.init();
+        window.leadManagerPro.groupMemberInteractionOptionsUI.injectOptionsForm(container);
+      } else {
+        // Fallback: crear formulario básico
+        this.createBasicInteractionForm(container);
+      }
+    } catch (error) {
+      console.error('GroupSidebar: Error al cargar opciones de interacción:', error);
+      this.createBasicInteractionForm(container);
+    }
+  }
+  
+  // Crear formulario básico de interacción (fallback)
+  createBasicInteractionForm(container) {
+    container.innerHTML = `
+      <h3 style="margin-top: 0; margin-bottom: 10px; color: #4267B2;">Configuración de interacción</h3>
+      <div class="lmp-form-group" style="margin-bottom: 15px;">
+        <label for="lmp-members-count" style="display: block; margin-bottom: 5px; font-weight: 500;">Número de miembros a interactuar:</label>
+        <input type="number" id="lmp-members-count" value="${this.settings.membersToInteract}" min="1" max="100" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      </div>
+      <div class="lmp-form-group" style="margin-bottom: 15px;">
+        <label for="lmp-interaction-delay" style="display: block; margin-bottom: 5px; font-weight: 500;">Tiempo entre interacciones (ms):</label>
+        <input type="number" id="lmp-interaction-delay" value="${this.settings.interactionDelay}" min="1000" step="500" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      </div>
+      <div class="lmp-form-group" style="margin-bottom: 15px;">
+        <label for="lmp-message-to-send" style="display: block; margin-bottom: 5px; font-weight: 500;">Mensaje a enviar:</label>
+        <textarea id="lmp-message-to-send" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px; resize: vertical;">${this.settings.messageToSend}</textarea>
+      </div>
+      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 15px;">
+        <input type="checkbox" id="lmp-auto-close-chat" ${this.settings.autoCloseChat ? 'checked' : ''} style="margin: 0;">
+        <span>Cerrar ventana de chat automáticamente</span>
+      </label>
+      <button id="lmp-save-settings" class="lmp-btn" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+        Guardar configuración
+      </button>
+    `;
   }
   
   // Configurar los event listeners de los elementos del sidebar
