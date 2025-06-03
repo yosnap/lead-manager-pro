@@ -142,11 +142,62 @@ function checkAuthStatus(callback) {
 }
 
 /**
+ * Función para limpiar toggles duplicados
+ */
+window.LeadManagerPro.modules.cleanupDuplicateToggles = function() {
+  console.log('Lead Manager Pro: Limpiando toggles duplicados');
+  
+  // Buscar todos los elementos con ID o clase que contengan 'snap-lead-manager-toggle'
+  const togglesById = document.querySelectorAll('[id*="snap-lead-manager-toggle"]');
+  const togglesByClass = document.querySelectorAll('[class*="snap-lead-manager-toggle"]');
+  
+  // Crear un Set para evitar duplicados
+  const allToggles = new Set([...togglesById, ...togglesByClass]);
+  
+  let keepToggle = null;
+  let removedCount = 0;
+  
+  allToggles.forEach(toggle => {
+    if (toggle.id === 'snap-lead-manager-toggle') {
+      if (!keepToggle) {
+        // Mantener el primero que encontremos con el ID correcto
+        keepToggle = toggle;
+        console.log('Lead Manager Pro: Manteniendo toggle principal');
+      } else {
+        // Eliminar duplicados
+        try {
+          toggle.remove();
+          removedCount++;
+          console.log('Lead Manager Pro: Toggle duplicado eliminado');
+        } catch (error) {
+          console.error('Lead Manager Pro: Error al eliminar toggle duplicado:', error);
+        }
+      }
+    } else if (toggle.classList.contains('snap-lead-manager-toggle') && !toggle.id) {
+      // Eliminar elementos que solo tienen la clase pero no el ID
+      try {
+        toggle.remove();
+        removedCount++;
+        console.log('Lead Manager Pro: Toggle con solo clase eliminado');
+      } catch (error) {
+        console.error('Lead Manager Pro: Error al eliminar toggle con clase:', error);
+      }
+    }
+  });
+  
+  console.log(`Lead Manager Pro: Limpieza completada. ${removedCount} toggles duplicados eliminados`);
+  return keepToggle;
+};
+
+/**
  * Inserta el sidebar en la página
  * @returns {HTMLElement} - El contenedor del sidebar
  */
 window.LeadManagerPro.modules.insertSidebar = function() {
   console.log('Lead Manager Pro: Insertando sidebar');
+  
+  // Limpiar toggles duplicados antes de crear uno nuevo
+  window.LeadManagerPro.modules.cleanupDuplicateToggles();
   
   // Verificar si ya existe el sidebar
   const existingSidebar = document.getElementById('snap-lead-manager-searcher');
@@ -168,12 +219,66 @@ window.LeadManagerPro.modules.insertSidebar = function() {
   iframe.className = 'snap-lead-manager-iframe';
   iframe.src = chrome.runtime.getURL('sidebar.html');
   
-  // Crear botón para mostrar/ocultar
-  const toggleButton = document.createElement('div');
+  // Crear botón para mostrar/ocultar con mejor accesibilidad
+  const toggleButton = document.createElement('button');
   toggleButton.id = 'snap-lead-manager-toggle';
-  toggleButton.className = 'snap-lead-manager-toggle';
-  toggleButton.innerHTML = '►';
+  toggleButton.innerHTML = '<span aria-hidden="true">◀</span>';
+  toggleButton.setAttribute('aria-label', 'Ocultar panel lateral de Lead Manager');
   toggleButton.setAttribute('title', 'Ocultar Lead Manager');
+  toggleButton.setAttribute('type', 'button');
+  toggleButton.style.cssText = `
+    position: fixed;
+    top: 50%;
+    right: 300px;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 80px;
+    background: linear-gradient(135deg, #4267B2 0%, #365899 100%);
+    color: white;
+    border: none;
+    border-radius: 6px 0 0 6px;
+    cursor: pointer;
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: bold;
+    box-shadow: -3px 0 15px rgba(0,0,0,0.2);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    outline: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  `;
+  
+  // Mejorar interactividad
+  toggleButton.addEventListener('mouseenter', function() {
+    this.style.background = 'linear-gradient(135deg, #5578c7 0%, #4267B2 100%)';
+    this.style.transform = 'translateY(-50%) translateX(-2px)';
+    this.style.boxShadow = '-5px 0 20px rgba(0,0,0,0.3)';
+  });
+  
+  toggleButton.addEventListener('mouseleave', function() {
+    this.style.background = 'linear-gradient(135deg, #4267B2 0%, #365899 100%)';
+    this.style.transform = 'translateY(-50%) translateX(0)';
+    this.style.boxShadow = '-3px 0 15px rgba(0,0,0,0.2)';
+  });
+  
+  toggleButton.addEventListener('focus', function() {
+    this.style.outline = '2px solid #fff';
+    this.style.outlineOffset = '2px';
+  });
+  
+  toggleButton.addEventListener('blur', function() {
+    this.style.outline = 'none';
+  });
+  
+  // Agregar soporte para teclado
+  toggleButton.addEventListener('keydown', function(event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.click();
+    }
+  });
   
   // Añadir iframe al contenedor
   sidebarContainer.appendChild(iframe);
@@ -219,26 +324,36 @@ window.LeadManagerPro.modules.insertSidebar = function() {
     localStorage.setItem('snap_lead_manager_sidebar_hidden', 'true');
   }
   
-  // Manejar clic en el botón de toggle
+  // Manejar clic en el botón de toggle con mejor UX
   toggleButton.addEventListener('click', function() {
     const isVisible = sidebarContainer.classList.contains('visible');
     if (isVisible) {
       // Ocultar el sidebar
       sidebarContainer.classList.remove('visible');
-      toggleButton.style.right = '0';
-      toggleButton.innerHTML = '◄';
-      toggleButton.setAttribute('title', 'Mostrar Lead Manager');
+      this.style.right = '10px';
+      this.innerHTML = '<span aria-hidden="true">▶</span>';
+      this.setAttribute('aria-label', 'Mostrar panel lateral de Lead Manager');
+      this.setAttribute('title', 'Mostrar Lead Manager');
+      this.style.background = 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)';
       adjustContent(false);
       localStorage.setItem('snap_lead_manager_sidebar_hidden', 'true');
     } else {
       // Mostrar el sidebar
       sidebarContainer.classList.add('visible');
-      toggleButton.style.right = '320px';
-      toggleButton.innerHTML = '►';
-      toggleButton.setAttribute('title', 'Ocultar Lead Manager');
+      this.style.right = '300px';
+      this.innerHTML = '<span aria-hidden="true">◀</span>';
+      this.setAttribute('aria-label', 'Ocultar panel lateral de Lead Manager');
+      this.setAttribute('title', 'Ocultar Lead Manager');
+      this.style.background = 'linear-gradient(135deg, #4267B2 0%, #365899 100%)';
       adjustContent(true);
       localStorage.setItem('snap_lead_manager_sidebar_hidden', 'false');
     }
+    
+    // Añadir efecto de feedback visual
+    this.style.transform = 'translateY(-50%) scale(0.95)';
+    setTimeout(() => {
+      this.style.transform = 'translateY(-50%) scale(1)';
+    }, 150);
   });
   
   // Observar cambios en la URL
@@ -281,7 +396,7 @@ window.LeadManagerPro.modules.insertSidebar = function() {
           // El usuario lo tenía visible
           sidebarContainer.classList.add('visible');
           toggleButton.style.right = '320px';
-          toggleButton.innerHTML = '►';
+          toggleButton.innerHTML = '<span aria-hidden="true">◀</span>';
           adjustContent(true);
         } else {
           // Por defecto o si estaba oculto, mantenerlo oculto
@@ -338,7 +453,7 @@ window.LeadManagerPro.modules.ensureToggleButtonVisible = function() {
   if (!toggleButton) {
     toggleButton = document.createElement('div');
     toggleButton.id = 'snap-lead-manager-toggle';
-    toggleButton.innerHTML = '►'; // Por defecto, mostrar flecha para abrir
+    toggleButton.innerHTML = '<span aria-hidden="true">▶</span>'; // Por defecto, mostrar flecha para abrir
     toggleButton.style.cssText = `
       position: fixed;
       right: 0;
@@ -373,7 +488,7 @@ window.LeadManagerPro.modules.ensureToggleButtonVisible = function() {
       if (isVisible) {
         // Ocultar
         sidebarContainer.classList.remove('visible');
-        toggleButton.innerHTML = '►';
+        toggleButton.innerHTML = '<span aria-hidden="true">▶</span>';
         toggleButton.style.right = '0';
         localStorage.setItem('snap_lead_manager_sidebar_hidden', 'true');
       } else {
@@ -614,7 +729,7 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
         // Ajustar el botón de toggle
         const toggleButton = document.getElementById('snap-lead-manager-toggle');
         if (toggleButton) {
-          toggleButton.innerHTML = '►';
+          toggleButton.innerHTML = '<span aria-hidden="true">◀</span>';
           toggleButton.style.right = '320px';
           toggleButton.setAttribute('title', 'Ocultar Lead Manager');
           toggleButton.style.display = 'flex';
@@ -673,7 +788,7 @@ window.LeadManagerPro.modules.setupSidebarListeners = function() {
         sidebarContainer.classList.add('visible');
         const toggleButton = document.getElementById('snap-lead-manager-toggle');
         if (toggleButton) {
-          toggleButton.innerHTML = '►';
+          toggleButton.innerHTML = '<span aria-hidden="true">◀</span>';
           toggleButton.style.right = '320px';
           toggleButton.setAttribute('title', 'Ocultar Lead Manager');
         }

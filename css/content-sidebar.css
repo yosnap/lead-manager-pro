@@ -49,42 +49,17 @@
   right: -290px;
 }
 
+/* El toggle ahora tiene estilos inline optimizados, esta regla es para compatibilidad */
 #snap-lead-manager-toggle {
-  position: fixed;
-  top: 50%;
-  right: 300px;
-  transform: translateY(-50%);
-  width: 20px;
-  height: 100px;
-  background-color: black;
-  z-index: 10000;
-  border: none;
-  border-radius: 5px 0 0 5px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  outline: none;
-  transition: right 0.3s ease;
-  box-shadow: -2px 0px 5px rgba(0, 0, 0, 0.1);
+  /* Los estilos principales están definidos inline en el JavaScript para mejor control */
 }
 
-#snap-lead-manager-toggle.collapsed {
-  right: 10px;
+#snap-lead-manager-toggle:hover {
+  /* Los efectos hover están manejados por JavaScript */
 }
 
-#snap-lead-manager-toggle-icon {
-  width: 10px;
-  height: 10px;
-  border-top: 2px solid white;
-  border-right: 2px solid white;
-  transform: rotate(45deg);
-  transition: transform 0.3s ease;
-}
-
-#snap-lead-manager-toggle.collapsed #snap-lead-manager-toggle-icon {
-  transform: rotate(-135deg);
+#snap-lead-manager-toggle:focus {
+  /* Los efectos focus están manejados por JavaScript */
 }
 
 /* Ajustes para que el sidebar sea más visible */

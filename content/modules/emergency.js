@@ -114,7 +114,7 @@ function resetExtension() {
     // Crear botón de toggle nuevo
     const toggleButton = document.createElement('div');
     toggleButton.id = 'snap-lead-manager-toggle';
-    toggleButton.innerHTML = '►';
+    toggleButton.innerHTML = '<span aria-hidden="true">▶</span>';
     toggleButton.style.cssText = `
       position: fixed;
       right: 0;

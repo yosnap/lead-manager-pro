@@ -172,7 +172,7 @@ class MemberInteractionUI {
           const toggleBtn = document.getElementById('snap-lead-manager-toggle');
           if (toggleBtn) {
             toggleBtn.style.right = '320px';
-            toggleBtn.innerHTML = '►';
+            toggleBtn.innerHTML = '<span aria-hidden="true">◀</span>';
           }
         }
       }
