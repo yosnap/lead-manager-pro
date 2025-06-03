@@ -38,9 +38,12 @@ window.LeadManagerPro.controllers.showSidebar = function() {
     // Ajustar el botón de toggle
     const toggleButton = document.getElementById('snap-lead-manager-toggle');
     if (toggleButton) {
+      toggleButton.classList.remove('sidebar-closed');
+      toggleButton.classList.add('sidebar-open');
       toggleButton.innerHTML = '<span aria-hidden="true">◀</span>';
       toggleButton.style.right = '320px';
       toggleButton.setAttribute('title', 'Ocultar Lead Manager');
+      toggleButton.style.background = 'linear-gradient(135deg, #4267B2 0%, #365899 100%)';
       toggleButton.style.display = 'flex';
     }
     

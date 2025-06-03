@@ -118,7 +118,8 @@
         "js/sidebar-auth.js",
         "debug/auth-tests.js",
         "debug/group-sidebar-tests.js",
-        "debug/new-features-tests.js"
+        "debug/new-features-tests.js",
+        "debug/sidebar-transitions-test.js"
       ],
       "matches": ["https://*.facebook.com/*"]
     }

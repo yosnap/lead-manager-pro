@@ -1,19 +1,24 @@
-/* Estilos para el contenedor del sidebar */
+/* Estilos para el contenedor del sidebar con transiciones suaves */
 #snap-lead-manager-searcher {
   position: fixed;
   top: 0;
-  right: 0;
+  right: -320px; /* Inicialmente oculto */
   width: 320px;
   height: 100vh;
   z-index: 9999;
   background: white;
-  box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+  box-shadow: -2px 0 15px rgba(0,0,0,0.3);
   border-left: 1px solid #ddd;
   overflow: hidden;
-  transition: transform 0.3s ease;
+  transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Estilos para el botón de toggle - Actualizado para mejor accesibilidad */
+/* Estado visible del sidebar */
+#snap-lead-manager-searcher.visible {
+  right: 0;
+}
+
+/* Estilos para el botón de toggle - Se mueve con el sidebar */
 #snap-lead-manager-toggle {
   /* Los estilos principales están definidos inline en JavaScript para mejor control dinámico */
   /* Este CSS es para compatibilidad y fallback */
@@ -21,7 +26,17 @@
   z-index: 10001 !important;
   border: none !important;
   cursor: pointer !important;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Toggle pegado al sidebar cuando está cerrado */
+#snap-lead-manager-toggle.sidebar-closed {
+  right: 10px !important;
+}
+
+/* Toggle pegado al sidebar cuando está abierto */
+#snap-lead-manager-toggle.sidebar-open {
+  right: 320px !important;
 }
 
 #snap-lead-manager-toggle:focus-visible {
@@ -35,19 +50,4 @@
   height: 100%;
   border: none;
   overflow: hidden;
-}
-
-/* Ocultar el sidebar mientras se carga la página para evitar interferencias */
-#snap-lead-manager-searcher.loading {
-  opacity: 0;
-}
-
-/* Estado oculto */
-#snap-lead-manager-searcher.hidden {
-  transform: translateX(100%);
-}
-
-/* Estado visible */
-#snap-lead-manager-searcher.visible {
-  transform: translateX(0);
 }
