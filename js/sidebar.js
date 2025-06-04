@@ -64,8 +64,7 @@ let collapsibleContent;
 let maxScrollsInput;
 let scrollDelayInput;
 let groupOptionsContainer;
-let publicGroupsCheckbox;
-let privateGroupsCheckbox;
+let onlyPublicGroupsCheckbox;
 let minUsersInput;
 let minPostsYearInput;
 let minPostsMonthInput;
@@ -416,9 +415,13 @@ function performSearch() {
     
     // Guardar opciones de grupo si es una búsqueda de grupos
     if (searchType === 'groups') {
-        chrome.storage.local.set({
-        groupPublic: publicGroupsCheckbox ? publicGroupsCheckbox.checked : true,
-        groupPrivate: privateGroupsCheckbox ? privateGroupsCheckbox.checked : true,
+      // Usar la nueva lógica con onlyPublicGroups
+      const onlyPublic = onlyPublicGroupsCheckbox ? onlyPublicGroupsCheckbox.checked : false;
+      
+      chrome.storage.local.set({
+        groupPublic: true, // Siempre buscar públicos
+        groupPrivate: !onlyPublic, // Solo buscar privados si onlyPublic es false
+        onlyPublicGroups: onlyPublic, // Nueva propiedad
         minUsers: minUsersInput ? minUsersInput.value : '',
         minPostsYear: minPostsYearInput ? minPostsYearInput.value : '',
         minPostsMonth: minPostsMonthInput ? minPostsMonthInput.value : '',
@@ -708,8 +711,7 @@ function clearSearchCriteria() {
   scrollDelayInput.value = '2';
   
   // Restablecer opciones de grupo a valores por defecto
-  publicGroupsCheckbox.checked = true;
-  privateGroupsCheckbox.checked = true;
+  onlyPublicGroupsCheckbox.checked = false; // Por defecto buscar públicos y privados
   minUsersInput.value = '0';
   minPostsYearInput.value = '0';
   minPostsMonthInput.value = '0';
@@ -769,11 +771,15 @@ function applyCurrentSettings() {
     
     // Guardar opciones de búsqueda de grupos usando el nuevo módulo
     if (window.leadManagerPro && window.leadManagerPro.groupSearchOptions) {
+      // Nueva lógica: onlyPublicGroups determina si buscar solo públicos o ambos
+      const onlyPublic = onlyPublicGroupsCheckbox.checked;
+      
       const success2 = window.leadManagerPro.groupSearchOptions.saveOptions({
         groupTypes: {
-          public: publicGroupsCheckbox.checked,
-          private: privateGroupsCheckbox.checked
+          public: true, // Siempre buscar públicos
+          private: !onlyPublic // Solo buscar privados si onlyPublic está false
         },
+        onlyPublicGroups: onlyPublic, // Nueva propiedad para control
         minMembers: minUsersValue,
         minPosts: {
           year: minPostsYearValue,
@@ -783,7 +789,8 @@ function applyCurrentSettings() {
       });
       if (success2) {
         console.log('Opciones de grupos aplicadas:', {
-          groupTypes: { public: publicGroupsCheckbox.checked, private: privateGroupsCheckbox.checked },
+          groupTypes: { public: true, private: !onlyPublic },
+          onlyPublicGroups: onlyPublic,
           minMembers: minUsersValue,
           minPosts: { year: minPostsYearValue, month: minPostsMonthValue, day: minPostsDayValue }
         });
@@ -793,9 +800,68 @@ function applyCurrentSettings() {
     // Mostrar mensaje de confirmación
     showTemporaryMessage('✓ Configuración aplicada correctamente');
     
+    // Aplicar cambios al switch de Facebook si estamos en una página de búsqueda de grupos
+    applyFacebookGroupTypeSwitch(onlyPublic);
+    
   } catch (error) {
     console.error('Error al aplicar configuración:', error);
     showError('Error al aplicar la configuración. Revisa la consola para más detalles.');
+  }
+}
+
+// Función para aplicar el estado del switch de "Grupos públicos" en Facebook
+function applyFacebookGroupTypeSwitch(onlyPublic) {
+  try {
+    // Buscar el switch de "Grupos públicos" en Facebook usando el aria-label
+    const publicGroupsSwitch = document.querySelector('input[aria-label="Grupos públicos"][role="switch"]');
+    
+    if (publicGroupsSwitch) {
+      // Verificar si el estado actual es diferente al deseado
+      const currentState = publicGroupsSwitch.getAttribute('aria-checked') === 'true';
+      
+      if (currentState !== onlyPublic) {
+        console.log('Facebook switch encontrado. Estado actual:', currentState, 'Estado deseado:', onlyPublic);
+        
+        // Hacer click en el switch para cambiarlo
+        publicGroupsSwitch.click();
+        
+        // Verificar que el cambio se aplicó
+        setTimeout(() => {
+          const newState = publicGroupsSwitch.getAttribute('aria-checked') === 'true';
+          console.log('Estado después del click:', newState);
+          
+          if (newState === onlyPublic) {
+            showTemporaryMessage('✓ Switch de Facebook actualizado correctamente');
+          } else {
+            console.warn('El switch no cambió como se esperaba');
+          }
+        }, 500);
+        
+      } else {
+        console.log('El switch ya está en el estado correcto:', onlyPublic);
+      }
+    } else {
+      console.log('Switch de grupos públicos no encontrado en esta página');
+    }
+    
+  } catch (error) {
+    console.error('Error al aplicar switch de Facebook:', error);
+  }
+}
+
+// Función para agregar listener al checkbox para auto-aplicar
+function setupAutoApplyFacebookSwitch() {
+  if (onlyPublicGroupsCheckbox) {
+    onlyPublicGroupsCheckbox.addEventListener('change', function() {
+      console.log('Checkbox cambió a:', this.checked);
+      
+      // Auto-aplicar cambio al switch de Facebook
+      setTimeout(() => {
+        applyFacebookGroupTypeSwitch(this.checked);
+      }, 100);
+    });
+    
+    console.log('Auto-apply Facebook switch configurado');
   }
 }
 
@@ -829,8 +895,7 @@ function updateExistingCriteria() {
     maxScrolls: parseInt(maxScrollsInput.value, 10) || 50,
     scrollDelay: parseFloat(scrollDelayInput.value) || 2,
     groupOptions: {
-      publicGroups: publicGroupsCheckbox.checked,
-      privateGroups: privateGroupsCheckbox.checked,
+      onlyPublicGroups: onlyPublicGroupsCheckbox.checked,
       minUsers: minUsersValue,
       minPostsYear: minPostsYearValue,
       minPostsMonth: minPostsMonthValue,
@@ -901,8 +966,7 @@ function saveSearchCriteria() {
     maxScrolls: parseInt(maxScrollsInput.value, 10) || 50,
     scrollDelay: parseFloat(scrollDelayInput.value) || 2,
     groupOptions: {
-      publicGroups: publicGroupsCheckbox.checked,
-      privateGroups: privateGroupsCheckbox.checked,
+      onlyPublicGroups: onlyPublicGroupsCheckbox.checked,
       minUsers: minUsersValue,
       minPostsYear: minPostsYearValue,
       minPostsMonth: minPostsMonthValue,
@@ -925,11 +989,13 @@ function saveSearchCriteria() {
     
     // Guardar opciones de búsqueda de grupos
     if (window.leadManagerPro && window.leadManagerPro.groupSearchOptions) {
+      const onlyPublic = criteria.groupOptions.onlyPublicGroups;
       window.leadManagerPro.groupSearchOptions.saveOptions({
         groupTypes: {
-          public: criteria.groupOptions.publicGroups,
-          private: criteria.groupOptions.privateGroups
+          public: true, // Siempre buscar públicos
+          private: !onlyPublic // Solo buscar privados si onlyPublic está false
         },
+        onlyPublicGroups: onlyPublic,
         minMembers: criteria.groupOptions.minUsers || 100,
         minPosts: {
           year: criteria.groupOptions.minPostsYear || 50,
@@ -1071,8 +1137,14 @@ function loadSavedCriteria(criteriaId, forEditing = false) {
   
   // Opciones de grupo si están disponibles
   if (criteria.groupOptions) {
-    publicGroupsCheckbox.checked = criteria.groupOptions.publicGroups !== false;
-    privateGroupsCheckbox.checked = criteria.groupOptions.privateGroups !== false;
+    // Manejar nueva lógica: si tiene onlyPublicGroups usar eso, sino convertir de la lógica antigua
+    if (criteria.groupOptions.hasOwnProperty('onlyPublicGroups')) {
+      onlyPublicGroupsCheckbox.checked = criteria.groupOptions.onlyPublicGroups;
+    } else {
+      // Convertir lógica antigua: si solo públicos están marcados, marcar onlyPublic
+      const publicOnly = criteria.groupOptions.publicGroups === true && criteria.groupOptions.privateGroups === false;
+      onlyPublicGroupsCheckbox.checked = publicOnly;
+    }
     
     // Manejar valores vacíos
     minUsersInput.value = criteria.groupOptions.minUsers === '' ? '' : (criteria.groupOptions.minUsers || 0);
@@ -1221,8 +1293,7 @@ function initDOMReferences() {
   maxScrollsInput = document.getElementById('max-scrolls');
   scrollDelayInput = document.getElementById('scroll-delay');
   groupOptionsContainer = document.getElementById('group-options');
-  publicGroupsCheckbox = document.getElementById('public-groups');
-  privateGroupsCheckbox = document.getElementById('private-groups');
+  onlyPublicGroupsCheckbox = document.getElementById('only-public-groups');
   minUsersInput = document.getElementById('min-users');
   minPostsYearInput = document.getElementById('min-posts-year');
   minPostsMonthInput = document.getElementById('min-posts-month');
@@ -1314,8 +1385,16 @@ function applySavedCriteria(criteria) {
   
   // Aplicar opciones de grupo si existen
   if (criteria.groupOptions) {
-    if (publicGroupsCheckbox) publicGroupsCheckbox.checked = criteria.groupOptions.publicGroups !== false;
-    if (privateGroupsCheckbox) privateGroupsCheckbox.checked = criteria.groupOptions.privateGroups !== false;
+    // Usar nueva lógica con onlyPublicGroups
+    if (onlyPublicGroupsCheckbox) {
+      if (criteria.groupOptions.hasOwnProperty('onlyPublicGroups')) {
+        onlyPublicGroupsCheckbox.checked = criteria.groupOptions.onlyPublicGroups;
+      } else {
+        // Convertir lógica antigua
+        const publicOnly = criteria.groupOptions.publicGroups === true && criteria.groupOptions.privateGroups === false;
+        onlyPublicGroupsCheckbox.checked = publicOnly;
+      }
+    }
     if (minUsersInput) minUsersInput.value = criteria.groupOptions.minUsers || '';
     if (minPostsYearInput) minPostsYearInput.value = criteria.groupOptions.minPostsYear || '';
     if (minPostsMonthInput) minPostsMonthInput.value = criteria.groupOptions.minPostsMonth || '';
@@ -1424,6 +1503,9 @@ function initializeEvents() {
   if (closeManageCriteriaButton) {
     closeManageCriteriaButton.addEventListener('click', closeModals);
   }
+  
+  // Configurar auto-aplicación del switch de Facebook
+  setupAutoApplyFacebookSwitch();
   
   debugLog('Todos los eventos inicializados correctamente');
 }

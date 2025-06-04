@@ -7,6 +7,7 @@ class GroupSearchOptions {
         public: true,
         private: true
       },
+      onlyPublicGroups: false, // Nueva opción: solo públicos
       minMembers: 100,
       minPosts: {
         year: 50,
