@@ -451,6 +451,17 @@ function performSearch() {
     updateUI();
     updateSearchInfo();
     
+    // Si es búsqueda de grupos, aplicar configuración del switch de Facebook
+    if (searchType === 'groups' && onlyPublicGroupsCheckbox) {
+      const onlyPublic = onlyPublicGroupsCheckbox.checked;
+      console.log('Aplicando configuración de grupos públicos al iniciar búsqueda:', onlyPublic);
+      
+      // Aplicar inmediatamente el switch de Facebook
+      setTimeout(() => {
+        applyFacebookGroupTypeSwitch(onlyPublic);
+      }, 1000); // Dar tiempo a que la página de búsqueda cargue
+    }
+    
     // Iniciar verificación del estado
     startStatusChecking();
     
@@ -797,6 +808,28 @@ function applyCurrentSettings() {
       }
     }
     
+    // Guardar también en localStorage para persistencia inmediata
+    try {
+      const groupOptions = {
+        onlyPublicGroups: onlyPublic,
+        minMembers: minUsersValue,
+        minPosts: {
+          year: minPostsYearValue,
+          month: minPostsMonthValue,
+          day: minPostsDayValue
+        }
+      };
+      
+      localStorage.setItem('snap_lead_manager_group_options', JSON.stringify(groupOptions));
+      
+      // También guardar directamente el valor de onlyPublicGroups
+      localStorage.setItem('only_public_groups_setting', onlyPublic.toString());
+      
+      console.log('Configuración guardada en localStorage:', groupOptions);
+    } catch (storageError) {
+      console.error('Error al guardar en localStorage:', storageError);
+    }
+    
     // Mostrar mensaje de confirmación
     showTemporaryMessage('✓ Configuración aplicada correctamente');
     
@@ -810,7 +843,7 @@ function applyCurrentSettings() {
 }
 
 // Función para aplicar el estado del switch de "Grupos públicos" en Facebook
-function applyFacebookGroupTypeSwitch(onlyPublic) {
+function applyFacebookGroupTypeSwitch(onlyPublic, retryCount = 0) {
   try {
     // Buscar el switch de "Grupos públicos" en Facebook usando el aria-label
     const publicGroupsSwitch = document.querySelector('input[aria-label="Grupos públicos"][role="switch"]');
@@ -834,6 +867,12 @@ function applyFacebookGroupTypeSwitch(onlyPublic) {
             showTemporaryMessage('✓ Switch de Facebook actualizado correctamente');
           } else {
             console.warn('El switch no cambió como se esperaba');
+            // Reintentar una vez más
+            if (retryCount < 1) {
+              setTimeout(() => {
+                applyFacebookGroupTypeSwitch(onlyPublic, retryCount + 1);
+              }, 1000);
+            }
           }
         }, 500);
         
@@ -842,6 +881,16 @@ function applyFacebookGroupTypeSwitch(onlyPublic) {
       }
     } else {
       console.log('Switch de grupos públicos no encontrado en esta página');
+      
+      // Reintentar hasta 3 veces si no se encuentra el switch
+      if (retryCount < 3) {
+        console.log(`Reintentando encontrar el switch (intento ${retryCount + 1}/3)...`);
+        setTimeout(() => {
+          applyFacebookGroupTypeSwitch(onlyPublic, retryCount + 1);
+        }, 2000);
+      } else {
+        console.log('Switch no encontrado después de varios intentos. Puede que no estemos en la página correcta.');
+      }
     }
     
   } catch (error) {
@@ -863,6 +912,45 @@ function setupAutoApplyFacebookSwitch() {
     
     console.log('Auto-apply Facebook switch configurado');
   }
+}
+
+// Función para monitorear cambios en la página y aplicar configuración automáticamente
+function setupPageMonitoring() {
+  // Observar cambios en la URL para detectar navegación a páginas de búsqueda
+  let currentUrl = window.location.href;
+  
+  const checkForUrlChange = () => {
+    const newUrl = window.location.href;
+    if (newUrl !== currentUrl) {
+      currentUrl = newUrl;
+      console.log('URL cambió a:', newUrl);
+      
+      // Si es una búsqueda de grupos y tenemos configuración guardada
+      if (newUrl.includes('/search/') && newUrl.includes('groups')) {
+        console.log('Detectada página de búsqueda de grupos');
+        
+        // Cargar configuración y aplicar switch
+        setTimeout(() => {
+          const savedSetting = localStorage.getItem('only_public_groups_setting');
+          if (savedSetting !== null) {
+            const onlyPublic = savedSetting === 'true';
+            console.log('Aplicando configuración guardada en página de búsqueda:', onlyPublic);
+            applyFacebookGroupTypeSwitch(onlyPublic);
+          }
+        }, 2000);
+      }
+    }
+  };
+  
+  // Verificar cambios de URL cada segundo
+  setInterval(checkForUrlChange, 1000);
+  
+  // También usar el evento popstate para detectar navegación
+  window.addEventListener('popstate', () => {
+    setTimeout(checkForUrlChange, 500);
+  });
+  
+  console.log('Monitoreo de página configurado');
 }
 
 // Actualizar un criterio existente que está siendo editado
@@ -1507,6 +1595,9 @@ function initializeEvents() {
   // Configurar auto-aplicación del switch de Facebook
   setupAutoApplyFacebookSwitch();
   
+  // Configurar monitoreo de página para aplicación automática
+  setupPageMonitoring();
+  
   debugLog('Todos los eventos inicializados correctamente');
 }
 
@@ -1648,6 +1739,62 @@ async function loadSavedState() {
       
       updateSearchInfo();
     }
+    
+    // Cargar configuración del checkbox "Solo públicos" desde Extension Storage
+    await loadOnlyPublicGroupsSettings();
+    
+  } catch (error) {
+    console.error('Error al cargar estado guardado:', error);
+  }
+}
+
+// Nueva función para cargar configuración de "Solo públicos"
+async function loadOnlyPublicGroupsSettings() {
+  try {
+    // Intentar cargar desde Extension Storage primero
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      chrome.storage.local.get(['leadManagerGroupSettings', 'onlyPublicGroups'], (result) => {
+        if (result && onlyPublicGroupsCheckbox) {
+          // Buscar en diferentes ubicaciones
+          let onlyPublicValue = false;
+          
+          if (result.onlyPublicGroups !== undefined) {
+            onlyPublicValue = result.onlyPublicGroups;
+          } else if (result.leadManagerGroupSettings && result.leadManagerGroupSettings.onlyPublicGroups !== undefined) {
+            onlyPublicValue = result.leadManagerGroupSettings.onlyPublicGroups;
+          }
+          
+          onlyPublicGroupsCheckbox.checked = onlyPublicValue;
+          console.log('Configuración "Solo públicos" cargada desde Extension Storage:', onlyPublicValue);
+        }
+      });
+    }
+    
+    // También intentar cargar desde localStorage como respaldo
+    const savedGroupOptions = localStorage.getItem('snap_lead_manager_group_options');
+    const directSetting = localStorage.getItem('only_public_groups_setting');
+    
+    if (onlyPublicGroupsCheckbox) {
+      // Priorizar la configuración directa
+      if (directSetting !== null) {
+        onlyPublicGroupsCheckbox.checked = directSetting === 'true';
+        console.log('Configuración "Solo públicos" cargada desde localStorage directo:', directSetting === 'true');
+      } else if (savedGroupOptions) {
+        try {
+          const groupOptions = JSON.parse(savedGroupOptions);
+          if (groupOptions.onlyPublicGroups !== undefined) {
+            onlyPublicGroupsCheckbox.checked = groupOptions.onlyPublicGroups;
+            console.log('Configuración "Solo públicos" cargada desde localStorage:', groupOptions.onlyPublicGroups);
+          }
+        } catch (error) {
+          console.error('Error al parsear opciones de grupo desde localStorage:', error);
+        }
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error al cargar configuración de grupos:', error);
+  }
     
     debugLog('Estado guardado cargado correctamente');
       } catch (error) {
