@@ -72,6 +72,7 @@ let minPostsMonthInput;
 let minPostsDayInput;
 
 // Referencias a gestión de criterios
+let applySettingsButton;
 let clearCriteriaButton;
 let saveCriteriaButton;
 let cancelEditButton;
@@ -744,6 +745,60 @@ function showSaveCriteriaModal() {
   saveCriteriaModal.style.display = 'block';
 }
 
+// Aplicar configuración actual sin guardar como criterio
+function applyCurrentSettings() {
+  try {
+    // Obtener valores de los campos
+    const maxScrollsValue = parseInt(maxScrollsInput.value, 10) || 50;
+    const scrollDelayValue = parseFloat(scrollDelayInput.value) || 2;
+    const minUsersValue = minUsersInput.value.trim() === '' ? 100 : (parseInt(minUsersInput.value, 10) || 100);
+    const minPostsYearValue = minPostsYearInput.value.trim() === '' ? 50 : (parseInt(minPostsYearInput.value, 10) || 50);
+    const minPostsMonthValue = minPostsMonthInput.value.trim() === '' ? 10 : (parseInt(minPostsMonthInput.value, 10) || 10);
+    const minPostsDayValue = minPostsDayInput.value.trim() === '' ? 1 : (parseInt(minPostsDayInput.value, 10) || 1);
+    
+    // Guardar opciones generales usando el nuevo módulo
+    if (window.leadManagerPro && window.leadManagerPro.generalOptions) {
+      const success1 = window.leadManagerPro.generalOptions.saveOptions({
+        maxScrollsToShowResults: maxScrollsValue,
+        waitTimeBetweenScrolls: scrollDelayValue
+      });
+      if (success1) {
+        console.log('Opciones generales aplicadas:', { maxScrollsValue, scrollDelayValue });
+      }
+    }
+    
+    // Guardar opciones de búsqueda de grupos usando el nuevo módulo
+    if (window.leadManagerPro && window.leadManagerPro.groupSearchOptions) {
+      const success2 = window.leadManagerPro.groupSearchOptions.saveOptions({
+        groupTypes: {
+          public: publicGroupsCheckbox.checked,
+          private: privateGroupsCheckbox.checked
+        },
+        minMembers: minUsersValue,
+        minPosts: {
+          year: minPostsYearValue,
+          month: minPostsMonthValue,
+          day: minPostsDayValue
+        }
+      });
+      if (success2) {
+        console.log('Opciones de grupos aplicadas:', {
+          groupTypes: { public: publicGroupsCheckbox.checked, private: privateGroupsCheckbox.checked },
+          minMembers: minUsersValue,
+          minPosts: { year: minPostsYearValue, month: minPostsMonthValue, day: minPostsDayValue }
+        });
+      }
+    }
+    
+    // Mostrar mensaje de confirmación
+    showTemporaryMessage('✓ Configuración aplicada correctamente');
+    
+  } catch (error) {
+    console.error('Error al aplicar configuración:', error);
+    showError('Error al aplicar la configuración. Revisa la consola para más detalles.');
+  }
+}
+
 // Actualizar un criterio existente que está siendo editado
 function updateExistingCriteria() {
   console.log('Actualizando criterio existente, ID:', state.editingCriteriaId);
@@ -857,6 +912,35 @@ function saveSearchCriteria() {
   
   // Agregar a la lista
   state.savedCriteria.push(criteria);
+  
+  // NUEVO: Guardar también en los nuevos módulos de opciones
+  try {
+    // Guardar opciones generales
+    if (window.leadManagerPro && window.leadManagerPro.generalOptions) {
+      window.leadManagerPro.generalOptions.saveOptions({
+        maxScrollsToShowResults: criteria.maxScrolls,
+        waitTimeBetweenScrolls: criteria.scrollDelay
+      });
+    }
+    
+    // Guardar opciones de búsqueda de grupos
+    if (window.leadManagerPro && window.leadManagerPro.groupSearchOptions) {
+      window.leadManagerPro.groupSearchOptions.saveOptions({
+        groupTypes: {
+          public: criteria.groupOptions.publicGroups,
+          private: criteria.groupOptions.privateGroups
+        },
+        minMembers: criteria.groupOptions.minUsers || 100,
+        minPosts: {
+          year: criteria.groupOptions.minPostsYear || 50,
+          month: criteria.groupOptions.minPostsMonth || 10,
+          day: criteria.groupOptions.minPostsDay || 1
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error al guardar en nuevos módulos:', error);
+  }
   
   // Guardar en localStorage
   localStorage.setItem('snap_lead_manager_saved_criteria', JSON.stringify(state.savedCriteria));
@@ -1145,6 +1229,7 @@ function initDOMReferences() {
   minPostsDayInput = document.getElementById('min-posts-day');
   
   // Gestión de criterios
+  applySettingsButton = document.getElementById('apply-settings');
   clearCriteriaButton = document.getElementById('clear-criteria');
   saveCriteriaButton = document.getElementById('save-criteria');
   cancelEditButton = document.getElementById('cancel-edit');
@@ -1296,6 +1381,11 @@ function initializeEvents() {
   if (clearCriteriaButton) {
     clearCriteriaButton.addEventListener('click', clearSearchCriteria);
     debugLog('Evento de limpiar criterios configurado');
+  }
+  
+  if (applySettingsButton) {
+    applySettingsButton.addEventListener('click', applyCurrentSettings);
+    debugLog('Evento de aplicar configuración configurado');
   }
   
   if (saveCriteriaButton) {
