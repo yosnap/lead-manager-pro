@@ -11,7 +11,7 @@ window.LeadManagerPro.state.options = {
   // Opciones generales
   maxScrolls: 4,  // Valor por defecto: 4 scrolls
   scrollDelay: 2,  // Valor por defecto: 2 segundos
-  
+
   // Opciones de búsqueda de grupos
   groupPublic: true,
   groupPrivate: true,
@@ -19,11 +19,11 @@ window.LeadManagerPro.state.options = {
   minPostsYear: 0, // Mínimo de publicaciones por año
   minPostsMonth: 0, // Mínimo de publicaciones por mes
   minPostsDay: 0,   // Mínimo de publicaciones por día
-  
+
   // Sincronización
   lastSyncTime: null,
   pendingSyncData: false,
-  
+
   // Otras opciones que se puedan agregar en el futuro
 };
 
@@ -45,7 +45,7 @@ chrome.storage.local.get([
       window.LeadManagerPro.state.options[key] = result[key];
     }
   });
-  
+
   // También intentamos cargar desde localStorage para compatibilidad con las opciones recientes
   try {
     const localStorageOptions = localStorage.getItem('snap_lead_manager_general_options');
@@ -55,30 +55,30 @@ chrome.storage.local.get([
       if (parsedOptions.maxScrolls) window.LeadManagerPro.state.options.maxScrolls = parsedOptions.maxScrolls;
       if (parsedOptions.scrollDelay) window.LeadManagerPro.state.options.scrollDelay = parsedOptions.scrollDelay;
     }
-    
+
     // Cargar opciones de grupo si existen
-    const groupOptions = localStorage.getItem('snap_lead_manager_group_options');
+    const groupOptions = localStorage.getItem('lmp_group_search_options');
     if (groupOptions) {
       const parsedGroupOptions = JSON.parse(groupOptions);
-      
+
       // Actualizar opciones de grupo
-      if (parsedGroupOptions.publicGroups !== undefined) 
+      if (parsedGroupOptions.publicGroups !== undefined)
         window.LeadManagerPro.state.options.groupPublic = parsedGroupOptions.publicGroups;
-      if (parsedGroupOptions.privateGroups !== undefined) 
+      if (parsedGroupOptions.privateGroups !== undefined)
         window.LeadManagerPro.state.options.groupPrivate = parsedGroupOptions.privateGroups;
-      if (parsedGroupOptions.minUsers !== undefined) 
+      if (parsedGroupOptions.minUsers !== undefined)
         window.LeadManagerPro.state.options.minUsers = parsedGroupOptions.minUsers;
-      if (parsedGroupOptions.minPostsYear !== undefined) 
+      if (parsedGroupOptions.minPostsYear !== undefined)
         window.LeadManagerPro.state.options.minPostsYear = parsedGroupOptions.minPostsYear;
-      if (parsedGroupOptions.minPostsMonth !== undefined) 
+      if (parsedGroupOptions.minPostsMonth !== undefined)
         window.LeadManagerPro.state.options.minPostsMonth = parsedGroupOptions.minPostsMonth;
-      if (parsedGroupOptions.minPostsDay !== undefined) 
+      if (parsedGroupOptions.minPostsDay !== undefined)
         window.LeadManagerPro.state.options.minPostsDay = parsedGroupOptions.minPostsDay;
     }
   } catch (e) {
     console.error('Error al cargar opciones desde localStorage:', e);
   }
-  
+
   console.log('Opciones cargadas:', window.LeadManagerPro.state.options);
 });
 
@@ -112,7 +112,7 @@ window.LeadManagerPro.state.recoveryState = {
  */
 window.LeadManagerPro.state.resetSearchState = function() {
   console.log('Reiniciando estado de búsqueda');
-  
+
   this.searchState = {
     isSearching: false,
     searchType: null,
@@ -152,7 +152,7 @@ window.LeadManagerPro.state.resetRecoveryState = function() {
 // Función para actualizar el estado de la búsqueda
 window.LeadManagerPro.state.updateSearchState = function(newState) {
   console.log('Actualizando estado de búsqueda:', newState);
-  
+
   // Actualizar estado local
   this.searchState = {
     ...this.searchState,

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Correcciones - Lead Manager Pro</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #results {
+            font-family: monospace;
+            white-space: pre-wrap;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Test de Correcciones - Lead Manager Pro</h1>
+
+    <div class="test-container">
+        <h2>Estado de la Extensión</h2>
+        <div id="extension-status" class="test-result info">
+            Verificando estado de la extensión...
+        </div>
+        <button onclick="checkExtensionStatus()">Verificar Estado</button>
+    </div>
+
+    <div class="test-container">
+        <h2>Tests de Correcciones</h2>
+        <p>Estos tests verifican que las correcciones para claves undefined funcionan correctamente.</p>
+
+        <button onclick="runBasicTests()">Ejecutar Tests Básicos</button>
+        <button onclick="runStorageTests()">Verificar Almacenamiento</button>
+        <button onclick="runCleanupTests()">Limpiar Storage</button>
+        <button onclick="clearResults()">Limpiar Resultados</button>
+    </div>
+
+    <div class="test-container">
+        <h2>Resultados</h2>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+            results.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function clearResults() {
+            document.getElementById('results').textContent = '';
+        }
+
+        function checkExtensionStatus() {
+            log('Verificando estado de la extensión...');
+
+            // Verificar si chrome.storage está disponible
+            if (typeof chrome !== 'undefined' && chrome.storage) {
+                log('✅ chrome.storage está disponible', 'success');
+
+                // Verificar si los módulos de Lead Manager Pro están cargados
+                if (window.LeadManagerPro) {
+                    log('✅ LeadManagerPro está cargado', 'success');
+
+                    if (window.LeadManagerPro.OptionsManager) {
+                        log('✅ OptionsManager está disponible', 'success');
+                    } else {
+                        log('⚠️ OptionsManager no está disponible');
+                    }
+
+                    if (window.LeadManagerPro.DataMigrationManager) {
+                        log('✅ DataMigrationManager está disponible', 'success');
+                    } else {
+                        log('⚠️ DataMigrationManager no está disponible');
+                    }
+                } else {
+                    log('⚠️ LeadManagerPro no está cargado');
+                }
+            } else {
+                log('❌ chrome.storage no está disponible - ¿Está ejecutándose en una extensión?', 'error');
+            }
+        }
+
+        async function runBasicTests() {
+            log('🧪 Iniciando tests básicos...');
+
+            // Test 1: Verificar que undefined no se puede usar como clave
+            try {
+                const testData = {};
+                testData[undefined] = 'test value';
+
+                chrome.storage.local.set(testData, () => {
+                    if (chrome.runtime.lastError) {
+                        log('✅ Chrome.storage rechazó correctamente clave undefined', 'success');
+                    } else {
+                        log('⚠️ Chrome.storage aceptó clave undefined');
+                    }
+                });
+            } catch (error) {
+                log(`✅ Error capturado al intentar usar undefined como clave: ${error.message}`, 'success');
+            }
+
+            // Test 2: Verificar comportamiento de optional chaining
+            const nullElement = null;
+            const value = nullElement?.checked || false;
+            const inputValue = nullElement?.value || '';
+
+            if (value === false && inputValue === '') {
+                log('✅ Optional chaining funciona correctamente', 'success');
+            } else {
+                log('❌ Optional chaining no funciona como esperado', 'error');
+            }
+
+            // Test 3: Probar guardado de configuración "Solo grupos públicos"
+            const testConfig = {
+                onlyPublicGroups: true,
+                groupPublic: true,
+                groupPrivate: false,
+                testTimestamp: Date.now()
+            };
+
+            chrome.storage.local.set(testConfig, () => {
+                if (chrome.runtime.lastError) {
+                    log(`❌ Error guardando configuración: ${chrome.runtime.lastError.message}`, 'error');
+                } else {
+                    log('✅ Configuración "Solo grupos públicos" guardada correctamente', 'success');
+
+                    // Verificar que se guardó
+                    chrome.storage.local.get(['onlyPublicGroups', 'groupPublic', 'groupPrivate'], (result) => {
+                        if (result.onlyPublicGroups === true) {
+                            log('✅ Configuración recuperada correctamente', 'success');
+                        } else {
+                            log('❌ Configuración no se recuperó correctamente', 'error');
+                        }
+                    });
+                }
+            });
+        }
+
+        async function runStorageTests() {
+            log('🔍 Analizando almacenamiento...');
+
+            chrome.storage.local.get(null, (result) => {
+                if (chrome.runtime.lastError) {
+                    log(`❌ Error obteniendo storage: ${chrome.runtime.lastError.message}`, 'error');
+                    return;
+                }
+
+                const keys = Object.keys(result);
+                log(`📊 Total de claves en storage: ${keys.length}`);
+
+                // Buscar claves problemáticas
+                const problematicKeys = [];
+                const suspiciousKeys = [];
+
+                keys.forEach(key => {
+                    if (key === 'undefined' || key === 'null' || key === '') {
+                        problematicKeys.push(key);
+                    }
+                    if (key.includes('undefined') || typeof result[key] === 'undefined') {
+                        suspiciousKeys.push(key);
+                    }
+                });
+
+                if (problematicKeys.length > 0) {
+                    log(`❌ Claves problemáticas encontradas: ${problematicKeys.join(', ')}`, 'error');
+                } else {
+                    log('✅ No se encontraron claves problemáticas', 'success');
+                }
+
+                if (suspiciousKeys.length > 0) {
+                    log(`⚠️ Claves sospechosas: ${suspiciousKeys.join(', ')}`);
+                }
+
+                // Mostrar algunas claves para análisis
+                log('📋 Primeras 10 claves del storage:');
+                keys.slice(0, 10).forEach(key => {
+                    const value = result[key];
+                    const valueStr = typeof value === 'object' ? JSON.stringify(value).substring(0, 50) + '...' : String(value).substring(0, 50);
+                    log(`  ${key}: ${valueStr}`);
+                });
+            });
+        }
+
+        async function runCleanupTests() {
+            log('🧹 Iniciando limpieza de storage...');
+
+            chrome.storage.local.get(null, (result) => {
+                if (chrome.runtime.lastError) {
+                    log(`❌ Error obteniendo storage: ${chrome.runtime.lastError.message}`, 'error');
+                    return;
+                }
+
+                const keysToRemove = [];
+
+                // Identificar claves para remover
+                Object.keys(result).forEach(key => {
+                    if (key === 'undefined' || key === 'null' || key === '' || key.includes('undefined')) {
+                        keysToRemove.push(key);
+                    }
+                });
+
+                if (keysToRemove.length > 0) {
+                    log(`🗑️ Eliminando ${keysToRemove.length} claves problemáticas: ${keysToRemove.join(', ')}`);
+
+                    chrome.storage.local.remove(keysToRemove, () => {
+                        if (chrome.runtime.lastError) {
+                            log(`❌ Error eliminando claves: ${chrome.runtime.lastError.message}`, 'error');
+                        } else {
+                            log('✅ Claves problemáticas eliminadas correctamente', 'success');
+                        }
+                    });
+                } else {
+                    log('✅ No se encontraron claves problemáticas para eliminar', 'success');
+                }
+            });
+        }
+
+        // Auto-verificar estado al cargar
+        window.addEventListener('load', () => {
+            setTimeout(checkExtensionStatus, 1000);
+        });
+    </script>
+</body>
+</html>

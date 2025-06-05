@@ -9,10 +9,10 @@ class GeneralOptionsUI {
   // Inicializar el módulo
   init() {
     console.log('GeneralOptionsUI: Initializing module');
-    
+
     // Inicializar el módulo de opciones generales
     this.generalOptions = window.leadManagerPro.generalOptions;
-    
+
     return this;
   }
 
@@ -98,12 +98,37 @@ class GeneralOptionsUI {
     `;
 
     const scrollDelayHelp = document.createElement('small');
-    scrollDelayHelp.textContent = 'Tiempo en segundos que esperará entre cada scroll para no sobrecargar la página (por defecto: 2 segundos)';
+        scrollDelayHelp.style.cssText = `
+      display: block;
+      color: #666;
+      margin: 4px 0 8px 0;
+      font-size: 12px;
+    `;
+
+    // Botón de guardar (ESTO FALTA)
+    const saveButton = document.createElement('button');
+    saveButton.textContent = 'Guardar Opciones';
+    saveButton.style.cssText = `
+      background: #4267b2;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 16px;
+      font-size: 14px;
+    `;
+
+    // Event listener para guardar
+    saveButton.addEventListener('click', () => {
+      const maxScrolls = parseInt(maxScrollsInput.value) || 50;
+      const scrollDelay = parseFloat(scrollDelayInput.value) || 2;
+
       const success = this.generalOptions.saveOptions({
         maxScrollsToShowResults: maxScrolls,
         waitTimeBetweenScrolls: scrollDelay
       });
-      
+
       if (success) {
         // Mostrar mensaje de éxito
         const successMessage = document.createElement('div');
@@ -113,9 +138,9 @@ class GeneralOptionsUI {
           margin-top: 8px;
           font-size: 14px;
         `;
-        
+
         formContainer.appendChild(successMessage);
-        
+
         // Eliminar el mensaje después de 3 segundos
         setTimeout(() => {
           if (formContainer.contains(successMessage)) {
@@ -126,7 +151,7 @@ class GeneralOptionsUI {
         alert('Error al guardar las opciones. Por favor, intente de nuevo.');
       }
     });
-    
+
     // Ensamblar el formulario
     formContainer.appendChild(title);
     formContainer.appendChild(maxScrollsLabel);
@@ -136,7 +161,7 @@ class GeneralOptionsUI {
     formContainer.appendChild(scrollDelayInput);
     formContainer.appendChild(scrollDelayHelp);
     formContainer.appendChild(saveButton);
-    
+
     return formContainer;
   }
 
@@ -146,14 +171,14 @@ class GeneralOptionsUI {
       console.error('GeneralOptionsUI: No se proporcionó un contenedor válido');
       return false;
     }
-    
+
     // Limpiar el contenedor
     container.innerHTML = '';
-    
+
     // Crear y agregar el formulario
     const form = this.createOptionsForm();
     container.appendChild(form);
-    
+
     return true;
   }
 }

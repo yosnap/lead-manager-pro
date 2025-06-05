@@ -5,15 +5,17 @@
 
 class AuthenticationWrapper {
   constructor() {
-    this.AUTH_MODULE = window.LeadManagerPro?.Auth;
+    this.AUTH_MODULE = null;
     this.authenticated = false;
     this.pendingInitializations = [];
     this.wrappedModules = new Set();
-    
+    this.initAttempts = 0;
+    this.maxInitAttempts = 10;
+
     // Lista de módulos que requieren autenticación
     this.MODULES_REQUIRING_AUTH = [
       'groupFinder',
-      'groupMemberFinder', 
+      'groupMemberFinder',
       'memberInteraction',
       'memberInteractionUI',
       'profileFinder',
@@ -27,32 +29,43 @@ class AuthenticationWrapper {
       'generalOptionsUI',
       'groupSearchOptionsUI'
     ];
-    
+
     this.init();
   }
-  
+
   init() {
+    this.initAttempts++;
+
+    // Intentar obtener el módulo de autenticación
+    this.AUTH_MODULE = window.LeadManagerPro?.Auth;
+
     if (!this.AUTH_MODULE) {
-      console.warn('AuthenticationWrapper: Módulo de autenticación no disponible');
-      return;
+      if (this.initAttempts <= this.maxInitAttempts) {
+        console.log(`AuthenticationWrapper: Intento ${this.initAttempts}/${this.maxInitAttempts} - Módulo de autenticación no disponible, reintentando en 100ms...`);
+        setTimeout(() => this.init(), 100);
+        return;
+      } else {
+        console.error('AuthenticationWrapper: Módulo de autenticación no disponible después de múltiples intentos');
+        return;
+      }
     }
-    
+
     // Verificar estado inicial de autenticación
     this.checkAuthenticationStatus();
-    
+
     // Configurar listeners para cambios de autenticación
     this.setupAuthListeners();
-    
-    console.log('AuthenticationWrapper: Inicializado');
+
+    console.log('AuthenticationWrapper: Inicializado correctamente');
   }
-  
+
   checkAuthenticationStatus() {
     if (!this.AUTH_MODULE) return;
-    
+
     this.AUTH_MODULE.isAuthenticated((isAuth) => {
       this.authenticated = isAuth;
       console.log('AuthenticationWrapper: Estado de autenticación:', isAuth);
-      
+
       if (isAuth) {
         this.processPendingInitializations();
       } else {
@@ -60,7 +73,7 @@ class AuthenticationWrapper {
       }
     });
   }
-  
+
   setupAuthListeners() {
     // Listener para mensajes de cambio de autenticación
     if (typeof chrome !== 'undefined' && chrome.runtime) {
@@ -68,7 +81,7 @@ class AuthenticationWrapper {
         if (message.action === 'auth_state_changed') {
           this.authenticated = message.authenticated;
           console.log('AuthenticationWrapper: Cambio de autenticación detectado:', this.authenticated);
-          
+
           if (this.authenticated) {
             this.processPendingInitializations();
           } else {
@@ -77,12 +90,12 @@ class AuthenticationWrapper {
         }
       });
     }
-    
+
     // Listener para eventos de ventana
     window.addEventListener('message', (event) => {
       if (event.data?.action === 'auth_state_changed') {
         this.authenticated = event.data.authenticated;
-        
+
         if (this.authenticated) {
           this.processPendingInitializations();
         } else {
@@ -91,7 +104,7 @@ class AuthenticationWrapper {
       }
     });
   }
-  
+
   /**
    * Wrapper principal para métodos de módulos
    * @param {string} moduleName - Nombre del módulo
@@ -103,7 +116,7 @@ class AuthenticationWrapper {
     if (!this.MODULES_REQUIRING_AUTH.includes(moduleName)) {
       return originalMethod; // No requiere autenticación
     }
-    
+
     return function(...args) {
       return new Promise((resolve, reject) => {
         // Verificar autenticación antes de ejecutar
@@ -118,16 +131,16 @@ class AuthenticationWrapper {
           // No autenticado, agregar a lista de pendientes o rechazar
           const errorMessage = `${moduleName}.${methodName}: Autenticación requerida`;
           console.warn(errorMessage);
-          
+
           // Mostrar mensaje de autenticación requerida
           window.LeadManagerPro?.AuthenticationWrapper?.showAuthRequiredMessage(moduleName, methodName);
-          
+
           reject(new Error(errorMessage));
         }
       });
     };
   }
-  
+
   /**
    * Wrapper para la inicialización de módulos
    * @param {string} moduleName - Nombre del módulo
@@ -138,14 +151,14 @@ class AuthenticationWrapper {
     if (!this.MODULES_REQUIRING_AUTH.includes(moduleName)) {
       return initFunction; // No requiere autenticación
     }
-    
+
     return function(...args) {
       if (window.LeadManagerPro?.AuthenticationWrapper?.authenticated) {
         console.log(`AuthenticationWrapper: Inicializando ${moduleName} (autenticado)`);
         return initFunction.apply(context, args);
       } else {
         console.log(`AuthenticationWrapper: Posponiendo inicialización de ${moduleName} (no autenticado)`);
-        
+
         // Agregar a lista de pendientes
         window.LeadManagerPro.AuthenticationWrapper.pendingInitializations.push({
           moduleName,
@@ -153,18 +166,18 @@ class AuthenticationWrapper {
           context,
           args
         });
-        
+
         return Promise.resolve();
       }
     };
   }
-  
+
   processPendingInitializations() {
     console.log(`AuthenticationWrapper: Procesando ${this.pendingInitializations.length} inicializaciones pendientes`);
-    
+
     const toProcess = [...this.pendingInitializations];
     this.pendingInitializations = [];
-    
+
     toProcess.forEach(({ moduleName, initFunction, context, args }) => {
       try {
         console.log(`AuthenticationWrapper: Inicializando ${moduleName}`);
@@ -174,17 +187,17 @@ class AuthenticationWrapper {
       }
     });
   }
-  
+
   blockUnauthenticatedModules() {
     console.log('AuthenticationWrapper: Bloqueando módulos no autenticados');
-    
+
     this.MODULES_REQUIRING_AUTH.forEach(moduleName => {
       const module = window.leadManagerPro?.[moduleName] || window.LeadManagerPro?.[moduleName];
-      
+
       if (module && typeof module === 'object') {
         // Deshabilitar métodos principales
         const methodsToBlock = ['init', 'start', 'execute', 'run', 'search', 'interact'];
-        
+
         methodsToBlock.forEach(methodName => {
           if (typeof module[methodName] === 'function') {
             module[`_original_${methodName}`] = module[methodName];
@@ -197,11 +210,11 @@ class AuthenticationWrapper {
       }
     });
   }
-  
+
   showAuthRequiredMessage(moduleName, methodName) {
     // Mostrar mensaje discreto sobre autenticación requerida
     const message = `${moduleName}: Inicia sesión para usar esta funcionalidad`;
-    
+
     // Intentar mostrar en el sidebar si existe
     const sidebar = document.getElementById('snap-lead-manager-searcher');
     if (sidebar) {
@@ -211,11 +224,11 @@ class AuthenticationWrapper {
       this.showBrowserNotification(message);
     }
   }
-  
+
   showSidebarAuthMessage(message) {
     // Crear o actualizar mensaje en el sidebar
     let authMessage = document.getElementById('lmp-auth-required-message');
-    
+
     if (!authMessage) {
       authMessage = document.createElement('div');
       authMessage.id = 'lmp-auth-required-message';
@@ -235,15 +248,15 @@ class AuthenticationWrapper {
         cursor: pointer;
         transition: all 0.3s ease;
       `;
-      
+
       authMessage.addEventListener('click', () => {
         // Abrir sidebar de autenticación o popup
         this.openAuthInterface();
       });
-      
+
       document.body.appendChild(authMessage);
     }
-    
+
     authMessage.innerHTML = `
       <div style="display: flex; align-items: center; gap: 8px;">
         <span style="font-size: 16px;">🔒</span>
@@ -254,7 +267,7 @@ class AuthenticationWrapper {
         </div>
       </div>
     `;
-    
+
     // Auto-ocultar después de 8 segundos
     setTimeout(() => {
       if (authMessage && authMessage.parentNode) {
@@ -267,7 +280,7 @@ class AuthenticationWrapper {
       }
     }, 8000);
   }
-  
+
   showBrowserNotification(message) {
     // Crear notificación temporal en el navegador
     if ('Notification' in window && Notification.permission === 'granted') {
@@ -280,7 +293,7 @@ class AuthenticationWrapper {
       console.warn('AuthenticationWrapper:', message);
     }
   }
-  
+
   openAuthInterface() {
     // Intentar abrir el sidebar de autenticación
     const sidebar = document.getElementById('snap-lead-manager-searcher');
@@ -299,7 +312,7 @@ class AuthenticationWrapper {
       }
     }
   }
-  
+
   /**
    * Método público para verificar si un módulo puede ejecutarse
    * @param {string} moduleName - Nombre del módulo
@@ -308,10 +321,10 @@ class AuthenticationWrapper {
     if (!this.MODULES_REQUIRING_AUTH.includes(moduleName)) {
       return true; // No requiere autenticación
     }
-    
+
     return this.authenticated;
   }
-  
+
   /**
    * Método público para registrar un módulo que requiere autenticación
    * @param {string} moduleName - Nombre del módulo
@@ -322,7 +335,7 @@ class AuthenticationWrapper {
       console.log(`AuthenticationWrapper: Módulo ${moduleName} registrado como requerimiento de auth`);
     }
   }
-  
+
   /**
    * Método público para aplicar wrapping a un módulo existente
    * @param {string} moduleName - Nombre del módulo
@@ -330,22 +343,22 @@ class AuthenticationWrapper {
    */
   applyAuthWrapper(moduleName, moduleObject) {
     if (!moduleObject || typeof moduleObject !== 'object') return moduleObject;
-    
+
     if (this.MODULES_REQUIRING_AUTH.includes(moduleName)) {
       // Wrap métodos principales
       const methodsToWrap = ['init', 'start', 'execute', 'run', 'search', 'interact'];
-      
+
       methodsToWrap.forEach(methodName => {
         if (typeof moduleObject[methodName] === 'function') {
           const originalMethod = moduleObject[methodName];
           moduleObject[methodName] = this.wrapMethod(moduleName, methodName, originalMethod, moduleObject);
         }
       });
-      
+
       this.wrappedModules.add(moduleName);
       console.log(`AuthenticationWrapper: Módulo ${moduleName} wrapped successfully`);
     }
-    
+
     return moduleObject;
   }
 }

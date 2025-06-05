@@ -11,12 +11,12 @@ let state = {
   searchStartTime: null,
   logEntries: [], // Almacenar entradas de log para el scroll y los perfiles
   restored: false,  // Indicador de si el estado fue restaurado
-  
+
   // Opciones generales con valores por defecto
   // Estos valores se sobrescribirán con los valores de chrome.storage.local
   maxScrolls: 50,
   scrollDelay: 2,
-  
+
   // Opciones para grupos con valores por defecto
   groupOptions: {
     publicGroups: true,
@@ -26,10 +26,10 @@ let state = {
     minPostsMonth: '100',
     minPostsDay: '5'
   },
-  
+
   // Criterios guardados
   savedCriteria: [],
-  
+
   // Criterio actual que se está editando (si existe)
   editingCriteriaId: null
 };
@@ -90,6 +90,20 @@ let tabButtons;
 let tabContents;
 let n8nIntegrationContainer;
 
+// Referencias adicionales para configuración centralizada
+let globalMaxScrollsInput;
+let globalScrollDelayInput;
+let autoSyncEnabledCheckbox;
+let profileMaxResultsInput;
+let profileDelayInput;
+let profileAutoScrollCheckbox;
+let groupMaxResultsInput;
+let groupDelayInput;
+let groupPublicOnlyCheckbox;
+let groupAutoScrollCheckbox;
+let saveGlobalConfigButton;
+let globalSettingsStatus;
+
 // Variables para el intervalo de verificación de estado
 let statusCheckInterval = null;
 const STATUS_CHECK_INTERVAL = 1000; // 1 segundo
@@ -120,25 +134,25 @@ function addLogEntry(message, isError = false) {
     isError: isError,
     timestamp: now.getTime()
   };
-  
+
   // Agregar la entrada al estado
   state.logEntries.push(entry);
-  
+
   // Limitar a 50 entradas para evitar consumo excesivo de memoria
   if (state.logEntries.length > 50) {
     state.logEntries.shift();
   }
-  
+
   // Actualizar la UI
   updateScrollLog();
 }
 
 function updateScrollLog() {
   if (!scrollLogContainer) return;
-  
+
   // Limpiar contenedor
   scrollLogContainer.innerHTML = '';
-  
+
   // Agregar entradas
   state.logEntries.forEach(entry => {
     const logEntry = document.createElement('div');
@@ -146,18 +160,18 @@ function updateScrollLog() {
     if (entry.isError) {
       logEntry.classList.add('error');
     }
-    
+
     logEntry.innerHTML = `<span class="log-time">[${entry.time}]</span> ${entry.message}`;
     scrollLogContainer.appendChild(logEntry);
   });
-  
+
   // Scroll al final
   scrollLogContainer.scrollTop = scrollLogContainer.scrollHeight;
 }
 
 function updateElapsedTime() {
   if (!state.searchStartTime || !elapsedTime) return;
-  
+
   const now = Date.now();
   const elapsed = now - state.searchStartTime;
   elapsedTime.textContent = formatTime(elapsed);
@@ -178,53 +192,53 @@ function clearError() {
 function updateStatus(message, progress = null, isError = false) {
   // Actualizar mensaje de estado
   state.statusMessage = message;
-  
+
   // Actualizar progreso si se proporciona
   if (progress !== null) {
     state.progress = progress;
   }
-  
+
   // Actualizar elementos de UI básicos
   if (statusMessage) {
     statusMessage.textContent = message;
     statusMessage.className = isError ? 'status error' : 'status';
   }
-  
+
   if (progressBar && progress !== null) {
     progressBar.style.width = `${progress}%`;
   }
-  
+
   // Actualizar elementos de UI detallados
   if (detailedStatusMessage) {
     detailedStatusMessage.textContent = message;
   }
-  
+
   if (detailedProgressBar && progress !== null) {
     detailedProgressBar.style.width = `${progress}%`;
   }
-  
+
   if (progressPercentage && progress !== null) {
     progressPercentage.textContent = `${Math.round(progress)}%`;
   }
-  
-  // Actualizar operación actual
+
+  // Actualizar operación current
   if (currentOperation) {
     currentOperation.textContent = message;
   }
-  
+
   // Actualizar tiempo transcurrido
   updateElapsedTime();
-  
+
   // Actualizar estado de los botones
   if (pauseButton) {
     pauseButton.disabled = !state.isRunning;
     pauseButton.textContent = state.isPaused ? 'Reanudar' : 'Pausar';
   }
-  
+
   if (stopButton) {
     stopButton.disabled = !state.isRunning;
   }
-  
+
   // Agregar entrada al log
   addLogEntry(message, isError);
 }
@@ -236,7 +250,7 @@ function updateUI() {
     // Activar botón de pausa durante la búsqueda
     pauseButton.disabled = !state.isRunning;
     pauseButton.textContent = state.isPaused ? 'Reanudar' : 'Pausar';
-    
+
     // Cambiar estilo visual según el estado
     if (state.isPaused) {
       pauseButton.classList.add('paused');
@@ -244,61 +258,61 @@ function updateUI() {
       pauseButton.classList.remove('paused');
     }
   }
-  
+
   if (stopButton) {
     // Activar botón de detener durante la búsqueda
     stopButton.disabled = !state.isRunning;
   }
-  
+
   // Actualizar operación actual
   if (currentOperation) {
-    currentOperation.textContent = state.isRunning 
-      ? (state.isPaused ? 'Pausado' : 'En ejecución') 
+    currentOperation.textContent = state.isRunning
+      ? (state.isPaused ? 'Pausado' : 'En ejecución')
       : 'Inactivo';
   }
-  
+
   // Actualizar barra de progreso
   if (progressBar) {
     progressBar.style.width = `${state.progress}%`;
   }
-  
+
   // Deshabilitar botones de búsqueda mientras se ejecuta una búsqueda
   if (searchButton) {
     searchButton.disabled = state.isRunning;
   }
-  
+
   // Deshabilitar campos de entrada durante la búsqueda
   if (searchTermInput) {
     searchTermInput.disabled = state.isRunning;
   }
-  
+
   if (searchCityInput) {
     searchCityInput.disabled = state.isRunning;
   }
-  
+
   if (searchTypeSelect) {
     searchTypeSelect.disabled = state.isRunning;
   }
-  
+
   // Deshabilitar opciones avanzadas durante la búsqueda
   if (collapsibleTrigger) {
     collapsibleTrigger.disabled = state.isRunning;
   }
-  
+
   // Actualizar información de búsqueda actual
   updateSearchInfo();
 }
 
 function updateSearchInfo() {
   if (!currentSearchInfo) return;
-  
+
   if (state.currentSearchTerm) {
     let searchInfoHTML = `<p><strong>Tipo de búsqueda:</strong> ${state.currentSearchType === 'people' ? 'Personas' : 'Grupos'}</p>`;
     searchInfoHTML += `<p><strong>Término de búsqueda:</strong> ${state.currentSearchTerm}</p>`;
-    
+
     if (state.currentSearchCity) {
       searchInfoHTML += `<p><strong>Ciudad:</strong> ${state.currentSearchCity}</p>`;
-      
+
       // Agregar un mensaje de estado para el filtro de ciudad
       const cityFilterApplied = localStorage.getItem('snap_lead_manager_city_filter_applied') === 'true';
       if (cityFilterApplied) {
@@ -307,7 +321,7 @@ function updateSearchInfo() {
         searchInfoHTML += `<p class="status"><i>Filtro de ciudad pendiente de aplicar...</i></p>`;
       }
     }
-    
+
     currentSearchInfo.innerHTML = searchInfoHTML;
     currentSearchInfo.style.display = 'block';
   } else {
@@ -318,19 +332,19 @@ function updateSearchInfo() {
 // Funciones de manejo de estado y búsqueda
 function startStatusChecking() {
   debugLog('Iniciando verificación de estado...');
-  
+
   if (statusCheckInterval) {
     clearInterval(statusCheckInterval);
     debugLog('Intervalo de verificación anterior limpiado');
   }
-  
+
   // Actualizar tiempo transcurrido cada segundo
   statusCheckInterval = setInterval(() => {
     if (state.isRunning && !state.isPaused) {
       updateElapsedTime();
     }
   }, STATUS_CHECK_INTERVAL);
-  
+
   // Verificar estado inicial
   getSearchStatus();
   debugLog('Verificación de estado iniciada');
@@ -338,7 +352,7 @@ function startStatusChecking() {
 
 function stopStatusChecking() {
   debugLog('Deteniendo verificación de estado...');
-  
+
   if (statusCheckInterval) {
     clearInterval(statusCheckInterval);
     statusCheckInterval = null;
@@ -356,21 +370,21 @@ function getSearchStatus() {
 // Modificar la función performSearch
 function performSearch() {
   debugLog('Iniciando búsqueda...');
-  
+
   try {
     // Obtener valores de los campos
     const searchType = searchTypeSelect.value;
     const searchTerm = searchTermInput.value.trim();
     const searchCity = searchCityInput.value.trim();
-    
+
     debugLog('Datos de búsqueda:', { searchType, searchTerm, searchCity });
-    
+
     // Validaciones básicas
     if (!searchTerm) {
       showError('Por favor ingrese un término de búsqueda');
       return;
     }
-    
+
     // Limpiar estado previo
     state.profiles = [];
     state.progress = 0;
@@ -380,16 +394,16 @@ function performSearch() {
     state.currentSearchTerm = searchTerm;
     state.currentSearchCity = searchCity;
     state.currentSearchType = searchType;
-    
+
     debugLog('Estado inicial configurado');
-    
+
     // Limpiar localStorage de búsquedas previas
     localStorage.removeItem('snap_lead_manager_results_pending');
     localStorage.removeItem('snap_lead_manager_search_results');
     localStorage.removeItem('snap_lead_manager_city_filter_applied');
     localStorage.removeItem('snap_lead_manager_force_reload');
     localStorage.removeItem('snap_lead_manager_search_url');
-    
+
     // Guardar datos de búsqueda
     const searchData = {
       type: searchType,
@@ -399,38 +413,44 @@ function performSearch() {
     };
     localStorage.setItem('snap_lead_manager_search_data', JSON.stringify(searchData));
     localStorage.setItem('snap_lead_manager_search_active', 'true');
-    
+
     debugLog('Datos de búsqueda guardados');
-    
+
     // Actualizar UI
     document.body.classList.add('search-active');
     if (pauseButton) pauseButton.disabled = false;
     if (stopButton) stopButton.disabled = false;
-    
+
     // Guardar opciones generales
     chrome.storage.local.set({
       maxScrolls: maxScrollsInput ? maxScrollsInput.value : 50,
       scrollDelay: scrollDelayInput ? scrollDelayInput.value : 2
     });
-    
+
     // Guardar opciones de grupo si es una búsqueda de grupos
     if (searchType === 'groups') {
-      // Usar la nueva lógica con onlyPublicGroups
-      const onlyPublic = onlyPublicGroupsCheckbox ? onlyPublicGroupsCheckbox.checked : false;
-      
+      // Usar la nueva lógica con onlyPublicGroups - validar que no sea undefined
+      const onlyPublic = onlyPublicGroupsCheckbox?.checked || false;
+
+      // Validar inputs antes de guardar para evitar claves undefined
+      const minUsersValue = minUsersInput?.value || '';
+      const minPostsYearValue = minPostsYearInput?.value || '';
+      const minPostsMonthValue = minPostsMonthInput?.value || '';
+      const minPostsDayValue = minPostsDayInput?.value || '';
+
       chrome.storage.local.set({
         groupPublic: true, // Siempre buscar públicos
         groupPrivate: !onlyPublic, // Solo buscar privados si onlyPublic es false
         onlyPublicGroups: onlyPublic, // Nueva propiedad
-        minUsers: minUsersInput ? minUsersInput.value : '',
-        minPostsYear: minPostsYearInput ? minPostsYearInput.value : '',
-        minPostsMonth: minPostsMonthInput ? minPostsMonthInput.value : '',
-        minPostsDay: minPostsDayInput ? minPostsDayInput.value : ''
+        minUsers: minUsersValue,
+        minPostsYear: minPostsYearValue,
+        minPostsMonth: minPostsMonthValue,
+        minPostsDay: minPostsDayValue
       });
     }
-    
+
     debugLog('Opciones guardadas');
-    
+
     // Limpiar resultados previos
     if (searchResultsList) {
       searchResultsList.innerHTML = '';
@@ -438,27 +458,27 @@ function performSearch() {
     if (resultsSummary) {
       resultsSummary.innerHTML = '';
     }
-    
+
     // Inicializar la sección de estado
     if (searchStatusContainer) {
       searchStatusContainer.style.display = 'block';
     }
-    
+
     // Actualizar estado inicial
     updateStatus(`Iniciando búsqueda de ${searchType === 'groups' ? 'grupos' : 'perfiles'}: ${searchTerm}`, 5);
-    
+
     // Actualizar UI
     updateUI();
     updateSearchInfo();
-    
+
     // Iniciar verificación del estado
     startStatusChecking();
-    
+
     // Agregar entrada inicial al log
     addLogEntry(`Búsqueda iniciada: ${searchTerm}${searchCity ? ` en ${searchCity}` : ''}`);
-    
+
     debugLog('Enviando mensaje para iniciar búsqueda...');
-    
+
     // Enviar mensaje para iniciar la búsqueda
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
       if (tabs[0]) {
@@ -477,7 +497,7 @@ function performSearch() {
         throw new Error('No se encontró la pestaña activa');
       }
     });
-    
+
   } catch (error) {
     console.error('Error al iniciar búsqueda:', error);
     showError(`Error al iniciar búsqueda: ${error.message}`);
@@ -490,43 +510,43 @@ function togglePauseSearch() {
   try {
     if (state.isRunning) {
       state.isPaused = !state.isPaused;
-      
+
       // Enviar mensaje a la página
       window.parent.postMessage({
         action: state.isPaused ? 'pause_search' : 'resume_search'
       }, '*');
-      
+
       // Feedback visual inmediato
       updateStatus(state.isPaused ? 'Pausando búsqueda...' : 'Reanudando búsqueda...', state.progress);
-      
+
       // Actualizar UI inmediatamente para dar feedback visual
       pauseButton.textContent = state.isPaused ? 'Reanudar' : 'Pausar';
-      
+
       // Actualización completa de la interfaz
       updateUI();
-      
+
       // Agregar entrada en el log
       addLogEntry(state.isPaused ? 'Búsqueda pausada por el usuario' : 'Búsqueda reanudada por el usuario');
-      
+
       // Feedback visual adicional
       if (state.isPaused) {
         pauseButton.classList.add('paused');
         if (currentOperation) currentOperation.textContent = 'Pausado';
-        
+
         // Cambiar apariencia del botón de pausa
         pauseButton.style.backgroundColor = '#f0ad4e';
         pauseButton.style.color = 'white';
       } else {
         pauseButton.classList.remove('paused');
         if (currentOperation) currentOperation.textContent = 'En ejecución';
-        
+
         // Restaurar apariencia del botón de pausa
         pauseButton.style.backgroundColor = '';
         pauseButton.style.color = '';
       }
-      
+
       console.log(`Búsqueda ${state.isPaused ? 'pausada' : 'reanudada'} correctamente`);
-      
+
       return true;
     } else {
       console.warn('No hay búsqueda en curso para pausar/reanudar');
@@ -547,41 +567,41 @@ function stopSearch() {
       console.warn('No hay búsqueda en curso para detener');
       return false;
     }
-    
+
     // Mensaje visual inmediato
     addLogEntry('Deteniendo búsqueda...');
-    
+
     // Enviar mensaje a la página para detener la búsqueda
     window.parent.postMessage({
       action: 'stop_search'
     }, '*');
-    
+
     // Actualizar estado inmediatamente para retroalimentación visual
     state.isRunning = false;
     state.isPaused = false;
-    
+
     // Guardar indicador de búsqueda inactiva
     localStorage.setItem('snap_lead_manager_search_active', 'false');
-    
+
     // Detener verificación de estado
     stopStatusChecking();
-    
+
     // Reset UI
     updateStatus('Búsqueda detenida por el usuario', 0);
     pauseButton.disabled = true;
     pauseButton.textContent = 'Pausar';
     pauseButton.classList.remove('paused');
     stopButton.disabled = true;
-    
+
     // Remover clase search-active
     document.body.classList.remove('search-active');
-    
+
     // Actualización completa de la interfaz
     updateUI();
-    
+
     // Agregar entrada en el log
     addLogEntry('Búsqueda detenida por el usuario');
-    
+
     console.log('Búsqueda detenida correctamente');
     return true;
   } catch (error) {
@@ -595,15 +615,15 @@ function stopSearch() {
 // Función para actualizar la lista de resultados
 function updateResultsList(profiles) {
   console.log('Actualizando lista de resultados:', profiles);
-  
+
   if (!searchResultsList) {
     console.error('No se encontró el contenedor de resultados');
     return;
   }
-  
+
   // Limpiar lista actual
   searchResultsList.innerHTML = '';
-  
+
   // Si no hay resultados, mostrar mensaje
   if (!profiles || profiles.length === 0) {
     const noResults = document.createElement('li');
@@ -612,12 +632,12 @@ function updateResultsList(profiles) {
     searchResultsList.appendChild(noResults);
     return;
   }
-  
+
   // Agregar cada grupo a la lista
   profiles.forEach((group, index) => {
     const listItem = document.createElement('li');
     listItem.className = 'result-item';
-    
+
     // Crear contenido del item con estilos mejorados
     listItem.innerHTML = `
       <div class="result-item-container" style="padding: 15px; border-bottom: 1px solid #e4e6eb; background: white;">
@@ -659,17 +679,17 @@ function updateResultsList(profiles) {
         </div>
       </div>
     `;
-    
+
     searchResultsList.appendChild(listItem);
   });
-  
+
   // Guardar resultados en localStorage
   try {
     localStorage.setItem('snap_lead_manager_search_results', JSON.stringify(profiles));
   } catch (error) {
     console.error('Error al guardar resultados en localStorage:', error);
   }
-  
+
   // Mostrar resumen
   if (resultsSummary) {
     resultsSummary.innerHTML = `
@@ -705,25 +725,25 @@ function clearSearchCriteria() {
   // Limpiar campos de entrada
   searchTermInput.value = '';
   searchCityInput.value = '';
-  
+
   // Restablecer opciones generales a valores por defecto
   maxScrollsInput.value = '50';
   scrollDelayInput.value = '2';
-  
+
   // Restablecer opciones de grupo a valores por defecto
   onlyPublicGroupsCheckbox.checked = false; // Por defecto buscar públicos y privados
   minUsersInput.value = '0';
   minPostsYearInput.value = '0';
   minPostsMonthInput.value = '0';
   minPostsDayInput.value = '0';
-  
+
   // Limpiar estado
   state.currentSearchTerm = '';
   state.currentSearchCity = '';
-  
+
   // Actualizar estado visual
   updateSearchInfo();
-  
+
   // Mostrar mensaje de confirmación
   showTemporaryMessage('Criterios de búsqueda limpiados');
 }
@@ -734,13 +754,13 @@ function showSaveCriteriaModal() {
     showError('Debes ingresar al menos un término de búsqueda para guardar');
     return;
   }
-  
+
   // Si estamos editando, no mostrar el modal y actualizar directamente
   if (state.editingCriteriaId) {
     updateExistingCriteria();
     return;
   }
-  
+
   // De lo contrario, mostrar el modal para ingresar un nombre
   criteriaNameInput.value = '';
   criteriaNameError.textContent = '';
@@ -757,7 +777,10 @@ function applyCurrentSettings() {
     const minPostsYearValue = minPostsYearInput.value.trim() === '' ? 50 : (parseInt(minPostsYearInput.value, 10) || 50);
     const minPostsMonthValue = minPostsMonthInput.value.trim() === '' ? 10 : (parseInt(minPostsMonthInput.value, 10) || 10);
     const minPostsDayValue = minPostsDayInput.value.trim() === '' ? 1 : (parseInt(minPostsDayInput.value, 10) || 1);
-    
+
+    // Obtener el valor de onlyPublic (definir fuera del bloque if para uso posterior)
+    const onlyPublic = onlyPublicGroupsCheckbox ? onlyPublicGroupsCheckbox.checked : false;
+
     // Guardar opciones generales usando el nuevo módulo
     if (window.leadManagerPro && window.leadManagerPro.generalOptions) {
       const success1 = window.leadManagerPro.generalOptions.saveOptions({
@@ -768,12 +791,10 @@ function applyCurrentSettings() {
         console.log('Opciones generales aplicadas:', { maxScrollsValue, scrollDelayValue });
       }
     }
-    
+
     // Guardar opciones de búsqueda de grupos usando el nuevo módulo
     if (window.leadManagerPro && window.leadManagerPro.groupSearchOptions) {
       // Nueva lógica: onlyPublicGroups determina si buscar solo públicos o ambos
-      const onlyPublic = onlyPublicGroupsCheckbox.checked;
-      
       const success2 = window.leadManagerPro.groupSearchOptions.saveOptions({
         groupTypes: {
           public: true, // Siempre buscar públicos
@@ -796,13 +817,13 @@ function applyCurrentSettings() {
         });
       }
     }
-    
+
     // Mostrar mensaje de confirmación
     showTemporaryMessage('✓ Configuración aplicada correctamente');
-    
+
     // Aplicar cambios al switch de Facebook si estamos en una página de búsqueda de grupos
     applyFacebookGroupTypeSwitch(onlyPublic);
-    
+
   } catch (error) {
     console.error('Error al aplicar configuración:', error);
     showError('Error al aplicar la configuración. Revisa la consola para más detalles.');
@@ -814,36 +835,36 @@ function applyFacebookGroupTypeSwitch(onlyPublic) {
   try {
     // Buscar el switch de "Grupos públicos" en Facebook usando el aria-label
     const publicGroupsSwitch = document.querySelector('input[aria-label="Grupos públicos"][role="switch"]');
-    
+
     if (publicGroupsSwitch) {
       // Verificar si el estado actual es diferente al deseado
       const currentState = publicGroupsSwitch.getAttribute('aria-checked') === 'true';
-      
+
       if (currentState !== onlyPublic) {
         console.log('Facebook switch encontrado. Estado actual:', currentState, 'Estado deseado:', onlyPublic);
-        
+
         // Hacer click en el switch para cambiarlo
         publicGroupsSwitch.click();
-        
+
         // Verificar que el cambio se aplicó
         setTimeout(() => {
           const newState = publicGroupsSwitch.getAttribute('aria-checked') === 'true';
           console.log('Estado después del click:', newState);
-          
+
           if (newState === onlyPublic) {
             showTemporaryMessage('✓ Switch de Facebook actualizado correctamente');
           } else {
             console.warn('El switch no cambió como se esperaba');
           }
         }, 500);
-        
+
       } else {
         console.log('El switch ya está en el estado correcto:', onlyPublic);
       }
     } else {
       console.log('Switch de grupos públicos no encontrado en esta página');
     }
-    
+
   } catch (error) {
     console.error('Error al aplicar switch de Facebook:', error);
   }
@@ -854,13 +875,13 @@ function setupAutoApplyFacebookSwitch() {
   if (onlyPublicGroupsCheckbox) {
     onlyPublicGroupsCheckbox.addEventListener('change', function() {
       console.log('Checkbox cambió a:', this.checked);
-      
+
       // Auto-aplicar cambio al switch de Facebook
       setTimeout(() => {
         applyFacebookGroupTypeSwitch(this.checked);
       }, 100);
     });
-    
+
     console.log('Auto-apply Facebook switch configurado');
   }
 }
@@ -870,22 +891,22 @@ function updateExistingCriteria() {
   console.log('Actualizando criterio existente, ID:', state.editingCriteriaId);
   // Buscar el criterio que estamos editando
   const criteriaIndex = state.savedCriteria.findIndex(c => c.id === state.editingCriteriaId);
-  
+
   if (criteriaIndex === -1) {
     showError('No se encontró el criterio que estás editando');
     console.error('No se encontró el criterio ID:', state.editingCriteriaId);
     return;
   }
-  
+
   const originalCriteria = state.savedCriteria[criteriaIndex];
   console.log('Criterio original:', originalCriteria);
-  
+
   // Obtener valores de los campos y permitir valores vacíos
   const minUsersValue = minUsersInput.value.trim() === '' ? '' : (parseInt(minUsersInput.value, 10) || 0);
   const minPostsYearValue = minPostsYearInput.value.trim() === '' ? '' : (parseInt(minPostsYearInput.value, 10) || 0);
   const minPostsMonthValue = minPostsMonthInput.value.trim() === '' ? '' : (parseInt(minPostsMonthInput.value, 10) || 0);
   const minPostsDayValue = minPostsDayInput.value.trim() === '' ? '' : (parseInt(minPostsDayInput.value, 10) || 0);
-  
+
   // Actualizar el criterio con los nuevos valores
   const updatedCriteria = {
     ...originalCriteria,
@@ -902,15 +923,15 @@ function updateExistingCriteria() {
       minPostsDay: minPostsDayValue
     }
   };
-  
+
   console.log('Criterio actualizado:', updatedCriteria);
-  
+
   // Reemplazar el criterio en el array
   state.savedCriteria[criteriaIndex] = updatedCriteria;
-  
+
   // Guardar en localStorage
   localStorage.setItem('snap_lead_manager_saved_criteria', JSON.stringify(state.savedCriteria));
-  
+
   // Restaurar estado de edición
   state.editingCriteriaId = null;
   if (saveCriteriaButton) {
@@ -918,13 +939,13 @@ function updateExistingCriteria() {
     saveCriteriaButton.classList.remove('editing');
     console.log('Texto del botón restaurado:', saveCriteriaButton.textContent);
   }
-  
+
   // Ocultar botón de cancelar edición
   if (cancelEditButton) {
     cancelEditButton.style.display = 'none';
     console.log('Botón de cancelar ocultado');
   }
-  
+
   // Mostrar mensaje de confirmación
   showTemporaryMessage(`Criterios "${updatedCriteria.name}" actualizados correctamente`);
 }
@@ -932,12 +953,12 @@ function updateExistingCriteria() {
 // Guardar criterios actuales
 function saveSearchCriteria() {
   const criteriaName = criteriaNameInput.value.trim();
-  
+
   if (!criteriaName) {
     criteriaNameError.textContent = 'Por favor ingresa un nombre para esta búsqueda';
     return;
   }
-  
+
   // Comprobar si ya existe un criterio con ese nombre
   const criteriaExists = state.savedCriteria.some(criteria => criteria.name === criteriaName);
   if (criteriaExists) {
@@ -949,13 +970,13 @@ function saveSearchCriteria() {
       state.savedCriteria = state.savedCriteria.filter(c => c.name !== criteriaName);
     }
   }
-  
+
   // Obtener valores de los campos y permitir valores vacíos
   const minUsersValue = minUsersInput.value.trim() === '' ? '' : (parseInt(minUsersInput.value, 10) || 0);
   const minPostsYearValue = minPostsYearInput.value.trim() === '' ? '' : (parseInt(minPostsYearInput.value, 10) || 0);
   const minPostsMonthValue = minPostsMonthInput.value.trim() === '' ? '' : (parseInt(minPostsMonthInput.value, 10) || 0);
   const minPostsDayValue = minPostsDayInput.value.trim() === '' ? '' : (parseInt(minPostsDayInput.value, 10) || 0);
-  
+
   // Crear objeto de criterios
   const criteria = {
     id: Date.now().toString(),
@@ -973,10 +994,10 @@ function saveSearchCriteria() {
       minPostsDay: minPostsDayValue
     }
   };
-  
+
   // Agregar a la lista
   state.savedCriteria.push(criteria);
-  
+
   // NUEVO: Guardar también en los nuevos módulos de opciones
   try {
     // Guardar opciones generales
@@ -986,7 +1007,7 @@ function saveSearchCriteria() {
         waitTimeBetweenScrolls: criteria.scrollDelay
       });
     }
-    
+
     // Guardar opciones de búsqueda de grupos
     if (window.leadManagerPro && window.leadManagerPro.groupSearchOptions) {
       const onlyPublic = criteria.groupOptions.onlyPublicGroups;
@@ -1007,13 +1028,13 @@ function saveSearchCriteria() {
   } catch (error) {
     console.error('Error al guardar en nuevos módulos:', error);
   }
-  
+
   // Guardar en localStorage
   localStorage.setItem('snap_lead_manager_saved_criteria', JSON.stringify(state.savedCriteria));
-  
+
   // Cerrar modal
   saveCriteriaModal.style.display = 'none';
-  
+
   // Mostrar mensaje de confirmación
   showTemporaryMessage(`Criterios guardados como "${criteriaName}"`);
 }
@@ -1022,7 +1043,7 @@ function saveSearchCriteria() {
 function showManageCriteriaModal() {
   // Actualizar lista de criterios guardados
   updateSavedCriteriaList();
-  
+
   // Mostrar modal
   manageCriteriaModal.style.display = 'block';
 }
@@ -1030,10 +1051,10 @@ function showManageCriteriaModal() {
 // Actualizar la lista de criterios guardados en el modal
 function updateSavedCriteriaList() {
   if (!savedCriteriaList) return;
-  
+
   // Limpiar lista
   savedCriteriaList.innerHTML = '';
-  
+
   // Si no hay criterios guardados, mostrar mensaje
   if (!state.savedCriteria || state.savedCriteria.length === 0) {
     const emptyState = document.createElement('div');
@@ -1042,37 +1063,37 @@ function updateSavedCriteriaList() {
     savedCriteriaList.appendChild(emptyState);
     return;
   }
-  
+
   // Agregar cada criterio a la lista
   state.savedCriteria.forEach(criteria => {
     const criteriaItem = document.createElement('div');
     criteriaItem.className = 'saved-criteria-item';
     criteriaItem.dataset.id = criteria.id;
-    
+
     const nameSpan = document.createElement('span');
     nameSpan.className = 'saved-criteria-name';
     nameSpan.textContent = criteria.name;
-    
+
     // Crear un elemento para mostrar detalles del criterio
     const detailsSpan = document.createElement('span');
     detailsSpan.className = 'saved-criteria-details';
-    
+
     // Mostrar tipo de búsqueda y término
     const typeLabel = criteria.type === 'people' ? 'Personas' : 'Grupos';
     detailsSpan.textContent = `${typeLabel}: ${criteria.term}`;
     if (criteria.city) {
       detailsSpan.textContent += ` en ${criteria.city}`;
     }
-    
+
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'saved-criteria-actions';
-    
+
     const loadButton = document.createElement('button');
     loadButton.className = 'criteria-action';
     loadButton.innerHTML = '&#x1F4E5;'; // Ícono de cargar
     loadButton.title = 'Cargar criterios';
     loadButton.addEventListener('click', () => loadSavedCriteria(criteria.id));
-    
+
     const editButton = document.createElement('button');
     editButton.className = 'criteria-action';
     editButton.innerHTML = '&#x1F4DD;'; // Ícono de documento con lápiz
@@ -1082,33 +1103,33 @@ function updateSavedCriteriaList() {
       loadSavedCriteria(criteria.id, true);
       manageCriteriaModal.style.display = 'none';
     });
-    
+
     const renameButton = document.createElement('button');
     renameButton.className = 'criteria-action';
     renameButton.innerHTML = '&#x270F;'; // Ícono de editar
     renameButton.title = 'Renombrar';
     renameButton.addEventListener('click', () => renameSavedCriteria(criteria.id));
-    
+
     const deleteButton = document.createElement('button');
     deleteButton.className = 'criteria-action';
     deleteButton.innerHTML = '&#x1F5D1;'; // Ícono de eliminar
     deleteButton.title = 'Eliminar';
     deleteButton.addEventListener('click', () => deleteSavedCriteria(criteria.id));
-    
+
     actionsDiv.appendChild(loadButton);
     actionsDiv.appendChild(editButton);
     actionsDiv.appendChild(renameButton);
     actionsDiv.appendChild(deleteButton);
-    
+
     // Crear contenedor para nombre y detalles
     const infoDiv = document.createElement('div');
     infoDiv.className = 'saved-criteria-info';
     infoDiv.appendChild(nameSpan);
     infoDiv.appendChild(detailsSpan);
-    
+
     criteriaItem.appendChild(infoDiv);
     criteriaItem.appendChild(actionsDiv);
-    
+
     savedCriteriaList.appendChild(criteriaItem);
   });
 }
@@ -1120,21 +1141,21 @@ function loadSavedCriteria(criteriaId, forEditing = false) {
     showError('No se encontraron los criterios guardados');
     return;
   }
-  
+
   console.log(`Cargando criterio ${criteriaId} para edición: ${forEditing}`);
-  
+
   // Establecer valores en los campos
   searchTypeSelect.value = criteria.type;
   searchTermInput.value = criteria.term;
   searchCityInput.value = criteria.city || '';
-  
+
   // Opciones generales
   maxScrollsInput.value = criteria.maxScrolls || 50;
   scrollDelayInput.value = criteria.scrollDelay || 2;
-  
+
   // Manejar cambio de tipo de búsqueda para mostrar/ocultar opciones de grupo
   handleSearchTypeChange();
-  
+
   // Opciones de grupo si están disponibles
   if (criteria.groupOptions) {
     // Manejar nueva lógica: si tiene onlyPublicGroups usar eso, sino convertir de la lógica antigua
@@ -1145,35 +1166,35 @@ function loadSavedCriteria(criteriaId, forEditing = false) {
       const publicOnly = criteria.groupOptions.publicGroups === true && criteria.groupOptions.privateGroups === false;
       onlyPublicGroupsCheckbox.checked = publicOnly;
     }
-    
+
     // Manejar valores vacíos
     minUsersInput.value = criteria.groupOptions.minUsers === '' ? '' : (criteria.groupOptions.minUsers || 0);
     minPostsYearInput.value = criteria.groupOptions.minPostsYear === '' ? '' : (criteria.groupOptions.minPostsYear || 0);
     minPostsMonthInput.value = criteria.groupOptions.minPostsMonth === '' ? '' : (criteria.groupOptions.minPostsMonth || 0);
     minPostsDayInput.value = criteria.groupOptions.minPostsDay === '' ? '' : (criteria.groupOptions.minPostsDay || 0);
   }
-  
+
   // Actualizar estado
   state.currentSearchTerm = criteria.term;
   state.currentSearchCity = criteria.city || '';
   state.currentSearchType = criteria.type;
-  
+
   // Si es para edición, recordar el ID y actualizar la interfaz
   if (forEditing) {
     state.editingCriteriaId = criteriaId;
-    
+
     // Cambiar el texto del botón para indicar que está editando
     if (saveCriteriaButton) {
       // Truncar el nombre si es muy largo
-      const displayName = criteria.name.length > 15 ? 
-        criteria.name.substring(0, 12) + '...' : 
+      const displayName = criteria.name.length > 15 ?
+        criteria.name.substring(0, 12) + '...' :
         criteria.name;
-        
+
       saveCriteriaButton.textContent = `Actualizar "${displayName}"`;
       saveCriteriaButton.classList.add('editing');
       console.log('Botón de guardar actualizado:', saveCriteriaButton.textContent);
     }
-    
+
     // Mostrar botón de cancelar edición
     if (cancelEditButton) {
       cancelEditButton.style.display = 'block';
@@ -1181,25 +1202,25 @@ function loadSavedCriteria(criteriaId, forEditing = false) {
     }
   } else {
     state.editingCriteriaId = null;
-    
+
     // Restaurar texto del botón
     if (saveCriteriaButton) {
       saveCriteriaButton.textContent = 'Guardar criterios';
       saveCriteriaButton.classList.remove('editing');
     }
-    
+
     // Ocultar botón de cancelar edición
     if (cancelEditButton) {
       cancelEditButton.style.display = 'none';
     }
   }
-  
+
   // Actualizar información de búsqueda
   updateSearchInfo();
-  
+
   // Cerrar modal
   manageCriteriaModal.style.display = 'none';
-  
+
   // Mostrar mensaje de confirmación
   const action = forEditing ? 'editando' : 'cargados';
   showTemporaryMessage(`Criterios "${criteria.name}" ${action}`);
@@ -1209,25 +1230,25 @@ function loadSavedCriteria(criteriaId, forEditing = false) {
 function renameSavedCriteria(criteriaId) {
   const criteriaIndex = state.savedCriteria.findIndex(c => c.id === criteriaId);
   if (criteriaIndex === -1) return;
-  
+
   const criteria = state.savedCriteria[criteriaIndex];
   const newName = prompt('Ingresa un nuevo nombre para estos criterios:', criteria.name);
-  
+
   if (newName && newName.trim()) {
     // Comprobar si ya existe otro criterio con ese nombre
     const nameExists = state.savedCriteria.some(c => c.id !== criteriaId && c.name === newName.trim());
-    
+
     if (nameExists) {
       alert('Ya existe una búsqueda con ese nombre');
       return;
     }
-    
+
     // Actualizar nombre
     state.savedCriteria[criteriaIndex].name = newName.trim();
-    
+
     // Guardar en localStorage
     localStorage.setItem('snap_lead_manager_saved_criteria', JSON.stringify(state.savedCriteria));
-    
+
     // Actualizar lista
     updateSavedCriteriaList();
   }
@@ -1238,10 +1259,10 @@ function deleteSavedCriteria(criteriaId) {
   if (confirm('¿Estás seguro de que deseas eliminar estos criterios guardados?')) {
     // Filtrar para eliminar el criterio
     state.savedCriteria = state.savedCriteria.filter(c => c.id !== criteriaId);
-    
+
     // Guardar en localStorage
     localStorage.setItem('snap_lead_manager_saved_criteria', JSON.stringify(state.savedCriteria));
-    
+
     // Actualizar lista
     updateSavedCriteriaList();
   }
@@ -1251,10 +1272,10 @@ function deleteSavedCriteria(criteriaId) {
 function showTemporaryMessage(message, isError = false) {
   const originalMessage = statusMessage.textContent;
   const originalClass = statusMessage.className;
-  
+
   statusMessage.textContent = message;
   statusMessage.className = isError ? 'status error' : 'status success';
-  
+
   // Restaurar mensaje original después de 3 segundos
   setTimeout(() => {
     statusMessage.textContent = originalMessage;
@@ -1276,7 +1297,7 @@ function initDOMReferences() {
   searchResultsList = document.getElementById('search-results');
   currentSearchInfo = document.getElementById('current-search-info');
   openWindowButton = document.getElementById('open-window-btn');
-  
+
   // Elementos detallados
   searchStatusContainer = document.getElementById('search-status-container');
   detailedStatusMessage = document.getElementById('detailed-status-message');
@@ -1286,7 +1307,7 @@ function initDOMReferences() {
   elapsedTime = document.getElementById('elapsed-time');
   scrollLogContainer = document.getElementById('scroll-log-container');
   resultsSummary = document.getElementById('results-summary');
-  
+
   // Configuración avanzada
   collapsibleTrigger = document.querySelector('.collapsible-trigger');
   collapsibleContent = document.querySelector('.collapsible-content');
@@ -1298,52 +1319,66 @@ function initDOMReferences() {
   minPostsYearInput = document.getElementById('min-posts-year');
   minPostsMonthInput = document.getElementById('min-posts-month');
   minPostsDayInput = document.getElementById('min-posts-day');
-  
+
   // Gestión de criterios
   applySettingsButton = document.getElementById('apply-settings');
   clearCriteriaButton = document.getElementById('clear-criteria');
   saveCriteriaButton = document.getElementById('save-criteria');
   cancelEditButton = document.getElementById('cancel-edit');
   manageCriteriaButton = document.getElementById('manage-criteria');
-  
+
   // Modales
   saveCriteriaModal = document.getElementById('save-criteria-modal');
   criteriaNameInput = document.getElementById('criteria-name');
   criteriaNameError = document.getElementById('criteria-name-error');
   confirmSaveButton = document.getElementById('confirm-save');
   cancelSaveButton = document.getElementById('cancel-save');
-  
+
   manageCriteriaModal = document.getElementById('manage-criteria-modal');
   savedCriteriaList = document.getElementById('saved-criteria-list');
   closeManageCriteriaButton = document.getElementById('close-manage-criteria');
-  
+
   // Referencias para tabs
   tabButtons = document.querySelectorAll('.tab-button');
   tabContents = document.querySelectorAll('.tab-content');
-  
+
   // Referencias para integración con n8n
   n8nIntegrationContainer = document.getElementById('n8n-integration-container');
+
+  // Referencias adicionales para configuración centralizada
+  globalMaxScrollsInput = document.getElementById('global-max-scrolls');
+  globalScrollDelayInput = document.getElementById('global-scroll-delay');
+  autoSyncEnabledCheckbox = document.getElementById('auto-sync-enabled');
+  profileMaxResultsInput = document.getElementById('profile-max-results');
+  profileDelayInput = document.getElementById('profile-delay');
+  profileAutoScrollCheckbox = document.getElementById('profile-auto-scroll');
+  groupMaxResultsInput = document.getElementById('group-max-results');
+  groupDelayInput = document.getElementById('group-delay');
+  groupPublicOnlyCheckbox = document.getElementById('group-public-only');
+  groupAutoScrollCheckbox = document.getElementById('group-auto-scroll');
+  saveGlobalConfigButton = document.getElementById('save-global-config');
+  globalSettingsStatus = document.getElementById('global-settings-status');
 }
 
 // Función para manejar el cambio de tipo de búsqueda
 function handleSearchTypeChange() {
   const searchType = searchTypeSelect.value;
   state.currentSearchType = searchType;
-  
+
   // Actualizar el placeholder según el tipo
   if (searchTermInput) {
-    searchTermInput.placeholder = searchType === 'people' 
-      ? 'Nombre, profesión, etc.' 
+    searchTermInput.placeholder = searchType === 'people'
+      ? 'Nombre, profesión, etc.'
       : 'Nombre o temática del grupo';
   }
-  
+
   // Actualizar placeholder de ciudad
   if (searchCityInput) {
     searchCityInput.placeholder = searchType === 'people'
       ? 'Ej: Madrid, Barcelona'
       : 'Filtrar grupos por ciudad';
   }
-  
+
   // Mostrar u ocultar opciones específicas para grupos
   if (groupOptionsContainer) {
     groupOptionsContainer.style.display = searchType === 'groups' ? 'block' : 'none';
@@ -1354,7 +1389,7 @@ function handleSearchTypeChange() {
 function toggleCollapsible() {
   this.classList.toggle('active');
   const content = this.nextElementSibling;
-  
+
   if (content.style.maxHeight) {
     content.style.maxHeight = null;
   } else {
@@ -1373,16 +1408,16 @@ function closeModals() {
 // Función para aplicar criterios de búsqueda
 function applySavedCriteria(criteria) {
   if (!criteria) return;
-  
+
   // Aplicar valores básicos
   if (searchTypeSelect) searchTypeSelect.value = criteria.type || 'groups';
   if (searchTermInput) searchTermInput.value = criteria.term || '';
   if (searchCityInput) searchCityInput.value = criteria.city || '';
-  
+
   // Aplicar opciones generales
   if (maxScrollsInput) maxScrollsInput.value = criteria.maxScrolls || 50;
   if (scrollDelayInput) scrollDelayInput.value = criteria.scrollDelay || 2;
-  
+
   // Aplicar opciones de grupo si existen
   if (criteria.groupOptions) {
     // Usar nueva lógica con onlyPublicGroups
@@ -1400,18 +1435,18 @@ function applySavedCriteria(criteria) {
     if (minPostsMonthInput) minPostsMonthInput.value = criteria.groupOptions.minPostsMonth || '';
     if (minPostsDayInput) minPostsDayInput.value = criteria.groupOptions.minPostsDay || '';
   }
-  
+
   // Actualizar estado
   state.currentSearchTerm = criteria.term || '';
   state.currentSearchCity = criteria.city || '';
   state.currentSearchType = criteria.type || 'groups';
-  
+
   // Manejar cambio de tipo de búsqueda
           handleSearchTypeChange();
-        
+
         // Actualizar información de búsqueda
         updateSearchInfo();
-        
+
   // Guardar criterios en localStorage
   localStorage.setItem('snap_lead_manager_search_criteria', JSON.stringify(criteria));
 }
@@ -1419,59 +1454,59 @@ function applySavedCriteria(criteria) {
 // Función para inicializar eventos
 function initializeEvents() {
   debugLog('Inicializando eventos...');
-  
+
   // Eventos de búsqueda
   if (searchButton) {
     searchButton.addEventListener('click', performSearch);
     debugLog('Evento de búsqueda configurado');
   }
-  
+
   if (pauseButton) {
     pauseButton.disabled = true;
     pauseButton.addEventListener('click', togglePauseSearch);
     debugLog('Evento de pausa configurado');
   }
-  
+
   if (stopButton) {
     stopButton.disabled = true;
     stopButton.addEventListener('click', stopSearch);
     debugLog('Evento de detener configurado');
   }
-  
+
   if (openWindowButton) {
     openWindowButton.addEventListener('click', openInWindow);
     debugLog('Evento de abrir en ventana configurado');
   }
-  
+
   // Eventos de tipo de búsqueda
   if (searchTypeSelect) {
     searchTypeSelect.addEventListener('change', handleSearchTypeChange);
     handleSearchTypeChange(); // Inicializar tipo de búsqueda
     debugLog('Eventos de tipo de búsqueda configurados');
   }
-  
+
   // Eventos de configuración
   if (collapsibleTrigger) {
     collapsibleTrigger.addEventListener('click', toggleCollapsible);
     debugLog('Evento de configuración avanzada configurado');
   }
-  
+
   // Eventos de criterios
   if (clearCriteriaButton) {
     clearCriteriaButton.addEventListener('click', clearSearchCriteria);
     debugLog('Evento de limpiar criterios configurado');
   }
-  
+
   if (applySettingsButton) {
     applySettingsButton.addEventListener('click', applyCurrentSettings);
     debugLog('Evento de aplicar configuración configurado');
   }
-  
+
   if (saveCriteriaButton) {
     saveCriteriaButton.addEventListener('click', showSaveCriteriaModal);
     debugLog('Evento de guardar criterios configurado');
   }
-  
+
   if (cancelEditButton) {
     cancelEditButton.addEventListener('click', () => {
       state.editingCriteriaId = null;
@@ -1479,34 +1514,34 @@ function initializeEvents() {
     });
     debugLog('Evento de cancelar edición configurado');
   }
-  
+
   if (manageCriteriaButton) {
     manageCriteriaButton.addEventListener('click', showManageCriteriaModal);
     debugLog('Evento de administrar criterios configurado');
   }
-  
+
   // Eventos de modales
   const closeModalButtons = document.querySelectorAll('.close-modal');
   closeModalButtons.forEach(btn => {
     btn.addEventListener('click', closeModals);
   });
   debugLog('Eventos de modales configurados');
-  
+
   if (confirmSaveButton) {
     confirmSaveButton.addEventListener('click', saveSearchCriteria);
   }
-  
+
   if (cancelSaveButton) {
     cancelSaveButton.addEventListener('click', closeModals);
   }
-  
+
   if (closeManageCriteriaButton) {
     closeManageCriteriaButton.addEventListener('click', closeModals);
   }
-  
+
   // Configurar auto-aplicación del switch de Facebook
   setupAutoApplyFacebookSwitch();
-  
+
   debugLog('Todos los eventos inicializados correctamente');
 }
 
@@ -1519,16 +1554,16 @@ async function loadGlobalConfig() {
           // Actualizar estado con las configuraciones globales
           state.maxScrolls = result.generalOptions.maxScrolls || state.maxScrolls;
           state.scrollDelay = result.generalOptions.scrollDelay || state.scrollDelay;
-          
+
           // Actualizar los campos del formulario si existen
           if (maxScrollsInput) {
             maxScrollsInput.value = state.maxScrolls;
           }
-          
+
           if (scrollDelayInput) {
             scrollDelayInput.value = state.scrollDelay;
           }
-          
+
           debugLog('Configuraciones globales cargadas desde Extension Storage:', result.generalOptions);
         } else {
           debugLog('No se encontraron configuraciones globales en Extension Storage, usando valores por defecto');
@@ -1545,36 +1580,36 @@ async function loadGlobalConfig() {
 // Modificar la función initializeSidebar para incluir la inicialización de eventos
 async function initializeSidebar() {
   debugLog('Iniciando sidebar...');
-  
+
   try {
     // Inicializar referencias DOM
     initDOMReferences();
     debugLog('Referencias DOM inicializadas');
-    
+
     // Inicializar eventos
     initializeEvents();
     debugLog('Eventos inicializados');
-    
+
     // Cargar configuraciones globales
     await loadGlobalConfig();
     debugLog('Configuraciones globales cargadas');
-    
+
     // Cargar estado guardado
     await loadSavedState();
     debugLog('Estado guardado cargado');
-    
+
     // Configurar listeners de mensajes
     setupMessageListeners();
     debugLog('Listeners de mensajes configurados');
-    
+
     // Inicializar navegación por tabs
     initTabNavigation();
     debugLog('Navegación por tabs inicializada');
-    
+
     // Verificar si hay una búsqueda en curso
     const searchActive = localStorage.getItem('snap_lead_manager_search_active') === 'true';
     debugLog('Estado de búsqueda activa:', searchActive);
-    
+
     if (searchActive) {
       debugLog('Recuperando estado de búsqueda activa...');
       // Restaurar estado de búsqueda
@@ -1583,7 +1618,7 @@ async function initializeSidebar() {
       // Solicitar estado actual
       requestSearchStatus();
     }
-    
+
     // Inicializar tab activo
     const activeTab = document.querySelector('.tab-button.active');
     if (activeTab) {
@@ -1594,10 +1629,10 @@ async function initializeSidebar() {
         }, 500);
       }
     }
-    
+
     // Actualizar UI inicial
     updateUI();
-    
+
     debugLog('Sidebar inicializado correctamente');
     return true;
   } catch (error) {
@@ -1609,7 +1644,7 @@ async function initializeSidebar() {
 // Función para cargar el estado guardado
 async function loadSavedState() {
   debugLog('Cargando estado guardado...');
-  
+
   try {
     // Cargar criterios guardados
     const savedCriteria = localStorage.getItem('snap_lead_manager_saved_criteria');
@@ -1617,7 +1652,7 @@ async function loadSavedState() {
       state.savedCriteria = JSON.parse(savedCriteria);
       debugLog('Criterios guardados cargados:', state.savedCriteria.length);
     }
-    
+
     // Cargar resultados previos si existen
     const savedResults = localStorage.getItem('snap_lead_manager_search_results');
     if (savedResults) {
@@ -1626,13 +1661,13 @@ async function loadSavedState() {
       // Mostrar resultados previos
       handleSearchResults(results, 'Resultados de búsqueda previa');
     }
-    
+
     // Cargar datos de búsqueda actual
     const searchData = localStorage.getItem('snap_lead_manager_search_data');
     if (searchData) {
       const data = JSON.parse(searchData);
       debugLog('Datos de búsqueda actual:', data);
-      
+
       // Actualizar campos
       if (searchTermInput) searchTermInput.value = data.term || '';
       if (searchCityInput) searchCityInput.value = data.city || '';
@@ -1640,15 +1675,15 @@ async function loadSavedState() {
         searchTypeSelect.value = data.type || 'groups';
         handleSearchTypeChange();
       }
-      
+
       // Actualizar estado
       state.currentSearchTerm = data.term || '';
       state.currentSearchCity = data.city || '';
       state.currentSearchType = data.type || 'groups';
-      
+
       updateSearchInfo();
     }
-    
+
     debugLog('Estado guardado cargado correctamente');
       } catch (error) {
     console.error('Error al cargar estado guardado:', error);
@@ -1658,14 +1693,14 @@ async function loadSavedState() {
 // Función para configurar listeners de mensajes
 function setupMessageListeners() {
   debugLog('Configurando listeners de mensajes...');
-  
+
   // Listener principal de mensajes
   window.addEventListener('message', function(event) {
     const message = event.data;
     if (!message || !message.action) return;
-    
+
     debugLog('Mensaje recibido:', message.action, message);
-    
+
     switch (message.action) {
       case 'status_update':
         if (message.status) {
@@ -1681,36 +1716,36 @@ function setupMessageListeners() {
           });
         }
         break;
-        
+
       case 'search_result':
       case 'found_results':
         if (message.results || (message.result && message.result.profiles)) {
           const results = message.results || message.result.profiles;
           const statusMessage = message.message || message.result.message;
           debugLog('Resultados recibidos:', results.length);
-          
+
           // Actualizar estado antes de procesar resultados
           state.isRunning = false;
           state.isPaused = false;
-          
+
           // Procesar resultados
           handleSearchResults(results, statusMessage);
-          
+
           // Actualizar estado final
           updateStatus(statusMessage || 'Búsqueda completada', 100);
           document.body.classList.remove('search-active');
           localStorage.setItem('snap_lead_manager_search_active', 'false');
-          
+
           // Detener verificación de estado
           stopStatusChecking();
-          
+
           // Actualizar UI final
           updateUI();
-          
+
           debugLog('Procesamiento de resultados completado');
         }
         break;
-        
+
       case 'error':
         console.error('Error recibido:', message.error);
         showError(message.error);
@@ -1721,7 +1756,7 @@ function setupMessageListeners() {
         updateUI();
         debugLog('Error procesado:', message.error);
         break;
-        
+
       case 'sidebar_ready':
         debugLog('Sidebar listo, verificando estado inicial...');
         // Si hay una búsqueda activa, solicitar estado
@@ -1731,12 +1766,12 @@ function setupMessageListeners() {
         break;
     }
   });
-  
+
   // Enviar mensaje de que el sidebar está listo
   window.parent.postMessage({
     action: 'sidebar_ready'
   }, '*');
-  
+
   debugLog('Listeners de mensajes configurados correctamente');
 }
 
@@ -1751,10 +1786,10 @@ function requestSearchStatus() {
 // Modificar el evento DOMContentLoaded
 document.addEventListener('DOMContentLoaded', async function() {
   debugLog('DOM cargado, iniciando aplicación...');
-  
+
   // Inicializar sidebar
   const initialized = await initializeSidebar();
-  
+
   if (initialized) {
     debugLog('Aplicación iniciada correctamente');
   } else {
@@ -1764,12 +1799,12 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 function initTabNavigation() {
   debugLog('Inicializando navegación por tabs...');
-  
+
   if (!tabButtons || !tabContents) {
     console.error('Tab buttons or tab contents not found in the DOM');
     return;
   }
-  
+
   // Asegurarse de que los contenedores de resultados existan
   const resultsTab = document.getElementById('results-tab');
   if (resultsTab && !document.getElementById('search-results')) {
@@ -1779,12 +1814,12 @@ function initTabNavigation() {
     resultsTab.appendChild(resultsList);
     debugLog('Contenedor de resultados creado');
   }
-  
+
   tabButtons.forEach(button => {
     button.addEventListener('click', () => {
       const tabId = button.getAttribute('data-tab');
       debugLog('Tab clicked:', tabId);
-      
+
       // Desactivar todos los tabs
       tabButtons.forEach(btn => {
         btn.classList.remove('active');
@@ -1794,7 +1829,7 @@ function initTabNavigation() {
         content.classList.remove('active');
         content.style.display = 'none';
       });
-      
+
       // Activar el tab seleccionado
       button.classList.add('active');
       button.setAttribute('aria-selected', 'true');
@@ -1803,7 +1838,7 @@ function initTabNavigation() {
         tabContent.classList.add('active');
         tabContent.style.display = 'block';
         debugLog('Tab activado:', tabId);
-        
+
         // Si es el tab de resultados, asegurar que los resultados sean visibles
         if (tabId === 'results-tab' && state.profiles && state.profiles.length > 0) {
           const searchResultsList = document.getElementById('search-results');
@@ -1812,7 +1847,7 @@ function initTabNavigation() {
           if (resultsSummary) resultsSummary.style.display = 'block';
           debugLog('Contenido de resultados mostrado');
         }
-        
+
         // Si es el tab de integración con n8n, inicializar si es necesario
         if (tabId === 'n8n-tab') {
           debugLog('Inicializando n8n integration');
@@ -1823,7 +1858,7 @@ function initTabNavigation() {
       }
     });
   });
-  
+
   debugLog('Navegación por tabs inicializada');
 }
 
@@ -1834,14 +1869,14 @@ async function initN8nIntegration() {
     console.error('n8nIntegrationContainer not found in the DOM');
     return;
   }
-  
+
   console.log('Starting n8n integration initialization');
   n8nIntegrationContainer.innerHTML = `<div class="loading-indicator">Cargando configuración...</div>`;
-  
+
   try {
     // Intentar cargar los módulos desde archivos
     let loaded = false;
-    
+
     try {
       // Intentar el método principal de carga
       await loadN8nModules();
@@ -1850,25 +1885,25 @@ async function initN8nIntegration() {
       console.warn('No se pudieron cargar los módulos n8n desde archivos, usando implementación directa', error);
       loaded = false;
     }
-    
+
     // Si falló, usar la implementación directa
     if (!loaded) {
       initializeN8nModulesDirect();
     }
-    
+
     // Obtener referencias a los módulos
     const n8nIntegrationUI = window.LeadManagerPro?.modules?.n8nIntegrationUI;
-    
+
     if (!n8nIntegrationUI) {
       throw new Error('No se pudo cargar el módulo de integración con n8n');
     }
-    
+
     // Inicializar el módulo de UI
     await n8nIntegrationUI.init();
-    
+
     // Renderizar la UI en el contenedor
     await n8nIntegrationUI.render(n8nIntegrationContainer);
-    
+
     console.log('Integración con n8n inicializada correctamente');
   } catch (error) {
     console.error('Error al inicializar integración con n8n:', error);
@@ -1878,7 +1913,7 @@ async function initN8nIntegration() {
         <button class="snap-lead-button" id="retry-n8n-load">Reintentar</button>
       </div>
     `;
-    
+
     // Agregar listener para reintentar
     const retryButton = document.getElementById('retry-n8n-load');
     if (retryButton) {
@@ -1894,33 +1929,33 @@ async function loadN8nModules() {
     console.log('N8n modules already loaded');
     return;
   }
-  
+
   console.log('Loading n8n modules');
-  
+
   try {
     // Cargar el contenido de los archivos
     const integrationResponse = await fetch(chrome.runtime.getURL('content/modules/n8nIntegration.js'));
     const integrationUIResponse = await fetch(chrome.runtime.getURL('content/modules/n8nIntegrationUI.js'));
-    
+
     if (!integrationResponse.ok || !integrationUIResponse.ok) {
       throw new Error('No se pudieron cargar los archivos de integración con n8n');
     }
-    
+
     // Obtener el texto de los scripts
     const integrationCode = await integrationResponse.text();
     const integrationUICode = await integrationUIResponse.text();
-    
+
     // Crear scripts y evaluar el código
     const integrationScript = document.createElement('script');
     integrationScript.textContent = integrationCode;
     document.head.appendChild(integrationScript);
-    
+
     const integrationUIScript = document.createElement('script');
     integrationUIScript.textContent = integrationUICode;
     document.head.appendChild(integrationUIScript);
-    
+
     console.log('n8n modules loaded successfully');
-    
+
     return true;
   } catch (error) {
     console.error('Error loading n8n modules:', error);
@@ -1936,9 +1971,9 @@ async function sendResultsToN8n(results, searchType) {
       console.warn('El módulo de integración con n8n no está disponible');
       return false;
     }
-    
+
     const n8nIntegration = window.LeadManagerPro.n8nIntegration;
-    
+
     // Determinar el tipo de datos
     let dataType = '';
     switch (searchType) {
@@ -1954,10 +1989,10 @@ async function sendResultsToN8n(results, searchType) {
       default:
         dataType = 'data';
     }
-    
+
     // Enviar datos a n8n
     const success = await n8nIntegration.sendToN8n(dataType, results);
-    
+
     if (success) {
       console.log(`Datos enviados correctamente a n8n: ${results.length} ${dataType}`);
       addLogEntry(`${results.length} ${dataType} enviados a n8n`);
@@ -1965,7 +2000,7 @@ async function sendResultsToN8n(results, searchType) {
       console.warn(`Los datos se almacenaron para envío posterior: ${results.length} ${dataType}`);
       addLogEntry(`${results.length} ${dataType} almacenados para envío posterior a n8n`);
     }
-    
+
     return success;
   } catch (error) {
     console.error('Error al enviar resultados a n8n:', error);
@@ -1977,20 +2012,20 @@ async function sendResultsToN8n(results, searchType) {
 // Función para manejar los resultados de búsqueda
 function handleSearchResults(results, message = '') {
   debugLog('Manejando resultados de búsqueda:', results);
-  
+
   if (!Array.isArray(results)) {
     console.error('Los resultados no son un array:', results);
     return;
   }
-  
+
   // Actualizar estado
   state.profiles = results;
   state.foundCount = results.length;
-  
+
   // Obtener referencias a los elementos necesarios
   const resultsTab = document.querySelector('.tab-button[data-tab="results-tab"]');
   const resultsContent = document.getElementById('results-tab');
-  
+
   // Activar la pestaña de resultados sin deshabilitar la navegación
   if (resultsTab && resultsContent) {
     // Cambiar a la pestaña de resultados
@@ -2002,13 +2037,13 @@ function handleSearchResults(results, message = '') {
       content.classList.remove('active');
       content.style.display = 'none';
     });
-    
+
     resultsTab.classList.add('active');
     resultsTab.setAttribute('aria-selected', 'true');
     resultsContent.classList.add('active');
     resultsContent.style.display = 'block';
   }
-  
+
   // Actualizar contenido de resultados
   const searchResultsList = document.getElementById('search-results');
   if (!searchResultsList) {
@@ -2019,11 +2054,11 @@ function handleSearchResults(results, message = '') {
     resultsContent.appendChild(newResultsList);
     searchResultsList = newResultsList;
   }
-  
+
   // Limpiar y mostrar el contenedor de resultados
   searchResultsList.innerHTML = '';
   searchResultsList.style.display = 'block';
-  
+
   // Agregar cada resultado a la lista
   results.forEach((group) => {
     const listItem = document.createElement('li');
@@ -2063,10 +2098,10 @@ function handleSearchResults(results, message = '') {
           ` : ''}
         </div>
       </div>
-    `;
+       `;
     searchResultsList.appendChild(listItem);
   });
-  
+
   // Crear o actualizar el resumen
   if (!resultsSummary) {
     resultsSummary = document.createElement('div');
@@ -2075,7 +2110,7 @@ function handleSearchResults(results, message = '') {
       resultsContent.appendChild(resultsSummary);
     }
   }
-  
+
   resultsSummary.innerHTML = `
     <div class="results-summary">
       <h3>Resumen de la búsqueda</h3>
@@ -2087,23 +2122,23 @@ function handleSearchResults(results, message = '') {
     </div>
   `;
   resultsSummary.style.display = 'block';
-  
+
   // Agregar entrada al log
   addLogEntry(message || `Búsqueda completada. Se encontraron ${results.length} grupos.`);
-  
+
   // Guardar resultados en localStorage
   try {
     localStorage.setItem('snap_lead_manager_search_results', JSON.stringify(results));
       } catch (error) {
     console.error('Error al guardar resultados en localStorage:', error);
   }
-  
+
   // Actualizar UI
   updateUI();
-  
+
   // Forzar un reflow para asegurar que los cambios se apliquen
   resultsContent?.offsetHeight;
-  
+
   debugLog('Resultados procesados y mostrados');
 }
 
@@ -2117,7 +2152,7 @@ function exportResults(format) {
 
   try {
     let content, filename, type;
-    
+
     if (format === 'json') {
       content = JSON.stringify(results, null, 2);
       filename = 'grupos_facebook.json';
@@ -2125,7 +2160,7 @@ function exportResults(format) {
     } else if (format === 'csv') {
       // Definir las columnas del CSV
       const headers = ['nombre', 'url', 'tipo', 'miembros', 'publicacionesAño', 'publicacionesMes', 'publicacionesDia'];
-      
+
       // Crear las filas
       const rows = [
         headers.join(','), // Cabecera
@@ -2139,14 +2174,14 @@ function exportResults(format) {
           group.postsDay || ''
         ].join(','))
       ];
-      
+
       content = rows.join('\n');
       filename = 'grupos_facebook.csv';
       type = 'text/csv';
     } else {
       throw new Error('Formato no soportado');
     }
-    
+
     // Crear el blob y descargar
     const blob = new Blob([content], { type: `${type};charset=utf-8;` });
     const url = URL.createObjectURL(blob);
@@ -2157,7 +2192,7 @@ function exportResults(format) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    
+
     // Mostrar mensaje de éxito
     addLogEntry(`Exportación ${format.toUpperCase()} completada`);
   } catch (error) {

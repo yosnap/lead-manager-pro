@@ -1,0 +1,81 @@
+# Ignore node_modules directory
+node_modules/
+# Ignore log files
+*.log
+# Ignore environment variable files
+.env
+# Ignore build directories
+dist/
+build/
+# Ignore coverage reports
+coverage/
+# Ignore temporary files
+tmp/
+
+# Ignore IDE specific files
+.idea/
+.vscode/
+# Ignore OS generated files
+Thumbs.db
+.DS_Store
+# Ignore package lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+# Ignore test output files
+test-output/
+# Ignore documentation files
+docs/
+# Ignore configuration files
+config/
+# Ignore backup files
+*.bak
+# Ignore cache directories
+.cache/
+# Ignore compiled files
+*.o
+*.obj
+# Ignore binary files
+*.exe
+*.dll
+*.so
+# Ignore images
+*.png
+*.jpg
+*.jpeg
+*.gif
+# Ignore audio files
+*.mp3
+*.wav
+
+# Ignore video files
+*.mp4
+
+# Ignore archives
+*.zip
+*.tar.gz
+*.rar
+# Ignore temporary files created by editors
+*~
+*.swp
+# Ignore Python bytecode files
+__pycache__/
+*.pyc
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+# Ignore log files from various tools
+*.log
+# Ignore coverage files
+coverage/
+# Ignore build artifacts
+dist/
+build/
+# Ignore system files
+*.DS_Store
+*.Thumbs.db
+# Ignore macOS specific files
+.AppleDouble
+.LSOverride
+# Ignore Windows specific files
+ehthumbs.db
+Icon?

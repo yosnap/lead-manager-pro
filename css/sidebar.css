@@ -125,7 +125,7 @@ input[type="text"], select {
   transition: all 0.3s ease;
 }
 
-#pause-button:not(:disabled):hover, 
+#pause-button:not(:disabled):hover,
 #stop-button:not(:disabled):hover {
   transform: translateY(-2px);
   box-shadow: 0 2px 5px rgba(0,0,0,0.2);
@@ -659,20 +659,67 @@ footer {
   font-style: italic;
 }
 
+/* Estilos para la pestaña de configuración */
+.settings-global-section,
+.settings-profiles-section,
+.settings-groups-section,
+.settings-actions-section {
+  background-color: #f8f9fa;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.settings-global-section h2,
+.settings-profiles-section h2,
+.settings-groups-section h2 {
+  color: var(--primary-color);
+  border-bottom: 2px solid var(--primary-color);
+  padding-bottom: 8px;
+  margin-bottom: 15px;
+  font-size: 18px;
+}
+
+.settings-actions-section {
+  background-color: #fff;
+  text-align: center;
+}
+
+/* Checkbox rows específicos para configuración */
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.checkbox-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.checkbox-row input[type="checkbox"] {
+  margin: 0;
+  width: auto;
+}
+
 /* Ajustes para ventanas pequeñas */
 @media (max-height: 600px) {
   h2 {
     margin-bottom: 6px;
   }
-  
+
   .form-group {
     margin-bottom: 6px;
   }
-  
+
   .button-group {
     margin-top: 8px;
   }
-  
+
   footer {
     padding: 5px;
   }

@@ -31,9 +31,11 @@
       "js": [
         "content/utils/common.js",
         "content/state.js",
+        "js/auth.js",
         "content/modules/AuthConfig.js",
         "content/modules/AuthenticationWrapper.js",
         "content/modules/AuthMassApplier.js",
+        "content/modules/storageConsolidator.js",
         "content/modules/OptionsManager.js",
         "content/modules/DataMigrationManager.js",
         "content/modules/LoginComponent.js",
@@ -95,10 +97,10 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "sidebar.html", 
-        "js/*", 
-        "css/*", 
-        "icons/*", 
+        "sidebar.html",
+        "js/*",
+        "css/*",
+        "icons/*",
         "content/modules/n8nIntegration.js",
         "content/modules/n8nIntegrationUI.js",
         "content/modules/historyManager.js",
@@ -122,7 +124,11 @@
         "debug/auth-tests.js",
         "debug/group-sidebar-tests.js",
         "debug/new-features-tests.js",
-        "debug/sidebar-transitions-test.js"
+        "debug/sidebar-transitions-test.js",
+        "debug/storage-cleanup.js",
+        "debug/undefined-keys-tests.js",
+        "debug/quick-test.js",
+        "debug/manual-test-runner.js"
       ],
       "matches": ["https://*.facebook.com/*"]
     }

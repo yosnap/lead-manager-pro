@@ -35,13 +35,13 @@ const Auth = {
         callback(false);
         return;
       }
-      
+
       const isAuth = result[AUTH_KEYS.AUTH] === true;
       console.log('Auth: Estado de autenticación:', isAuth);
       callback(isAuth);
     });
   },
-  
+
   /**
    * Obtiene la información del usuario autenticado
    * @param {Function} callback - Función a llamar con la información del usuario
@@ -54,14 +54,14 @@ const Auth = {
         callback({ username: null, timestamp: null });
         return;
       }
-      
+
       callback({
         username: result[AUTH_KEYS.USER] || null,
         timestamp: result[AUTH_KEYS.TIMESTAMP] || null
       });
     });
   },
-  
+
   /**
    * Autentica al usuario con las credenciales proporcionadas
    * @param {string} username - Nombre de usuario
@@ -78,7 +78,7 @@ const Auth = {
         [AUTH_KEYS.USER]: username,
         [AUTH_KEYS.TIMESTAMP]: Date.now()
       };
-      
+
       // Guardar en almacenamiento primario
       STORAGE_CONFIG.PRIMARY.set(authData, function() {
         if (chrome.runtime.lastError) {
@@ -86,16 +86,16 @@ const Auth = {
           callback(false);
           return;
         }
-        
+
         console.log('Auth: Estado de autenticación guardado correctamente');
-        
+
         // También guardar en respaldo para sincronización
         STORAGE_CONFIG.BACKUP.set(authData, function() {
           if (chrome.runtime.lastError) {
             console.warn('Auth: Error al sincronizar autenticación:', chrome.runtime.lastError);
           }
         });
-        
+
         // Si se debe recordar, guardar credenciales
         if (remember) {
           const credentialData = {
@@ -103,21 +103,21 @@ const Auth = {
             [AUTH_KEYS.USERNAME]: username,
             [AUTH_KEYS.PASSWORD]: password
           };
-          
+
           STORAGE_CONFIG.PRIMARY.set(credentialData);
           STORAGE_CONFIG.BACKUP.set(credentialData);
         }
-        
+
         // Notificar al sidebar y otros componentes sobre el cambio
         Auth.notifyAuthChange();
-        
+
         callback(true);
       });
     } else {
       callback(false);
     }
   },
-  
+
   /**
    * Notifica a todos los componentes sobre cambios en el estado de autenticación
    */
@@ -128,7 +128,7 @@ const Auth = {
         action: 'auth_state_changed',
         authenticated: true
       });
-      
+
       // Notificar a content scripts
       chrome.tabs.query({}, function(tabs) {
         tabs.forEach(tab => {
@@ -140,13 +140,13 @@ const Auth = {
           });
         });
       });
-      
+
       console.log('Auth: Notificación de cambio de autenticación enviada');
     } catch (error) {
       console.error('Auth: Error al notificar cambio de autenticación', error);
     }
   },
-  
+
   /**
    * Cierra la sesión del usuario
    * @param {Function} callback - Función a llamar cuando se complete
@@ -154,44 +154,44 @@ const Auth = {
   logout: function(callback) {
     // Eliminar datos de autenticación de ambos almacenamientos
     const keysToRemove = [AUTH_KEYS.AUTH, AUTH_KEYS.USER, AUTH_KEYS.TIMESTAMP];
-    
+
     STORAGE_CONFIG.PRIMARY.remove(keysToRemove, function() {
       if (chrome.runtime.lastError) {
         console.error('Error al cerrar sesión:', chrome.runtime.lastError);
         callback && callback(false);
         return;
       }
-      
+
       // También eliminar del respaldo
       STORAGE_CONFIG.BACKUP.remove(keysToRemove, function() {
         if (chrome.runtime.lastError) {
           console.warn('Error al limpiar respaldo:', chrome.runtime.lastError);
         }
       });
-      
+
       console.log('Auth: Sesión cerrada correctamente');
-      
+
       // Notificar el cambio
       Auth.notifyAuthChange();
-      
+
       callback && callback(true);
     });
   },
-  
+
   /**
    * Carga las credenciales guardadas si existen
    * @param {Function} callback - Función a llamar con las credenciales
    */
   loadSavedCredentials: function(callback) {
     const keys = [AUTH_KEYS.REMEMBER, AUTH_KEYS.USERNAME, AUTH_KEYS.PASSWORD];
-    
+
     STORAGE_CONFIG.PRIMARY.get(keys, function(result) {
       if (chrome.runtime.lastError) {
         console.error('Error al cargar credenciales:', chrome.runtime.lastError);
         callback(null);
         return;
       }
-      
+
       if (result[AUTH_KEYS.REMEMBER] === true) {
         callback({
           username: result[AUTH_KEYS.USERNAME],
@@ -203,28 +203,28 @@ const Auth = {
       }
     });
   },
-  
+
   /**
    * Limpia las credenciales guardadas
    * @param {Function} callback - Función a llamar cuando se complete
    */
   clearSavedCredentials: function(callback) {
     const keysToRemove = [AUTH_KEYS.REMEMBER, AUTH_KEYS.USERNAME, AUTH_KEYS.PASSWORD];
-    
+
     STORAGE_CONFIG.PRIMARY.remove(keysToRemove, function() {
       if (chrome.runtime.lastError) {
         console.error('Error al limpiar credenciales:', chrome.runtime.lastError);
         callback && callback(false);
         return;
       }
-      
+
       // También limpiar del respaldo
       STORAGE_CONFIG.BACKUP.remove(keysToRemove, function() {
         if (chrome.runtime.lastError) {
           console.warn('Error al limpiar respaldo de credenciales:', chrome.runtime.lastError);
         }
       });
-      
+
       console.log('Auth: Credenciales eliminadas correctamente');
       callback && callback(true);
     });
@@ -234,3 +234,7 @@ const Auth = {
 // Exportar el objeto Auth
 window.LeadManagerPro = window.LeadManagerPro || {};
 window.LeadManagerPro.Auth = Auth;
+
+// Log de confirmación
+console.log('✅ Auth module loaded and exported successfully to window.LeadManagerPro.Auth');
+console.log('🔍 Auth methods available:', Object.keys(Auth));

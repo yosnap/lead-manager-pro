@@ -24,62 +24,78 @@ class GroupSidebar {
     this.toggleButton = toggleButton;
     if (this.toggleButton) {
       // Agregar event listener para el toggle
-      const clickHandler = () => this.toggleSidebar();
+      const clickHandler = async () => await this.toggleSidebar();
       this.toggleButton.addEventListener('click', clickHandler);
       this.addEventListenerRef(this.toggleButton, 'click', clickHandler);
     }
   }
 
   // Toggle del sidebar
-  toggleSidebar() {
+  async toggleSidebar() {
     if (this.isVisible) {
       this.hide();
     } else {
-      this.show();
+      await this.show();
     }
   }
 
   // Verificar autenticación antes de ejecutar métodos críticos
-  checkAuthentication() {
+  async checkAuthentication() {
     if (!this.authenticationRequired) return true;
-    
-    const authWrapper = window.LeadManagerPro?.AuthenticationWrapper;
-    if (authWrapper && !authWrapper.canModuleExecute('groupSidebar')) {
-      return false;
+
+    // Verificar directamente usando el módulo Auth
+    if (window.LeadManagerPro?.Auth) {
+      return new Promise((resolve) => {
+        window.LeadManagerPro.Auth.isAuthenticated((isAuth) => {
+          console.log('GroupSidebar: Estado de autenticación verificado:', isAuth);
+          resolve(isAuth);
+        });
+      });
     }
-    
-    return true;
+
+    // Fallback: verificar directamente en chrome.storage
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['lmp_auth'], (result) => {
+        const isAuth = result.lmp_auth === true;
+        console.log('GroupSidebar: Estado de autenticación (fallback):', isAuth);
+        resolve(isAuth);
+      });
+    });
   }
 
   // Inicializar el sidebar
   async init() {
     console.log('GroupSidebar: Inicializando sidebar para páginas de grupo');
-    
+
     // Configurar listener para cambios de autenticación
     this.setupAuthListener();
-    
+
     // Verificar autenticación antes de mostrar contenido
-    if (!this.checkAuthentication()) {
+    const isAuthenticated = await this.checkAuthentication();
+    if (!isAuthenticated) {
       console.log('GroupSidebar: Inicialización bloqueada - autenticación requerida');
       this.showAuthenticationRequired();
       return this;
     }
-    
+
     // Cargar configuraciones desde Extension Storage
     await this.loadSettings();
-    
+
     return this;
   }
-  
+
   // Configurar listener para cambios de autenticación
   setupAuthListener() {
     // Listener para mensajes de cambio de autenticación
     if (typeof chrome !== 'undefined' && chrome.runtime) {
-      chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         if (message.action === 'auth_state_changed') {
           console.log('GroupSidebar: Cambio de autenticación detectado:', message.authenticated);
-          
-          if (message.authenticated) {
+
+          // Verificar el estado real de autenticación
+          const isAuthenticated = await this.checkAuthentication();
+
+          if (isAuthenticated) {
             // Re-inicializar con contenido completo
             this.handleSuccessfulAuth();
           } else {
@@ -89,17 +105,36 @@ class GroupSidebar {
         }
       });
     }
-    
+
     // Listener para eventos de ventana
-    window.addEventListener('message', (event) => {
+    window.addEventListener('message', async (event) => {
       if (event.data?.action === 'auth_state_changed') {
-        if (event.data.authenticated) {
+        // Verificar el estado real de autenticación
+        const isAuthenticated = await this.checkAuthentication();
+
+        if (isAuthenticated) {
           this.handleSuccessfulAuth();
         } else {
           this.showAuthenticationRequired();
         }
       }
     });
+
+    // Listener adicional para storage changes (cuando se actualiza el estado de auth)
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      chrome.storage.onChanged.addListener(async (changes, namespace) => {
+        if (namespace === 'local' && changes.lmp_auth) {
+          console.log('GroupSidebar: Cambio en lmp_auth detectado:', changes.lmp_auth);
+          const isAuthenticated = changes.lmp_auth.newValue === true;
+
+          if (isAuthenticated) {
+            this.handleSuccessfulAuth();
+          } else {
+            this.showAuthenticationRequired();
+          }
+        }
+      });
+    }
   }
 
   // Cargar configuraciones desde Extension Storage
@@ -109,10 +144,10 @@ class GroupSidebar {
       const result = await new Promise(resolve => {
         chrome.storage.local.get(['leadManagerGroupSettings'], result => resolve(result));
       });
-      
+
       if (result && result.leadManagerGroupSettings) {
         this.settings = { ...this.settings, ...result.leadManagerGroupSettings };
-        
+
         // Asegurarse de que messages sea un array
         if (!Array.isArray(this.settings.messages)) {
           // Si no existe messages pero existe messageToSend, usarlo como primer mensaje
@@ -122,18 +157,18 @@ class GroupSidebar {
             this.settings.messages = [];
           }
         }
-        
+
         // Si messages está vacío pero hay messageToSend, añadirlo
         if (this.settings.messages.length === 0 && this.settings.messageToSend) {
           this.settings.messages.push(this.settings.messageToSend);
         }
-        
+
         // Si hay messages pero no hay messageToSend, usar el primero
         if (this.settings.messages.length > 0 && !this.settings.messageToSend) {
           this.settings.messageToSend = this.settings.messages[0];
         }
       }
-      
+
       console.log('GroupSidebar: Configuraciones cargadas:', this.settings);
       return this.settings;
     } catch (error) {
@@ -149,19 +184,19 @@ class GroupSidebar {
       if (!Array.isArray(this.settings.messages)) {
         this.settings.messages = [];
       }
-      
+
       // Filtrar mensajes vacíos
       this.settings.messages = this.settings.messages.filter(msg => msg && msg.trim() !== '');
-      
+
       // Asegurarse de que messageToSend esté actualizado (para compatibilidad)
       if (this.settings.messages.length > 0) {
         this.settings.messageToSend = this.settings.messages[0];
       }
-      
+
       await new Promise(resolve => {
         chrome.storage.local.set({ leadManagerGroupSettings: this.settings }, resolve);
       });
-      
+
       console.log('GroupSidebar: Configuraciones guardadas:', this.settings);
       return true;
     } catch (error) {
@@ -171,17 +206,18 @@ class GroupSidebar {
   }
 
   // Mostrar el sidebar
-  show() {
+  async show() {
     // Verificar autenticación antes de mostrar contenido
-    if (!this.checkAuthentication()) {
+    const isAuthenticated = await this.checkAuthentication();
+    if (!isAuthenticated) {
       this.showAuthenticationRequired();
       return;
     }
-    
+
     if (!this.container) {
       this.createSidebar();
     }
-    
+
     if (this.container) {
       this.container.style.right = '0';
       this.isVisible = true;
@@ -191,7 +227,7 @@ class GroupSidebar {
   // Mostrar formulario de autenticación requerida
   showAuthenticationRequired() {
     console.log('GroupSidebar: Mostrando formulario de autenticación');
-    
+
     // Crear container si no existe
     if (!this.container) {
       this.container = document.createElement('div');
@@ -212,10 +248,10 @@ class GroupSidebar {
       `;
       document.body.appendChild(this.container);
     }
-    
+
     // Limpiar contenido existente
     this.container.innerHTML = '';
-    
+
     // Crear contenedor para el login
     const authContainer = document.createElement('div');
     authContainer.id = 'group-sidebar-auth-container';
@@ -228,7 +264,7 @@ class GroupSidebar {
       padding: 40px 30px;
       text-align: center;
     `;
-    
+
     // Agregar header
     const header = document.createElement('div');
     header.innerHTML = `
@@ -242,23 +278,35 @@ class GroupSidebar {
         <p style="margin: 0; color: #65676b; font-size: 14px; line-height: 1.4;">Inicia sesión para acceder a las herramientas de interacción con miembros del grupo</p>
       </div>
     `;
-    
+
     authContainer.appendChild(header);
-    
+
     // Intentar usar el LoginComponent si está disponible
     if (window.LeadManagerPro?.LoginComponent) {
       const loginContainer = document.createElement('div');
       loginContainer.id = 'group-sidebar-login-container';
       loginContainer.style.width = '100%';
       authContainer.appendChild(loginContainer);
-      
-      // Crear instancia del LoginComponent
-      this.loginComponent = new window.LeadManagerPro.LoginComponent('group-sidebar-login-container');
-      this.loginComponent.onSuccess(() => {
-        console.log('GroupSidebar: Login exitoso, reinicializando...');
-        this.handleSuccessfulAuth();
-      });
-      
+
+      // Agregar el authContainer al DOM primero
+      this.container.appendChild(authContainer);
+
+      // Esperar un momento para que el DOM se actualice antes de crear el LoginComponent
+      setTimeout(() => {
+        // Verificar que el elemento existe en el DOM
+        const containerElement = document.getElementById('group-sidebar-login-container');
+        if (containerElement) {
+          // Crear instancia del LoginComponent
+          this.loginComponent = new window.LeadManagerPro.LoginComponent('group-sidebar-login-container');
+          this.loginComponent.onSuccess(() => {
+            console.log('GroupSidebar: Login exitoso, reinicializando...');
+            this.handleSuccessfulAuth();
+          });
+        } else {
+          console.error('GroupSidebar: No se pudo encontrar el contenedor de login');
+        }
+      }, 100);
+
     } else {
       // Fallback: mensaje básico
       const fallbackMessage = document.createElement('div');
@@ -272,7 +320,7 @@ class GroupSidebar {
         </div>
       `;
       authContainer.appendChild(fallbackMessage);
-      
+
       // Event listener para el botón fallback
       const openPopupBtn = fallbackMessage.querySelector('#group-sidebar-open-popup');
       if (openPopupBtn) {
@@ -285,39 +333,50 @@ class GroupSidebar {
         });
       }
     }
-    
-    this.container.appendChild(authContainer);
-    
+
+    // Solo agregar authContainer al DOM si no se agregó en el bloque if anterior
+    if (!window.LeadManagerPro?.LoginComponent) {
+      this.container.appendChild(authContainer);
+    }
+
     // Mostrar el sidebar
     this.container.style.right = '0';
     this.isVisible = true;
-    
+
     // Actualizar el toggle
     const toggleManager = window.leadManagerPro?.unifiedToggleManager;
     if (toggleManager) {
       toggleManager.updateToggleState(true);
     }
   }
-  
+
   // Manejar autenticación exitosa
-  handleSuccessfulAuth() {
+  async handleSuccessfulAuth() {
+    console.log('GroupSidebar: Manejando autenticación exitosa');
+
+    // Verificar que realmente estamos autenticados
+    const isAuthenticated = await this.checkAuthentication();
+    if (!isAuthenticated) {
+      console.log('GroupSidebar: Estado de autenticación no confirmado, mantener formulario de login');
+      return;
+    }
+
     // Limpiar el componente de login
     if (this.loginComponent) {
       this.loginComponent.destroy();
       this.loginComponent = null;
     }
-    
+
     // Reinicializar el sidebar con contenido completo
-    setTimeout(() => {
-      this.init().then(() => {
-        // Recrear el sidebar con el contenido normal
-        if (this.container) {
-          this.container.remove();
-          this.container = null;
-        }
-        this.createSidebar();
-        this.show();
-      });
+    setTimeout(async () => {
+      await this.init();
+      // Recrear el sidebar con el contenido normal
+      if (this.container) {
+        this.container.remove();
+        this.container = null;
+      }
+      await this.createSidebar();
+      await this.show();
     }, 500);
   }
 
@@ -326,7 +385,7 @@ class GroupSidebar {
     if (this.container) {
       this.container.style.right = '-350px';
       this.isVisible = false;
-      
+
       // Actualizar el toggle usando el sistema unificado
       const toggleManager = window.leadManagerPro?.unifiedToggleManager;
       if (toggleManager) {
@@ -336,13 +395,14 @@ class GroupSidebar {
   }
 
   // Crear el sidebar y sus elementos
-  createSidebar() {
+  async createSidebar() {
     // Verificar autenticación antes de crear contenido
-    if (!this.checkAuthentication()) {
+    const isAuthenticated = await this.checkAuthentication();
+    if (!isAuthenticated) {
       this.showAuthenticationRequired();
       return;
     }
-    
+
     // Crear contenedor principal
     this.container = document.createElement('div');
     this.container.id = 'lead-manager-group-sidebar';
@@ -360,10 +420,10 @@ class GroupSidebar {
       overflow-y: auto;
       font-family: Arial, sans-serif;
     `;
-    
+
     // Crear contenido HTML del sidebar usando el nuevo patrón modular
     this.container.innerHTML = '';
-    
+
     // Crear header del sidebar
     const header = document.createElement('div');
     header.className = 'lmp-sidebar-header';
@@ -373,7 +433,7 @@ class GroupSidebar {
       <button id="lmp-close-sidebar" style="background: none; border: none; cursor: pointer; font-size: 20px;">×</button>
     `;
     this.container.appendChild(header);
-    
+
     // Crear sección de herramientas
     const toolsSection = document.createElement('div');
     toolsSection.className = 'lmp-section';
@@ -390,17 +450,17 @@ class GroupSidebar {
       </div>
     `;
     this.container.appendChild(toolsSection);
-    
+
     // Crear contenedor para opciones de interacción
     const interactionOptionsContainer = document.createElement('div');
     interactionOptionsContainer.id = 'lmp-interaction-options-container';
     interactionOptionsContainer.className = 'lmp-section';
     interactionOptionsContainer.style.cssText = 'margin-bottom: 20px;';
     this.container.appendChild(interactionOptionsContainer);
-    
+
     // Cargar opciones de interacción usando el nuevo módulo
     this.loadInteractionOptions(interactionOptionsContainer);
-    
+
     // Crear sección de estadísticas
     const statsSection = document.createElement('div');
     statsSection.className = 'lmp-section';
@@ -414,17 +474,17 @@ class GroupSidebar {
       </div>
     `;
     this.container.appendChild(statsSection);
-    
+
     // Agregar al DOM
     document.body.appendChild(this.container);
-    
+
     // Configurar event listeners
     this.setupEventListeners();
-    
+
     // Obtener información del grupo actual
     this.updateGroupInfo();
   }
-  
+
   // Cargar opciones de interacción usando el nuevo módulo
   loadInteractionOptions(container) {
     try {
@@ -433,7 +493,7 @@ class GroupSidebar {
         console.log('GroupSidebar: Inicializando módulo de opciones de interacción UI');
         // El módulo se cargará automáticamente si está incluido en el manifest
       }
-      
+
       // Si el módulo está disponible, usarlo
       if (window.leadManagerPro.groupMemberInteractionOptionsUI) {
         window.leadManagerPro.groupMemberInteractionOptionsUI.init();
@@ -447,7 +507,7 @@ class GroupSidebar {
       this.createBasicInteractionForm(container);
     }
   }
-  
+
   // Crear formulario básico de interacción (fallback)
   createBasicInteractionForm(container) {
     container.innerHTML = `
@@ -473,7 +533,7 @@ class GroupSidebar {
       </button>
     `;
   }
-  
+
   // Configurar los event listeners de los elementos del sidebar
   setupEventListeners() {
     // Botón de cerrar
@@ -483,7 +543,7 @@ class GroupSidebar {
       closeBtn.addEventListener('click', handler);
       this.addEventListenerRef(closeBtn, 'click', handler);
     }
-    
+
     // Botón de contar miembros
     const countMembersBtn = this.container.querySelector('#lmp-count-members-btn');
     if (countMembersBtn) {
@@ -491,7 +551,7 @@ class GroupSidebar {
       countMembersBtn.addEventListener('click', handler);
       this.addEventListenerRef(countMembersBtn, 'click', handler);
     }
-    
+
     // Botón de interactuar con miembros
     const interactMembersBtn = this.container.querySelector('#lmp-interact-members-btn');
     if (interactMembersBtn) {
@@ -499,7 +559,7 @@ class GroupSidebar {
       interactMembersBtn.addEventListener('click', handler);
       this.addEventListenerRef(interactMembersBtn, 'click', handler);
     }
-    
+
     // Botón de guardar configuración
     const saveSettingsBtn = this.container.querySelector('#lmp-save-settings');
     if (saveSettingsBtn) {
@@ -507,7 +567,7 @@ class GroupSidebar {
       saveSettingsBtn.addEventListener('click', handler);
       this.addEventListenerRef(saveSettingsBtn, 'click', handler);
     }
-    
+
     // Inputs de configuración (para actualizar en tiempo real)
     const allInputs = this.container.querySelectorAll('input, textarea');
     allInputs.forEach(input => {
@@ -515,35 +575,49 @@ class GroupSidebar {
       input.addEventListener('input', handler);
       this.addEventListenerRef(input, 'input', handler);
     });
-    
+
     // Cargar opciones generales guardadas
     this.loadGeneralOptions();
   }
-  
+
   // Inicializar el acordeón después de crear el DOM
   initializeAccordion() {
     // Obtener todos los botones del acordeón
     const accordionButtons = this.container.querySelectorAll('.lmp-accordion-button');
-    
+
     // Añadir event listeners a los botones
     accordionButtons.forEach(button => {
       const handler = () => {
         // Toggle active class
         button.classList.toggle('active');
-        
+
         // Cambiar el icono
         const icon = button.querySelector('.lmp-accordion-icon');
         if (icon) {
           icon.textContent = button.classList.contains('active') ? '-' : '+';
         }
-        
+
         // Toggle panel de contenido
         const content = button.nextElementSibling;
         if (content) {
           if (content.style.maxHeight !== '0px' && content.style.maxHeight !== '') {
             content.style.maxHeight = '0px';
           } else {
-  // Cargar opciones generales guardadas
+            content.style.maxHeight = content.scrollHeight + 'px';
+          }
+        }
+      };
+
+      // Agregar event listener
+      button.addEventListener('click', handler);
+      this.addEventListenerRef(button, 'click', handler);
+    });
+
+    // Cargar opciones generales guardadas
+    this.loadGeneralOptions();
+  }
+
+  // MOVER ESTA FUNCIÓN FUERA DEL FOREACH
   loadGeneralOptions() {
     try {
       if (window.leadManagerPro && window.leadManagerPro.generalOptions) {
@@ -554,12 +628,12 @@ class GroupSidebar {
       console.error('GroupSidebar: Error al cargar opciones generales:', error);
     }
   }
-  
+
   // Agregar referencia de event listener para poder limpiarlos después
   addEventListenerRef(element, type, handler) {
     this.eventListeners.push({ element, type, handler });
   }
-  
+
   // Limpiar todos los event listeners para evitar memory leaks
   clearEventListeners() {
     this.eventListeners.forEach(({ element, type, handler }) => {
@@ -567,7 +641,7 @@ class GroupSidebar {
     });
     this.eventListeners = [];
   }
-  
+
   // Actualizar configuraciones desde los inputs
   updateSettings() {
     try {
@@ -576,39 +650,39 @@ class GroupSidebar {
       const interactionDelay = parseInt(this.container.querySelector('#lmp-interaction-delay').value, 10);
       const messageToSend = this.container.querySelector('#lmp-message-to-send').value.trim();
       const autoCloseChat = this.container.querySelector('#lmp-auto-close-chat').checked;
-      
+
       // Validar valores
       if (isNaN(membersCount) || membersCount < 1) {
         alert('Por favor, introduce un número válido de miembros a interactuar (mínimo 1)');
         return false;
       }
-      
+
       if (isNaN(interactionDelay) || interactionDelay < 1000) {
         alert('Por favor, introduce un tiempo de espera válido (mínimo 1000 ms)');
         return false;
       }
-      
+
       if (!messageToSend) {
         alert('Por favor, introduce un mensaje para enviar a los miembros');
         return false;
       }
-      
+
       // Actualizar configuraciones de interacción de miembros
       this.settings.membersToInteract = membersCount;
       this.settings.interactionDelay = interactionDelay;
       this.settings.messageToSend = messageToSend;
       this.settings.messages = [messageToSend]; // Para compatibilidad con el sistema anterior
       this.settings.autoCloseChat = autoCloseChat;
-      
+
       // Guardar configuraciones de interacción
       this.saveSettings();
-      
+
       // Actualizar también el sidebar flotante si existe
       this.updateFloatingSidebar([messageToSend]);
-      
+
       // Mostrar mensaje de éxito
       this.showToast('Configuración guardada correctamente');
-      
+
       return true;
     } catch (error) {
       console.error('Error al actualizar configuraciones:', error);
@@ -616,7 +690,7 @@ class GroupSidebar {
       return false;
     }
   }
-  
+
   // Actualizar el sidebar flotante con los mensajes
   updateFloatingSidebar(messages) {
     try {
@@ -626,11 +700,11 @@ class GroupSidebar {
         console.log('Sidebar flotante no encontrado para actualizar');
         return;
       }
-      
+
       // Si existe la instancia de MemberInteractionUI, actualizar su configuración
       if (window.leadManagerPro && window.leadManagerPro.memberInteractionUI) {
         const memberInteractionUI = window.leadManagerPro.memberInteractionUI;
-        
+
         // Actualizar la configuración
         if (memberInteractionUI.memberInteraction) {
           memberInteractionUI.memberInteraction.messages = messages;
@@ -639,20 +713,20 @@ class GroupSidebar {
           memberInteractionUI.memberInteraction.interactionDelay = this.settings.interactionDelay;
           memberInteractionUI.memberInteraction.autoCloseChat = this.settings.autoCloseChat;
         }
-        
+
         console.log('MemberInteractionUI actualizado con la configuración');
       }
     } catch (error) {
       console.error('Error al actualizar el sidebar flotante:', error);
     }
   }
-  
+
   // Actualizar previsualización de configuraciones
   updateSettingPreview(input) {
     // Actualizar la previsualización de la configuración en tiempo real
     // Por ahora, no hacemos nada aquí
   }
-  
+
   // Función para contar miembros del grupo
   countMembers() {
     try {
@@ -661,15 +735,15 @@ class GroupSidebar {
         this.showToast('No se ha encontrado el módulo de conteo de miembros', true);
         return;
       }
-      
+
       // Obtener la instancia de groupMemberFinder
       const groupMemberFinder = window.leadManagerPro.groupMemberFinder;
-      
+
       // Iniciar el conteo de miembros
       if (groupMemberFinder.findMembers) {
         groupMemberFinder.findMembers();
         this.showToast('Conteo de miembros iniciado');
-        
+
         // Actualizar estadísticas después de un tiempo
         setTimeout(() => {
           this.updateMemberCount();
@@ -682,7 +756,7 @@ class GroupSidebar {
       this.showToast('Error al contar miembros', true);
     }
   }
-  
+
   // Función para interactuar con miembros
   interactWithMembers() {
     try {
@@ -691,10 +765,10 @@ class GroupSidebar {
         this.showToast('No se ha encontrado el módulo de interacción con miembros', true);
         return;
       }
-      
+
       // Obtener la instancia de memberInteractionUI
       const memberInteractionUI = window.leadManagerPro.memberInteractionUI;
-      
+
       // Actualizar configuraciones en memberInteractionUI
       if (memberInteractionUI.memberInteraction) {
         memberInteractionUI.memberInteraction.membersToInteract = this.settings.membersToInteract;
@@ -703,28 +777,28 @@ class GroupSidebar {
         memberInteractionUI.memberInteraction.messageToSend = this.settings.messageToSend;
         memberInteractionUI.memberInteraction.autoCloseChat = this.settings.autoCloseChat;
       }
-      
+
       // Buscar el sidebar flotante
       let floatingSidebar = document.querySelector('.lead-manager-interaction-ui');
-      
+
       // Si no existe, crearlo
       if (!floatingSidebar && memberInteractionUI.show) {
         // Mostrar el sidebar flotante
         memberInteractionUI.show();
-        
+
         // Obtener referencia después de crearlo
         floatingSidebar = document.querySelector('.lead-manager-interaction-ui');
       }
-      
+
       // Si existe, asegurarse de que sea visible
       if (floatingSidebar) {
         // Hacer visible el sidebar flotante
         floatingSidebar.style.display = 'block';
         floatingSidebar.style.opacity = '1';
-        
+
         // Ocultar este sidebar
         this.hide();
-        
+
         // Mostrar mensaje de éxito
         this.showToast('Panel de interacción abierto');
       } else {
@@ -737,7 +811,7 @@ class GroupSidebar {
       this.showToast('Error al abrir panel de interacción', true);
     }
   }
-  
+
   // Función para mostrar una notificación toast
   showToast(message, isError = false) {
     // Crear elemento toast
@@ -755,10 +829,10 @@ class GroupSidebar {
       box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     `;
     toast.textContent = message;
-    
+
     // Agregar al DOM
     document.body.appendChild(toast);
-    
+
     // Eliminar después de 3 segundos
     setTimeout(() => {
       if (toast.parentNode) {
@@ -766,17 +840,17 @@ class GroupSidebar {
       }
     }, 3000);
   }
-  
+
   // Actualizar conteo de miembros en las estadísticas
   updateMemberCount() {
     try {
       // Buscar elementos del DOM que contengan información de miembros
       const memberCountElement = this.container.querySelector('#lmp-total-members');
       if (!memberCountElement) return;
-      
+
       // Intentar obtener el conteo desde diferentes fuentes
       let memberCount = 0;
-      
+
       // Método 1: Desde el módulo groupMemberFinder
       if (window.leadManagerPro && window.leadManagerPro.groupMemberFinder) {
         const finder = window.leadManagerPro.groupMemberFinder;
@@ -784,7 +858,7 @@ class GroupSidebar {
           memberCount = finder.memberCount || finder.totalMembers;
         }
       }
-      
+
       // Método 2: Buscar en la página elementos que contengan el número de miembros
       if (memberCount === 0) {
         const memberSelectors = [
@@ -794,7 +868,7 @@ class GroupSidebar {
           'span:contains("miembros")',
           'span:contains("members")'
         ];
-        
+
         for (const selector of memberSelectors) {
           try {
             const element = document.querySelector(selector);
@@ -813,7 +887,7 @@ class GroupSidebar {
           }
         }
       }
-      
+
       // Actualizar la UI
       if (memberCount > 0) {
         memberCountElement.textContent = memberCount.toLocaleString();
@@ -825,20 +899,20 @@ class GroupSidebar {
       console.error('GroupSidebar: Error al actualizar conteo de miembros:', error);
     }
   }
-  
+
   // Actualizar información del grupo actual
   updateGroupInfo() {
     try {
       // Obtener nombre del grupo de la página
       let groupName = '';
-      
+
       // Intentar diferentes selectores para el nombre del grupo
       const groupNameSelectors = [
-        'h1', 
+        'h1',
         'a[href*="/groups/"][role="link"]',
         'span[dir="auto"]'
       ];
-      
+
       for (const selector of groupNameSelectors) {
         const element = document.querySelector(selector);
         if (element && element.textContent.trim()) {
@@ -846,16 +920,16 @@ class GroupSidebar {
           break;
         }
       }
-      
+
       // Actualizar nombre del grupo en la UI
       const groupNameElement = this.container.querySelector('#lmp-current-group-name');
       if (groupNameElement) {
         groupNameElement.textContent = groupName || 'Grupo no detectado';
       }
-      
+
       // Extraer ID del grupo de la URL
       const groupId = this.extractGroupIdFromUrl();
-      
+
       // Guardar información del grupo actual
       if (groupId) {
         const groupInfo = {
@@ -864,7 +938,7 @@ class GroupSidebar {
           url: window.location.href,
           lastVisited: new Date().toISOString()
         };
-        
+
         // Guardar en chrome.storage
         chrome.storage.local.set({ 'leadManagerCurrentGroup': groupInfo });
         console.log('GroupSidebar: Información del grupo guardada:', groupInfo);
@@ -873,7 +947,7 @@ class GroupSidebar {
       console.error('GroupSidebar: Error al obtener información del grupo:', error);
     }
   }
-  
+
   // Extraer ID del grupo a partir de la URL
   extractGroupIdFromUrl() {
     const url = window.location.href;

@@ -7,11 +7,11 @@
   <link rel="stylesheet" href="css/sidebar.css">
   <link rel="stylesheet" href="css/progress.css">
   <link rel="stylesheet" href="css/n8n-integration.css">
-  
+
   <!-- Cargar directamente los scripts de n8n -->
   <script src="content/modules/n8nIntegration.js"></script>
   <script src="content/modules/n8nIntegrationUI.js"></script>
-  
+
   <!-- Cargar nuevos módulos centralizados -->
   <script src="content/modules/OptionsManager.js"></script>
   <script src="content/modules/LoginComponent.js"></script>
@@ -27,7 +27,7 @@
       <h1>Snap Lead Manager</h1>
       <div class="version">v0.5.0</div>
     </header>
-    
+
     <main>
       <!-- Tabs para navegar entre secciones -->
       <div class="sidebar-tabs">
@@ -36,12 +36,12 @@
         <button class="tab-button" data-tab="n8n-tab">Integración</button>
         <button class="tab-button" data-tab="settings-tab">Configuración</button>
       </div>
-      
+
       <!-- Tab de búsqueda -->
       <div class="tab-content active" id="search-tab">
         <section class="search-section">
           <h2>Búsqueda en Facebook</h2>
-          
+
           <!-- Opciones generales -->
           <div class="form-group">
             <label for="search-type">Tipo de búsqueda</label>
@@ -58,7 +58,7 @@
             <label for="search-city">Ciudad (opcional)</label>
             <input type="text" id="search-city" placeholder="Ej: Madrid, Barcelona">
           </div>
-          
+
           <!-- Opciones avanzadas (colapsables) -->
           <div class="collapsible-section">
             <button class="collapsible-trigger">Configuración Avanzada</button>
@@ -77,7 +77,7 @@
                   <small class="input-help">Tiempo de espera entre cada desplazamiento</small>
                 </div>
               </div>
-              
+
               <!-- Opciones específicas para grupos -->
               <div id="group-options" class="settings-section" style="display: none;">
                 <h3>Opciones para Grupos</h3>
@@ -96,7 +96,7 @@
                   <input type="number" id="min-users" min="0" value="1000">
                   <small class="input-help">Número mínimo de miembros que debe tener el grupo</small>
                 </div>
-                
+
                 <div class="form-group">
                   <label>Cantidad mínima de publicaciones</label>
                   <div class="posts-filters">
@@ -120,14 +120,14 @@
               </div>
             </div>
           </div>
-          
+
           <!-- Botones de acción para búsqueda -->
           <div class="button-group">
             <button id="search-button" class="btn">Buscar</button>
             <button id="pause-button" class="btn btn-secondary">Pausar</button>
             <button id="stop-button" class="btn btn-secondary">Detener</button>
           </div>
-          
+
           <!-- Botones para gestión de criterios -->
           <div class="criteria-management">
             <button id="apply-settings" class="btn-link" style="color: #28a745; font-weight: bold;">Aplicar configuración</button>
@@ -136,18 +136,18 @@
             <button id="cancel-edit" class="btn-link cancel-edit-button" style="display: none;">Cancelar edición</button>
             <button id="manage-criteria" class="btn-link">Administrar guardados</button>
           </div>
-          
+
           <!-- Contenedor para mostrar información de búsqueda actual -->
           <div id="current-search-info" class="current-search-info" style="display: none;"></div>
         </section>
-        
+
         <section class="status-section">
           <h2>Estado</h2>
           <div id="status-message" class="status">Listo para comenzar</div>
           <div class="progress-container">
             <div id="progress-bar" class="progress-bar"></div>
           </div>
-          
+
           <!-- Nuevo contenedor detallado para el estado de la búsqueda -->
           <div id="search-status-container" class="status-container" style="display: none;">
             <div class="status-header">
@@ -162,7 +162,7 @@
               <span id="current-operation">Inactivo</span>
               <span id="elapsed-time">00:00</span>
             </div>
-            
+
             <!-- Registro de scrolls y hallazgos -->
             <div id="scroll-log-container" class="scroll-log">
               <!-- Las entradas de log se agregarán aquí dinámicamente -->
@@ -170,7 +170,7 @@
           </div>
         </section>
       </div>
-      
+
       <!-- Tab de resultados -->
       <div class="tab-content" id="results-tab">
         <section class="results-section">
@@ -179,7 +179,7 @@
           <ul id="search-results" class="results-list"></ul>
         </section>
       </div>
-      
+
       <!-- Tab de integración con n8n -->
       <div class="tab-content" id="n8n-tab">
         <section class="n8n-integration-section">
@@ -188,11 +188,11 @@
             <!-- El contenido será generado por n8nIntegrationUI -->
             <div class="loading-indicator">Cargando configuración...</div>
           </div>
-          
+
           <div class="n8n-help-section">
             <h3>¿Qué es n8n?</h3>
             <p>n8n es una herramienta de automatización de flujos de trabajo que te permite conectar diferentes servicios y automatizar tareas. Con esta integración, puedes enviar tus resultados de búsqueda a n8n para procesarlos y utilizarlos en otros servicios.</p>
-            
+
             <h3>¿Cómo configurar?</h3>
             <p>Para configurar la integración con n8n:</p>
             <ol>
@@ -201,46 +201,100 @@
               <li>Genera una API key y agrégala a la configuración</li>
               <li>Opcional: Activa el almacenamiento local de datos</li>
             </ol>
-            
+
             <p>Una vez configurada la integración, los resultados de tus búsquedas se enviarán automáticamente a n8n para su procesamiento.</p>
           </div>
         </section>
       </div>
-      
+
       <!-- Tab de configuración -->
       <div class="tab-content" id="settings-tab">
         <section class="settings-global-section">
           <h2>Configuración Global</h2>
-          
-          <!-- Aquí irían todas las opciones de configuración global -->
+
+          <!-- Configuración General -->
           <div class="form-group">
             <label for="global-max-scrolls">Scrolls máximos (global)</label>
             <input type="number" id="global-max-scrolls" min="1" value="4">
           </div>
-          
+
           <div class="form-group">
             <label for="global-scroll-delay">Tiempo entre scrolls (segundos)</label>
             <input type="number" id="global-scroll-delay" min="1" step="0.5" value="2">
           </div>
-          
+
           <div class="form-group checkbox-row">
             <label for="auto-sync-enabled">
               <input type="checkbox" id="auto-sync-enabled">
               Sincronización automática
             </label>
           </div>
-          
+        </section>
+
+        <!-- Configuración de Personas -->
+        <section class="settings-profiles-section">
+          <h2>Configuración de Búsqueda de Personas</h2>
+
           <div class="form-group">
-            <button id="save-global-config" class="btn">Guardar Configuración</button>
+            <label for="profile-max-results">Máximo de resultados por búsqueda</label>
+            <input type="number" id="profile-max-results" min="10" max="1000" value="100">
           </div>
-          
+
+          <div class="form-group">
+            <label for="profile-delay">Tiempo entre extracciones (segundos)</label>
+            <input type="number" id="profile-delay" min="1" step="0.5" value="2">
+          </div>
+
+          <div class="form-group checkbox-row">
+            <label for="profile-auto-scroll">
+              <input type="checkbox" id="profile-auto-scroll">
+              Scroll automático en búsquedas
+            </label>
+          </div>
+        </section>
+
+        <!-- Configuración de Grupos -->
+        <section class="settings-groups-section">
+          <h2>Configuración de Búsqueda de Grupos</h2>
+
+          <div class="form-group">
+            <label for="group-max-results">Máximo de resultados por búsqueda</label>
+            <input type="number" id="group-max-results" min="10" max="1000" value="100">
+          </div>
+
+          <div class="form-group">
+            <label for="group-delay">Tiempo entre extracciones (segundos)</label>
+            <input type="number" id="group-delay" min="1" step="0.5" value="2">
+          </div>
+
+          <div class="form-group checkbox-row">
+            <label for="group-public-only">
+              <input type="checkbox" id="group-public-only">
+              Solo grupos públicos
+            </label>
+          </div>
+
+          <div class="form-group checkbox-row">
+            <label for="group-auto-scroll">
+              <input type="checkbox" id="group-auto-scroll">
+              Scroll automático en búsquedas
+            </label>
+          </div>
+        </section>
+
+        <!-- Botón de guardado y estado -->
+        <section class="settings-actions-section">
+          <div class="form-group">
+            <button id="save-global-config" class="btn">Guardar Toda la Configuración</button>
+          </div>
+
           <div class="form-group">
             <div id="global-settings-status" class="status"></div>
           </div>
         </section>
       </div>
     </main>
-    
+
     <!-- Modal para guardar criterios de búsqueda -->
     <div id="save-criteria-modal" class="modal">
       <div class="modal-content">
@@ -261,7 +315,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Modal para administrar criterios guardados -->
     <div id="manage-criteria-modal" class="modal">
       <div class="modal-content">
@@ -280,7 +334,7 @@
         </div>
       </div>
     </div>
-    
+
     <footer>
       <p>Snap Lead Manager v0.5.0</p>
       <div class="footer-buttons">
@@ -288,7 +342,7 @@
       </div>
     </footer>
   </div>
-  
+
   <script src="js/auth.js"></script>
   <script src="js/sidebar.js"></script>
   <script src="js/sidebar-auth.js"></script>

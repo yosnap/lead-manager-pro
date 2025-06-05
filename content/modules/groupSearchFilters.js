@@ -14,20 +14,20 @@ class GroupSearchFilters {
         day: 1
       }
     };
-    
+
     this.filters = this.loadFilters();
   }
-  
-  // Cargar filtros desde chrome.storage
+
+  // Cargar filtros desde chrome.storage usando clave unificada
   async loadFilters() {
     try {
       const result = await new Promise(resolve => {
-        chrome.storage.local.get(['leadManagerGroupFilters'], result => resolve(result));
+        chrome.storage.local.get(['lmp_group_search_options'], result => resolve(result));
       });
-      
-      if (result && result.leadManagerGroupFilters) {
-        console.log('Filtros de búsqueda de grupos encontrados:', result.leadManagerGroupFilters);
-        return { ...this.defaultFilters, ...result.leadManagerGroupFilters };
+
+      if (result && result.lmp_group_search_options) {
+        console.log('Filtros de búsqueda de grupos encontrados:', result.lmp_group_search_options);
+        return { ...this.defaultFilters, ...result.lmp_group_search_options };
       } else {
         console.log('No se encontraron filtros guardados, usando valores por defecto');
         await this.saveFilters(this.defaultFilters);
@@ -39,16 +39,16 @@ class GroupSearchFilters {
       return { ...this.defaultFilters };
     }
   }
-  
-  // Guardar filtros en chrome.storage
+
+  // Guardar filtros en chrome.storage usando clave unificada
   async saveFilters(filters) {
     try {
       const newFilters = { ...this.filters, ...filters };
-      this.filters = newFilters;      
+      this.filters = newFilters;
       await new Promise(resolve => {
-        chrome.storage.local.set({ 'leadManagerGroupFilters': newFilters }, resolve);
+        chrome.storage.local.set({ 'lmp_group_search_options': newFilters }, resolve);
       });
-      
+
       console.log('Filtros de búsqueda de grupos guardados:', newFilters);
       return true;
     } catch (error) {
@@ -56,30 +56,30 @@ class GroupSearchFilters {
       return false;
     }
   }
-  
+
   // Obtener un filtro específico
   getFilter(key) {
     return this.filters[key];
   }
-  
+
   // Establecer un filtro específico
   async setFilter(key, value) {
     const filters = { ...this.filters };
     filters[key] = value;
     return await this.saveFilters(filters);
   }
-  
+
   // Obtener todos los filtros
   getAllFilters() {
     return { ...this.filters };
   }
-  
+
   // Restablecer filtros a los valores por defecto
   async resetFilters() {
     this.filters = { ...this.defaultFilters };
     return await this.saveFilters(this.filters);
   }
-  
+
   // Validar si un grupo cumple con los filtros
   validateGroup(groupData) {
     try {
@@ -87,84 +87,84 @@ class GroupSearchFilters {
       if (!this.validateGroupType(groupData.type)) {
         return { valid: false, reason: 'Tipo de grupo no permitido' };
       }
-      
+
       // Validar cantidad mínima de miembros
       if (!this.validateMemberCount(groupData.memberCount)) {
         return { valid: false, reason: 'No cumple con la cantidad mínima de miembros' };
       }
-      
+
       // Validar cantidad mínima de publicaciones
       if (!this.validatePostCount(groupData.postStats)) {
         return { valid: false, reason: 'No cumple con la cantidad mínima de publicaciones' };
       }
-      
+
       return { valid: true, reason: 'Grupo válido según filtros' };
     } catch (error) {
       console.error('Error al validar grupo:', error);
       return { valid: false, reason: 'Error en validación' };
     }
-  }  
+  }
   // Validar tipo de grupo
   validateGroupType(groupType) {
     if (!groupType) return false;
-    
+
     const normalizedType = groupType.toLowerCase();
-    
+
     if (normalizedType.includes('public') || normalizedType.includes('público')) {
       return this.filters.groupTypes.public;
     }
-    
+
     if (normalizedType.includes('private') || normalizedType.includes('privado')) {
       return this.filters.groupTypes.private;
     }
-    
+
     // Si no se puede determinar el tipo, aceptar por defecto
     return true;
   }
-  
+
   // Validar cantidad de miembros
   validateMemberCount(memberCount) {
     if (typeof memberCount !== 'number' || isNaN(memberCount)) {
       return false;
     }
-    
+
     return memberCount >= this.filters.minMembers;
   }
-  
+
   // Validar cantidad de publicaciones
   validatePostCount(postStats) {
     if (!postStats || typeof postStats !== 'object') {
       return false;
     }
-    
+
     // El grupo es válido si cumple CON AL MENOS UNA de las condiciones de tiempo
     const yearValid = postStats.year >= this.filters.minPosts.year;
     const monthValid = postStats.month >= this.filters.minPosts.month;
     const dayValid = postStats.day >= this.filters.minPosts.day;
-    
+
     return yearValid || monthValid || dayValid;
   }
-  
+
   // Obtener criterios de validación como texto
   getValidationCriteria() {
     const criteria = [];
-    
+
     // Tipos permitidos
     const allowedTypes = [];
     if (this.filters.groupTypes.public) allowedTypes.push('Público');
     if (this.filters.groupTypes.private) allowedTypes.push('Privado');
     criteria.push(`Tipos: ${allowedTypes.join(', ')}`);
-    
+
     // Miembros mínimos
     criteria.push(`Miembros mínimos: ${this.filters.minMembers}`);
-    
+
     // Publicaciones mínimas
     const postCriteria = [];
     if (this.filters.minPosts.year > 0) postCriteria.push(`${this.filters.minPosts.year}/año`);
     if (this.filters.minPosts.month > 0) postCriteria.push(`${this.filters.minPosts.month}/mes`);
     if (this.filters.minPosts.day > 0) postCriteria.push(`${this.filters.minPosts.day}/día`);
     criteria.push(`Publicaciones (cualquiera): ${postCriteria.join(' o ')}`);
-    
+
     return criteria;
   }
 }
