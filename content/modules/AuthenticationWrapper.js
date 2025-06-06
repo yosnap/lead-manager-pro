@@ -173,6 +173,20 @@ class AuthenticationWrapper {
   }
 
   processPendingInitializations() {
+    // Restaurar métodos originales de módulos protegidos
+    this.MODULES_REQUIRING_AUTH.forEach(moduleName => {
+      const module = window.leadManagerPro?.[moduleName] || window.LeadManagerPro?.[moduleName];
+      if (module && typeof module === 'object') {
+        const methodsToRestore = ['init', 'start', 'execute', 'run', 'search', 'interact'];
+        methodsToRestore.forEach(methodName => {
+          if (typeof module[`_original_${methodName}`] === 'function') {
+            module[methodName] = module[`_original_${methodName}`];
+            delete module[`_original_${methodName}`];
+          }
+        });
+      }
+    });
+
     console.log(`AuthenticationWrapper: Procesando ${this.pendingInitializations.length} inicializaciones pendientes`);
 
     const toProcess = [...this.pendingInitializations];

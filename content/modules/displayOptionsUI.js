@@ -78,9 +78,9 @@ class DisplayOptionsUI {
       
       // Guardar opción en localStorage para que esté disponible para otros módulos
       try {
-        localStorage.setItem('snap_lead_manager_display_options', JSON.stringify({
-          maxResultsPerScroll: maxResults
-        }));
+        // localStorage.setItem('snap_lead_manager_display_options', JSON.stringify({
+        //   maxResultsPerScroll: maxResults
+        // })); // PARA BORRAR: clave antigua
         
         // También actualizar chrome.storage si es posible
         try {

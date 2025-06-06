@@ -213,27 +213,22 @@ class LoginComponent {
     const password = document.getElementById('sidebar-password').value;
     const remember = document.getElementById('sidebar-remember').checked;
 
-    // Simular autenticación
-    setTimeout(() => {
-      if (username === 'lunai' && password === 'lunai1234') {
-        // Guardar credenciales si se solicita
-        if (remember) {
-          localStorage.setItem('leadManagerCredentials', JSON.stringify({
-            username,
-            password,
-            remember
-          }));
-        }
-
+    // Usar el módulo Auth global para autenticar
+    if (window.LeadManagerPro && window.LeadManagerPro.Auth) {
+      window.LeadManagerPro.Auth.login(username, password, remember, (success) => {
         this.setLoading(false);
-        if (this.onLoginSuccess) {
-          this.onLoginSuccess();
+        if (success) {
+          if (this.onLoginSuccess) {
+            this.onLoginSuccess();
+          }
+        } else {
+          this.showError('Credenciales incorrectas. Usa: lunai / lunai1234');
         }
-      } else {
-        this.setLoading(false);
-        this.showError('Credenciales incorrectas. Usa: lunai / lunai1234');
-      }
-    }, 1000);
+      });
+    } else {
+      this.setLoading(false);
+      this.showError('Módulo de autenticación no disponible.');
+    }
   }
 
   setLoading(isLoading) {

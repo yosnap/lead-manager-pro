@@ -11,13 +11,13 @@ class InteractionHistory {
   }
   
   // Cargar historial desde chrome.storage
-  loadHistory() {
+  async loadHistory() {
     try {
       return new Promise((resolve) => {
-        chrome.storage.local.get(['leadManagerInteractionHistory'], (result) => {
-          if (result && result.leadManagerInteractionHistory) {
-            console.log('Historial de interacciones cargado desde storage:', result.leadManagerInteractionHistory);
-            resolve({ ...this.defaultHistory, ...result.leadManagerInteractionHistory });
+        chrome.storage.sync.get(['interactionSettings'], (data) => {
+          if (data && data.interactionSettings && data.interactionSettings.history) {
+            console.log('Historial de interacciones cargado desde storage:', data.interactionSettings.history);
+            resolve({ ...this.defaultHistory, ...data.interactionSettings.history });
           } else {
             console.log('No se encontró historial de interacciones, usando valores por defecto');
             // Guardar historial por defecto
@@ -38,8 +38,7 @@ class InteractionHistory {
       return new Promise((resolve) => {
         const newHistory = { ...this.history, ...history };
         this.history = newHistory;
-        
-        chrome.storage.local.set({ 'leadManagerInteractionHistory': newHistory }, () => {
+        chrome.storage.sync.set({ interactionSettings: { history: newHistory } }, () => {
           console.log('Historial de interacciones guardado en chrome.storage:', newHistory);
           resolve(true);
         });

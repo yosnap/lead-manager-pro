@@ -33,23 +33,24 @@
           minPostsYear: document.getElementById('min-posts-year'),
           minPostsMonth: document.getElementById('min-posts-month'),
           minPostsDay: document.getElementById('min-posts-day'),
+          onlyPublicGroups: document.getElementById('only-public-groups'),
           globalSettingsStatus: document.getElementById('global-settings-status')
         };
       }
 
       async loadCurrentOptions() {
         try {
-          // Cargar opciones generales
-          const generalOptions = await this.optionsManager.getOptions('general');
-          if (generalOptions) {
-            if (this.elements.maxScrolls) this.elements.maxScrolls.value = generalOptions.maxScrolls || 50;
-            if (this.elements.scrollDelay) this.elements.scrollDelay.value = generalOptions.scrollDelay || 2;
-            if (this.elements.globalMaxScrolls) this.elements.globalMaxScrolls.value = generalOptions.maxScrolls || 50;
-            if (this.elements.globalScrollDelay) this.elements.globalScrollDelay.value = generalOptions.scrollDelay || 2;
+          // Cargar opciones de personas
+          const peopleOptions = await this.optionsManager.getOptions('peopleSearchSettings');
+          if (peopleOptions) {
+            if (this.elements.maxScrolls) this.elements.maxScrolls.value = peopleOptions.maxScrolls || 50;
+            if (this.elements.scrollDelay) this.elements.scrollDelay.value = peopleOptions.scrollDelay || 2;
+            if (this.elements.globalMaxScrolls) this.elements.globalMaxScrolls.value = peopleOptions.maxScrolls || 50;
+            if (this.elements.globalScrollDelay) this.elements.globalScrollDelay.value = peopleOptions.scrollDelay || 2;
           }
 
           // Cargar opciones de búsqueda de grupos
-          const groupOptions = await this.optionsManager.getOptions('groupSearch');
+          const groupOptions = await this.optionsManager.getOptions('groupSearchSettings');
           if (groupOptions) {
             if (this.elements.publicGroups) this.elements.publicGroups.checked = groupOptions.types?.public !== false;
             if (this.elements.privateGroups) this.elements.privateGroups.checked = groupOptions.types?.private !== false;
@@ -57,6 +58,7 @@
             if (this.elements.minPostsYear) this.elements.minPostsYear.value = groupOptions.minPosts?.year || 0;
             if (this.elements.minPostsMonth) this.elements.minPostsMonth.value = groupOptions.minPosts?.month || 0;
             if (this.elements.minPostsDay) this.elements.minPostsDay.value = groupOptions.minPosts?.day || 0;
+            if (this.elements.onlyPublicGroups) this.elements.onlyPublicGroups.checked = !!groupOptions.onlyPublicGroups;
           }
         } catch (error) {
           console.error('SidebarOptionsController: Error al cargar opciones:', error);
@@ -106,15 +108,16 @@
             scrollDelay: parseFloat(this.elements.scrollDelay?.value) || 2
           };
 
-          await this.optionsManager.setOptions('general', options);
+          await this.optionsManager.setOptions('peopleSearchSettings', options);
+          await this.loadCurrentOptions();
 
           // También actualizar los campos globales si existen
           if (this.elements.globalMaxScrolls) this.elements.globalMaxScrolls.value = options.maxScrolls;
           if (this.elements.globalScrollDelay) this.elements.globalScrollDelay.value = options.scrollDelay;
 
-          console.log('SidebarOptionsController: Opciones generales guardadas:', options);
+          console.log('SidebarOptionsController: Opciones de personas guardadas:', options);
         } catch (error) {
-          console.error('SidebarOptionsController: Error al guardar opciones generales:', error);
+          console.error('SidebarOptionsController: Error al guardar opciones de personas:', error);
         }
       }
 
@@ -132,10 +135,12 @@
               year: parseInt(this.elements.minPostsYear?.value) || 0,
               month: parseInt(this.elements.minPostsMonth?.value) || 0,
               day: parseInt(this.elements.minPostsDay?.value) || 0
-            }
+            },
+            onlyPublicGroups: this.elements.onlyPublicGroups?.checked === true
           };
 
-          await this.optionsManager.setOptions('groupSearch', options);
+          await this.optionsManager.setOptions('groupSearchSettings', options);
+          await this.loadCurrentOptions();
           console.log('SidebarOptionsController: Opciones de búsqueda de grupos guardadas:', options);
         } catch (error) {
           console.error('SidebarOptionsController: Error al guardar opciones de grupos:', error);
@@ -144,19 +149,19 @@
 
       async saveGlobalConfig() {
         try {
-          const generalOptions = {
+          const peopleOptions = {
             maxScrolls: parseInt(this.elements.globalMaxScrolls?.value) || 50,
             scrollDelay: parseFloat(this.elements.globalScrollDelay?.value) || 2
           };
 
-          await this.optionsManager.setOptions('general', generalOptions);
+          await this.optionsManager.setOptions('peopleSearchSettings', peopleOptions);
 
           // Actualizar también los campos locales
-          if (this.elements.maxScrolls) this.elements.maxScrolls.value = generalOptions.maxScrolls;
-          if (this.elements.scrollDelay) this.elements.scrollDelay.value = generalOptions.scrollDelay;
+          if (this.elements.maxScrolls) this.elements.maxScrolls.value = peopleOptions.maxScrolls;
+          if (this.elements.scrollDelay) this.elements.scrollDelay.value = peopleOptions.scrollDelay;
 
           this.showStatus('Configuración guardada correctamente', 'success');
-          console.log('SidebarOptionsController: Configuración global guardada:', generalOptions);
+          console.log('SidebarOptionsController: Configuración global guardada:', peopleOptions);
         } catch (error) {
           this.showStatus('Error al guardar la configuración', 'error');
           console.error('SidebarOptionsController: Error al guardar configuración global:', error);
@@ -178,11 +183,11 @@
 
       // Métodos públicos para obtener valores actuales
       getCurrentGeneralOptions() {
-        return this.optionsManager.getOptions('general');
+        return this.optionsManager.getOptions('peopleSearchSettings');
       }
 
       getCurrentGroupOptions() {
-        return this.optionsManager.getOptions('groupSearch');
+        return this.optionsManager.getOptions('groupSearchSettings');
       }
 
       getGroupFilters() {

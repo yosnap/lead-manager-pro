@@ -33,7 +33,7 @@ window.LeadManagerPro.modules.navigateToSearchPage = async function(searchState)
     localStorage.setItem('snap_lead_manager_force_reload', 'true');
     localStorage.setItem('snap_lead_manager_search_url', searchUrl);
     localStorage.setItem('snap_lead_manager_search_type', searchType);
-    localStorage.setItem('snap_lead_manager_search_term', searchTerm);
+    // localStorage.setItem('snap_lead_manager_search_term', searchTerm); // PARA BORRAR: clave antigua
     
     // Debug
     console.log(`Lead Manager Pro: Navegando a ${searchUrl}`);
@@ -42,14 +42,12 @@ window.LeadManagerPro.modules.navigateToSearchPage = async function(searchState)
     const sidebarContainer = document.getElementById('snap-lead-manager-searcher');
     if (sidebarContainer) {
       sidebarContainer.style.transform = 'translateX(100%)';
-      const toggleButton = document.getElementById('snap-lead-manager-toggle');
-      if (toggleButton) toggleButton.innerHTML = '▶';
     }
     
     // Usar un enfoque más seguro para la navegación
     try {
       // Intentar primero con window.location
-      window.location.href = searchUrl;
+      // window.location.href = searchUrl; // PARA BORRAR: navegación automática
     } catch (navError) {
       console.warn('Error al navegar con location.href, intentando método alternativo:', navError);
       

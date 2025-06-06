@@ -129,17 +129,21 @@ const Auth = {
         authenticated: true
       });
 
-      // Notificar a content scripts
-      chrome.tabs.query({}, function(tabs) {
-        tabs.forEach(tab => {
-          chrome.tabs.sendMessage(tab.id, {
-            action: 'auth_state_changed',
-            authenticated: true
-          }).catch(error => {
-            // Ignorar errores de tabs que no tienen content script
+      // Notificar a content scripts SOLO si chrome.tabs está disponible
+      if (chrome.tabs && chrome.tabs.query) {
+        chrome.tabs.query({}, function(tabs) {
+          tabs.forEach(tab => {
+            try {
+              chrome.tabs.sendMessage(tab.id, {
+                action: 'auth_state_changed',
+                authenticated: true
+              });
+            } catch (error) {
+              // Ignorar errores de tabs que no tienen content script
+            }
           });
         });
-      });
+      }
 
       console.log('Auth: Notificación de cambio de autenticación enviada');
     } catch (error) {
@@ -231,7 +235,7 @@ const Auth = {
   }
 };
 
-// Exportar el objeto Auth
+// Exponer el objeto Auth de forma global para el wrapper de autenticación
 window.LeadManagerPro = window.LeadManagerPro || {};
 window.LeadManagerPro.Auth = Auth;
 

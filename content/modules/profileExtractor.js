@@ -456,7 +456,7 @@ window.LeadManagerPro.modules.openAndExtractProfileDetails = async function(prof
       localStorage.setItem('snap_lead_manager_profile_url', profileUrl);
       
       // Navegar a la URL del perfil
-      window.location.href = profileUrl;
+      // window.location.href = profileUrl; // PARA BORRAR: navegación automática
       return { success: true, message: 'Redirigiendo a la página del perfil', redirect: true };
     }
     
@@ -635,7 +635,7 @@ window.LeadManagerPro.modules.extractOpenProfileDetails = async function() {
         localStorage.removeItem('snap_lead_manager_is_extracting_profile');
         localStorage.removeItem('snap_lead_manager_profile_url');
         localStorage.removeItem('snap_lead_manager_return_url');
-        window.location.href = returnUrl;
+        // window.location.href = returnUrl; // PARA BORRAR: navegación automática
       }, 2000);
     }
     

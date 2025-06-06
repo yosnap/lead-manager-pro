@@ -223,6 +223,7 @@ window.LeadManagerPro.modules.findProfiles = async function() {
     updateStatus(`Búsqueda completada. Se encontraron ${searchState.foundProfiles.length} ${resultType} en ${duration} segundos.`, 100);
     
     // Enviar resultados encontrados al background y al sidebar
+    // chrome.storage.local.get([ ... ]); // PARA BORRAR: clave antigua
     chrome.runtime.sendMessage({
       action: 'found_results',
       searchType: searchState.searchType,

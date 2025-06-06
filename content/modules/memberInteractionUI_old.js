@@ -1885,7 +1885,7 @@ class MemberInteractionUI {
     const wasVisible = this.isVisible;
     
     // Navegar a la sección de miembros
-    // window.location.href = newURL; // PARA BORRAR: navegación automática
+    window.location.href = newURL;
     
     // La página se recargará, y el init() restaurará la visibilidad
     return true;

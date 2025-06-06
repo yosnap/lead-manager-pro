@@ -54,43 +54,31 @@ class GroupFinder {
     
     // Leer configuración desde chrome.storage.local
     return new Promise((resolve) => {
-      chrome.storage.local.get([
-        'maxScrolls',
-        'scrollDelay',
-        'groupPublic',
-        'groupPrivate',
-        'minUsers',
-        'minPostsYear',
-        'minPostsMonth',
-        'minPostsDay'
-      ], (result) => {
-        console.log('GroupFinder: Leyendo opciones desde chrome.storage.local:', result);
-        
-        // Establecer valores de scroll
-        this.maxScrolls = result.maxScrolls ? Number(result.maxScrolls) : 4;
-        this.scrollTimeout = result.scrollDelay ? Number(result.scrollDelay) * 1000 : 2000;
-        
-        // Opciones de grupos
-        this.options = {
-          ...this.options,
-          publicGroups: result.groupPublic !== undefined ? result.groupPublic : true,
-          privateGroups: result.groupPrivate !== undefined ? result.groupPrivate : true,
-          minUsers: result.minUsers ? parseInt(result.minUsers) : 0,
-          minPostsYear: result.minPostsYear || '',
-          minPostsMonth: result.minPostsMonth || '',
-          minPostsDay: result.minPostsDay || ''
-        };
-        
-        console.log('GroupFinder: Configuración final:', {
-          scroll: {
-            maxScrolls: this.maxScrolls,
-            scrollTimeout: this.scrollTimeout
-          },
-          grupos: this.options
-        });
-        
-        resolve(this);
+      // chrome.storage.local.get([ ... ]); // PARA BORRAR: clave antigua
+      console.log('GroupFinder: Leyendo opciones desde chrome.storage.local:', result);
+      
+      // Establecer valores de scroll
+      this.maxScrolls = result.maxScrolls ? Number(result.maxScrolls) : 4;
+      this.scrollTimeout = result.scrollDelay ? Number(result.scrollDelay) * 1000 : 2000;
+      
+      // Opciones de grupos
+      this.options = {
+        ...this.options,
+        minUsers: result.minUsers ? parseInt(result.minUsers) : 0,
+        minPostsYear: result.minPostsYear || '',
+        minPostsMonth: result.minPostsMonth || '',
+        minPostsDay: result.minPostsDay || ''
+      };
+      
+      console.log('GroupFinder: Configuración final:', {
+        scroll: {
+          maxScrolls: this.maxScrolls,
+          scrollTimeout: this.scrollTimeout
+        },
+        grupos: this.options
       });
+      
+      resolve(this);
     });
   }
 
@@ -101,15 +89,27 @@ class GroupFinder {
       console.log('GroupFinder: Búsqueda bloqueada - autenticación requerida');
       return Promise.reject(new Error('Autenticación requerida'));
     }
-    
     try {
       console.log('GroupFinder: Iniciando búsqueda');
-      
+
+      // --- Sincronizar el switch de "Grupos públicos" en el DOM de Facebook ---
+      function sincronizarSwitchGruposPublicos(onlyPublic) {
+        const switchInput = document.querySelector('input[aria-label="Grupos públicos"][role="switch"]');
+        if (switchInput) {
+          if (onlyPublic && !switchInput.checked) {
+            switchInput.click();
+          } else if (!onlyPublic && switchInput.checked) {
+            switchInput.click();
+          }
+        }
+      }
+      sincronizarSwitchGruposPublicos(this.options.onlyPublicGroups === true);
+      // --- Fin sincronización switch ---
+
       // Resetear estado
       this.scrollCount = 0;
       this.noChangeCount = 0;
       this.groups = [];
-      
       // Actualizar estado global
       window.LeadManagerPro.state.updateSearchState({
         isSearching: true,
@@ -119,13 +119,10 @@ class GroupFinder {
         foundGroups: [],
         errors: []
       });
-
       // Configurar observer
       this.setupObserver();
-
       // Iniciar scroll
       this.scrollAndCollect();
-
     } catch (error) {
       console.error('GroupFinder: Error al iniciar búsqueda:', error);
       window.LeadManagerPro.state.updateSearchState({
@@ -172,6 +169,26 @@ class GroupFinder {
         console.log('GroupFinder: Búsqueda detenida');
         return this.finishSearch();
       }
+      // --- Control de pausa y detener ---
+      if (window.LeadManagerPro.state.searchState.stopSearch) {
+        console.log('GroupFinder: Búsqueda detenida por el usuario');
+        return this.finishSearch();
+      }
+      if (window.LeadManagerPro.state.searchState.pauseSearch) {
+        console.log('GroupFinder: Búsqueda pausada por el usuario');
+        await new Promise(resolve => {
+          const interval = setInterval(() => {
+            if (!window.LeadManagerPro.state.searchState.pauseSearch || window.LeadManagerPro.state.searchState.stopSearch) {
+              clearInterval(interval);
+              resolve();
+            }
+          }, 500);
+        });
+        if (window.LeadManagerPro.state.searchState.stopSearch) {
+          return this.finishSearch();
+        }
+      }
+      // --- Fin control pausa/detener ---
 
       // Actualizar progreso
       const progress = Math.min(
@@ -290,10 +307,6 @@ class GroupFinder {
 
   // Determinar si un grupo debe ser incluido según los filtros
   shouldIncludeGroup(groupInfo) {
-    // Verificar tipo de grupo
-    if (!this.options.publicGroups && groupInfo.type === 'public') return false;
-    if (!this.options.privateGroups && groupInfo.type === 'private') return false;
-
     // Verificar cantidad mínima de usuarios
     const minUsers = parseInt(this.options.minUsers, 10);
     if (!isNaN(minUsers) && minUsers > 0) {

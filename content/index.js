@@ -13,24 +13,31 @@ window.LeadManagerPro.utils = window.LeadManagerPro.utils || {};
 window.LeadManagerPro.modules = window.LeadManagerPro.modules || {};
 
 // Cargar módulos de autenticación críticos primero
-function loadAuthenticationModules() {
+function loadAuthenticationModules(callback) {
   const authModules = [
     'content/modules/AuthenticationWrapper.js',
     'content/modules/AuthMassApplier.js'
   ];
-  
+  let loaded = 0;
   authModules.forEach(modulePath => {
     const script = document.createElement('script');
     script.src = chrome.runtime.getURL(modulePath);
     script.async = false; // Cargar en orden
+    script.onload = () => {
+      loaded++;
+      if (loaded === authModules.length && typeof callback === 'function') {
+        callback();
+      }
+    };
     document.head.appendChild(script);
   });
-  
   console.log('Lead Manager Pro: Módulos de autenticación cargados');
 }
 
-// Cargar módulos de autenticación inmediatamente
-loadAuthenticationModules();
+// Cargar módulos de autenticación y luego inicializar el script de contenido
+loadAuthenticationModules(() => {
+  initContentScript();
+});
 
 // Inicialización del script de contenido
 async function initContentScript() {
@@ -528,18 +535,6 @@ function setupChromeMessagesListener() {
             
             console.log('CRITICAL: Opciones finales para la búsqueda:', options);
             
-            // Guardar también en localStorage para que GroupFinder las lea correctamente
-            try {
-              localStorage.setItem('snap_lead_manager_general_options', JSON.stringify({
-                maxScrolls: options.maxScrolls,
-                scrollDelay: options.scrollDelay
-              }));
-              
-              console.log('Opciones guardadas en localStorage:', options.maxScrolls, options.scrollDelay);
-            } catch (e) {
-              console.error('Error al guardar opciones en localStorage:', e);
-            }
-            
             // Mostrar la interfaz de búsqueda
             uiModule.show({
               title: 'Búsqueda de Grupos de Facebook'
@@ -628,7 +623,7 @@ function setupChromeMessagesListener() {
         
         // Guardar resultados en localStorage para futuro uso
         try {
-          localStorage.setItem('foundGroups', JSON.stringify(groups));
+          // localStorage.setItem('foundGroups', JSON.stringify(groups)); // PARA BORRAR: clave antigua
           console.log('Grupos guardados en localStorage:', groups.length);
         } catch (e) {
           console.error('Error al guardar grupos en localStorage:', e);

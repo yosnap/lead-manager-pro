@@ -830,8 +830,7 @@ window.addEventListener('DOMContentLoaded', () => {
             const groupIdMatch = window.location.href.match(/\/groups\/([^\/]+)/);
             if (groupIdMatch && groupIdMatch[1]) {
               const groupId = groupIdMatch[1];
-              window.location.href = `https://www.facebook.com/groups/${groupId}/members`;
-              return true;
+              // window.location.href = `https://www.facebook.com/groups/${groupId}/members`; // PARA BORRAR: navegación automática
             } else {
               throw new Error('No se pudo determinar el ID del grupo desde la URL');
             }

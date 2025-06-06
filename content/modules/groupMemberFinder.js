@@ -74,10 +74,10 @@ class GroupMemberFinder {
         this.scrollTimeout = 2000;
         
         // Guardar en localStorage para futuros usos
-        localStorage.setItem('snap_lead_manager_general_options', JSON.stringify({
-          maxScrolls: this.maxScrolls,
-          scrollDelay: this.scrollTimeout / 1000
-        }));
+        // localStorage.setItem('snap_lead_manager_general_options', JSON.stringify({
+        //   maxScrolls: this.maxScrolls,
+        //   scrollDelay: this.scrollTimeout / 1000
+        // })); // PARA BORRAR: clave antigua
         
         console.log('→ Default options saved to localStorage:', {
           maxScrolls: this.maxScrolls,
@@ -834,23 +834,17 @@ class GroupMemberFinder {
     
     // Guardar resultados en localStorage
     try {
-      // Guardar los miembros encontrados
-      localStorage.setItem('foundGroupMembers', JSON.stringify(this.members));
-      
-      // Guardar estadísticas de la extracción
-      const extractionStats = {
-        timestamp: new Date().toISOString(),
-        totalMembers: this.members.length,
-        groupInfo: {
-          id: this.extractGroupIdFromUrl(),
-          name: this.extractGroupNameFromPage(),
-          url: window.location.href
-        },
-        scrollCount: this.scrollCount
-      };
-      
       // Guardar las estadísticas más recientes
-      localStorage.setItem('snap_lead_manager_last_extraction_stats', JSON.stringify(extractionStats));
+      // localStorage.setItem('snap_lead_manager_last_extraction_stats', JSON.stringify({
+      //   timestamp: new Date().toISOString(),
+      //   totalMembers: this.members.length,
+      //   groupInfo: {
+      //     id: this.extractGroupIdFromUrl(),
+      //     name: this.extractGroupNameFromPage(),
+      //     url: window.location.href
+      //   },
+      //   scrollCount: this.scrollCount
+      // })); // PARA BORRAR: clave antigua
       
     } catch (e) {
       console.error('GroupMemberFinder: Error al guardar miembros en localStorage:', e);

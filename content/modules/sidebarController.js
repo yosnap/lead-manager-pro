@@ -35,18 +35,6 @@ window.LeadManagerPro.controllers.showSidebar = function() {
     sidebarContainer.style.display = 'block';
     sidebarContainer.classList.add('visible');
     
-    // Ajustar el botón de toggle
-    const toggleButton = document.getElementById('snap-lead-manager-toggle');
-    if (toggleButton) {
-      toggleButton.classList.remove('sidebar-closed');
-      toggleButton.classList.add('sidebar-open');
-      toggleButton.innerHTML = '<span aria-hidden="true">◀</span>';
-      toggleButton.style.right = '320px';
-      toggleButton.setAttribute('title', 'Ocultar Lead Manager');
-      toggleButton.style.background = 'linear-gradient(135deg, #4267B2 0%, #365899 100%)';
-      toggleButton.style.display = 'flex';
-    }
-    
     // Ajustar el contenido de la página
     document.body.classList.add('snap-lead-manager-body-shift');
     

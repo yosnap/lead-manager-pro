@@ -111,59 +111,6 @@ function resetExtension() {
       }
     });
     
-    // Crear botón de toggle nuevo
-    const toggleButton = document.createElement('div');
-    toggleButton.id = 'snap-lead-manager-toggle';
-    toggleButton.innerHTML = '<span aria-hidden="true">▶</span>';
-    toggleButton.style.cssText = `
-      position: fixed;
-      right: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      background: #4267B2;
-      color: white;
-      width: 30px;
-      height: 50px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      border-radius: 5px 0 0 5px;
-      font-size: 18px;
-      font-weight: bold;
-      box-shadow: -2px 0 5px rgba(0,0,0,0.2);
-      z-index: 9999;
-      transition: all 0.3s ease;
-    `;
-    
-    // Agregar manejador de clic para reiniciar la extensión
-    toggleButton.addEventListener('click', function() {
-      // Mostrar mensaje de que estamos recargando
-      const messageDiv = document.createElement('div');
-      messageDiv.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0,0,0,0.8);
-        color: white;
-        padding: 20px;
-        border-radius: 8px;
-        z-index: 99999;
-        font-family: Arial, sans-serif;
-      `;
-      messageDiv.textContent = 'Recargando Lead Manager Pro...';
-      document.body.appendChild(messageDiv);
-      
-      // Recargar la página después de un breve retraso
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    });
-    
-    // Agregar al DOM
-    document.body.appendChild(toggleButton);
-    
     // Mostrar mensaje de éxito
     alert('Lead Manager Pro restablecido. Haz clic en el botón azul para recargar la página.');
     

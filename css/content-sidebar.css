@@ -49,19 +49,6 @@
   right: -290px;
 }
 
-/* El toggle ahora tiene estilos inline optimizados, esta regla es para compatibilidad */
-#snap-lead-manager-toggle {
-  /* Los estilos principales están definidos inline en el JavaScript para mejor control */
-}
-
-#snap-lead-manager-toggle:hover {
-  /* Los efectos hover están manejados por JavaScript */
-}
-
-#snap-lead-manager-toggle:focus {
-  /* Los efectos focus están manejados por JavaScript */
-}
-
 /* Ajustes para que el sidebar sea más visible */
 #snap-lead-manager-iframe {
   background-color: white;

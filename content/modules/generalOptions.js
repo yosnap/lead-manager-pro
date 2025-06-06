@@ -8,60 +8,31 @@ class GeneralOptions {
       maxScrollsToShowResults: 50, // Máximo de scrolls para mostrar resultados (por defecto 50)
       waitTimeBetweenScrolls: 2, // Tiempo de espera entre scrolls (por defecto 2 segundos)
     };
-    
-    this.options = this.loadOptions();
+    this.options = { ...this.defaultOptions };
+    this.loadOptions();
   }
   
-  // Cargar opciones desde localStorage
+  // Cargar opciones desde chrome.storage.sync
   loadOptions() {
-    try {
-      const savedOptions = localStorage.getItem('snap_lead_manager_general_options');
-      if (savedOptions) {
-        const parsedOptions = JSON.parse(savedOptions);
-        console.log('Opciones encontradas en localStorage:', parsedOptions);
-        return { ...this.defaultOptions, ...parsedOptions };
+    chrome.storage.sync.get(['peopleSearchSettings'], (result) => {
+      if (result && result.peopleSearchSettings) {
+        this.options = { ...this.defaultOptions, ...result.peopleSearchSettings };
+        console.log('Opciones generales cargadas de chrome.storage.sync:', this.options);
       } else {
-        console.log('No se encontraron opciones en localStorage, guardando opciones por defecto');
-        // Si no hay opciones guardadas, guardar las opciones por defecto
         this.saveOptions(this.defaultOptions);
+        console.log('No se encontraron opciones en chrome.storage.sync, guardando opciones por defecto');
       }
-    } catch (error) {
-      console.error('Error al cargar las opciones generales:', error);
-      console.log('Guardando opciones por defecto debido al error');
-      // En caso de error, guardar las opciones por defecto
-      this.saveOptions(this.defaultOptions);
-    }
-    
-    // Devolver las opciones por defecto
-    return { ...this.defaultOptions };
+    });
   }
   
-  // Guardar opciones en localStorage
+  // Guardar opciones en chrome.storage.sync
   saveOptions(options) {
-    try {
-      const newOptions = { ...this.options, ...options };
-      this.options = newOptions;
-      localStorage.setItem('snap_lead_manager_general_options', JSON.stringify(newOptions));
-      
-      // También guardar en chrome.storage para persistencia
-      try {
-        chrome.storage.local.set({
-          'maxScrolls': newOptions.maxScrolls,
-          'scrollDelay': newOptions.scrollDelay,
-          'maxScrollsToShowResults': newOptions.maxScrollsToShowResults,
-          'waitTimeBetweenScrolls': newOptions.waitTimeBetweenScrolls
-        }, function() {
-          console.log('Opciones generales guardadas en chrome.storage.local');
-        });
-      } catch (storageError) {
-        console.error('Error al guardar opciones generales en chrome.storage:', storageError);
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('Error al guardar las opciones generales:', error);
-      return false;
-    }
+    const newOptions = { ...this.options, ...options };
+    this.options = newOptions;
+    chrome.storage.sync.set({ peopleSearchSettings: newOptions }, () => {
+      console.log('Opciones generales guardadas en chrome.storage.sync:', newOptions);
+    });
+    return true;
   }
   
   // Obtener una opción específica

@@ -18,32 +18,6 @@
   right: 0;
 }
 
-/* Estilos para el botón de toggle - Se mueve con el sidebar */
-#snap-lead-manager-toggle {
-  /* Los estilos principales están definidos inline en JavaScript para mejor control dinámico */
-  /* Este CSS es para compatibilidad y fallback */
-  position: fixed !important;
-  z-index: 10001 !important;
-  border: none !important;
-  cursor: pointer !important;
-  transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-/* Toggle pegado al sidebar cuando está cerrado */
-#snap-lead-manager-toggle.sidebar-closed {
-  right: 10px !important;
-}
-
-/* Toggle pegado al sidebar cuando está abierto */
-#snap-lead-manager-toggle.sidebar-open {
-  right: 320px !important;
-}
-
-#snap-lead-manager-toggle:focus-visible {
-  outline: 2px solid #fff !important;
-  outline-offset: 2px !important;
-}
-
 /* Estilos para el iframe */
 #snap-lead-manager-iframe {
   width: 100%;

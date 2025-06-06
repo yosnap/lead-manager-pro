@@ -8,77 +8,29 @@ window.LeadManagerPro.state = window.LeadManagerPro.state || {};
 
 // Estado de opciones globales
 window.LeadManagerPro.state.options = {
-  // Opciones generales
-  maxScrolls: 4,  // Valor por defecto: 4 scrolls
-  scrollDelay: 2,  // Valor por defecto: 2 segundos
-
+  // Opciones generales (personas)
+  maxScrolls: 50,
+  scrollDelay: 2,
   // Opciones de búsqueda de grupos
-  groupPublic: true,
-  groupPrivate: true,
-  minUsers: 0,    // Cantidad mínima de usuarios
-  minPostsYear: 0, // Mínimo de publicaciones por año
-  minPostsMonth: 0, // Mínimo de publicaciones por mes
-  minPostsDay: 0,   // Mínimo de publicaciones por día
-
-  // Sincronización
-  lastSyncTime: null,
-  pendingSyncData: false,
-
-  // Otras opciones que se puedan agregar en el futuro
+  types: { public: true, private: true },
+  minUsers: 0,
+  minPosts: { year: 0, month: 0, day: 0 },
 };
 
-// Cargar opciones guardadas
-chrome.storage.local.get([
-  'maxScrolls',
-  'scrollDelay',
-  'groupPublic',
-  'groupPrivate',
-  'minUsers',
-  'minPostsYear',
-  'minPostsMonth',
-  'minPostsDay',
-  'lastSyncTime',
-  'pendingSyncData'
-], function(result) {
-  Object.keys(result).forEach(key => {
-    if (result[key] !== undefined) {
-      window.LeadManagerPro.state.options[key] = result[key];
-    }
-  });
-
-  // También intentamos cargar desde localStorage para compatibilidad con las opciones recientes
-  try {
-    const localStorageOptions = localStorage.getItem('snap_lead_manager_general_options');
-    if (localStorageOptions) {
-      const parsedOptions = JSON.parse(localStorageOptions);
-      // Actualizar solo si existen
-      if (parsedOptions.maxScrolls) window.LeadManagerPro.state.options.maxScrolls = parsedOptions.maxScrolls;
-      if (parsedOptions.scrollDelay) window.LeadManagerPro.state.options.scrollDelay = parsedOptions.scrollDelay;
-    }
-
-    // Cargar opciones de grupo si existen
-    const groupOptions = localStorage.getItem('lmp_group_search_options');
-    if (groupOptions) {
-      const parsedGroupOptions = JSON.parse(groupOptions);
-
-      // Actualizar opciones de grupo
-      if (parsedGroupOptions.publicGroups !== undefined)
-        window.LeadManagerPro.state.options.groupPublic = parsedGroupOptions.publicGroups;
-      if (parsedGroupOptions.privateGroups !== undefined)
-        window.LeadManagerPro.state.options.groupPrivate = parsedGroupOptions.privateGroups;
-      if (parsedGroupOptions.minUsers !== undefined)
-        window.LeadManagerPro.state.options.minUsers = parsedGroupOptions.minUsers;
-      if (parsedGroupOptions.minPostsYear !== undefined)
-        window.LeadManagerPro.state.options.minPostsYear = parsedGroupOptions.minPostsYear;
-      if (parsedGroupOptions.minPostsMonth !== undefined)
-        window.LeadManagerPro.state.options.minPostsMonth = parsedGroupOptions.minPostsMonth;
-      if (parsedGroupOptions.minPostsDay !== undefined)
-        window.LeadManagerPro.state.options.minPostsDay = parsedGroupOptions.minPostsDay;
-    }
-  } catch (e) {
-    console.error('Error al cargar opciones desde localStorage:', e);
+// Cargar opciones guardadas desde chrome.storage.sync
+chrome.storage.sync.get(['groupSearchSettings', 'peopleSearchSettings'], function(result) {
+  if (result.peopleSearchSettings) {
+    window.LeadManagerPro.state.options.maxScrolls = result.peopleSearchSettings.maxScrolls || 50;
+    window.LeadManagerPro.state.options.scrollDelay = result.peopleSearchSettings.scrollDelay || 2;
   }
-
+  if (result.groupSearchSettings) {
+    window.LeadManagerPro.state.options.types = result.groupSearchSettings.types || { public: true, private: true };
+    window.LeadManagerPro.state.options.minUsers = result.groupSearchSettings.minUsers || 0;
+    window.LeadManagerPro.state.options.minPosts = result.groupSearchSettings.minPosts || { year: 0, month: 0, day: 0 };
+    // Si hay scrolls/delay específicos para grupos
+    if (result.groupSearchSettings.maxScrolls) window.LeadManagerPro.state.options.maxScrolls = result.groupSearchSettings.maxScrolls;
+    if (result.groupSearchSettings.scrollDelay) window.LeadManagerPro.state.options.scrollDelay = result.groupSearchSettings.scrollDelay;
+  }
   console.log('Opciones cargadas:', window.LeadManagerPro.state.options);
 });
 
@@ -132,10 +84,10 @@ window.LeadManagerPro.state.resetSearchState = function() {
   // Notificar reinicio
   this.updateSearchState(this.searchState);
 
-  // Limpiar localStorage
-  localStorage.removeItem('searchState');
-  localStorage.removeItem('lastSearchResults');
-  localStorage.removeItem('lastSearchTime');
+  // Limpiar localStorage solo para estado de búsqueda
+  // localStorage.removeItem('searchState'); // PARA BORRAR: clave antigua
+  // localStorage.removeItem('lastSearchResults'); // PARA BORRAR: clave antigua
+  // localStorage.removeItem('lastSearchTime'); // PARA BORRAR: clave antigua
 };
 
 /**
@@ -178,12 +130,12 @@ window.LeadManagerPro.state.updateSearchState = function(newState) {
     payload: this.searchState
   });
 
-  // Guardar estado en localStorage para persistencia
-  try {
-    localStorage.setItem('searchState', JSON.stringify(this.searchState));
-  } catch (error) {
-    console.error('Error al guardar estado en localStorage:', error);
-  }
+  // Guardar estado en localStorage para persistencia temporal
+  // try {
+  //   localStorage.setItem('searchState', JSON.stringify(this.searchState));
+  // } catch (error) {
+  //   console.error('Error al guardar estado en localStorage:', error);
+  // }
 };
 
 // Función para notificar resultados
@@ -208,12 +160,12 @@ window.LeadManagerPro.state.notifyResults = function(results, message = '') {
   this.updateSearchState(payload);
 
   // Guardar resultados en localStorage
-  try {
-    localStorage.setItem('lastSearchResults', JSON.stringify(results));
-    localStorage.setItem('lastSearchTime', new Date().toISOString());
-  } catch (error) {
-    console.error('Error al guardar resultados en localStorage:', error);
-  }
+  // try {
+  //   localStorage.setItem('lastSearchResults', JSON.stringify(results));
+  //   localStorage.setItem('lastSearchTime', new Date().toISOString());
+  // } catch (error) {
+  //   console.error('Error al guardar resultados en localStorage:', error);
+  // }
 };
 
 // Cargar estado al inicializar

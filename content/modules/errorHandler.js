@@ -105,9 +105,9 @@ window.LeadManagerPro.modules.handleRecovery = async function() {
   if (recoveryState.recoveryAttempts <= 2) {
     // Para los primeros intentos, simplemente recargar la página
     console.log('Lead Manager Pro: Estrategia de recuperación - Recarga simple');
-    setTimeout(() => {
-      window.location.reload();
-    }, 3000);
+    // setTimeout(() => {
+    //   window.location.reload();
+    // }, 3000); // PARA BORRAR: recarga automática
   } 
   else if (recoveryState.recoveryAttempts <= 5) {
     // Para intentos intermedios, esperar más tiempo antes de recargar
@@ -119,7 +119,7 @@ window.LeadManagerPro.modules.handleRecovery = async function() {
     await sleep(waitTime);
     
     // Recargar después de la espera
-    window.location.reload();
+    // window.location.reload(); // PARA BORRAR: recarga automática
   }
   else {
     // Para muchos intentos, pausar la búsqueda y notificar al usuario

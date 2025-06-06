@@ -15,21 +15,18 @@ window.testSidebarTransitions = function() {
   
   // Verificar elementos
   const sidebar = document.getElementById('snap-lead-manager-searcher');
-  const toggle = document.getElementById('snap-lead-manager-toggle');
   
-  if (!sidebar || !toggle) {
-    console.error('❌ Error: Sidebar o toggle no encontrados');
+  if (!sidebar) {
+    console.error('❌ Error: Sidebar no encontrado');
     return;
   }
   
-  console.log('✅ Elementos encontrados:', { sidebar: !!sidebar, toggle: !!toggle });
+  console.log('✅ Elemento encontrado:', { sidebar: !!sidebar });
   
   // Test 1: Verificar estado inicial
   console.log('2. Verificando estado inicial...');
   const initiallyVisible = sidebar.classList.contains('visible');
   console.log(`Estado inicial - Sidebar visible: ${initiallyVisible}`);
-  console.log(`Toggle position: ${toggle.style.right}`);
-  console.log(`Toggle classes: ${toggle.className}`);
   
   // Test 2: Abrir sidebar (si está cerrado)
   setTimeout(async () => {
@@ -42,14 +39,10 @@ window.testSidebarTransitions = function() {
       await wait(500); // Esperar transición
       
       const isNowVisible = sidebar.classList.contains('visible');
-      const togglePosition = toggle.style.right;
-      const toggleClasses = toggle.className;
       
       console.log(`Después de abrir - Sidebar visible: ${isNowVisible}`);
-      console.log(`Toggle position: ${togglePosition}`);
-      console.log(`Toggle classes: ${toggleClasses}`);
       
-      if (isNowVisible && togglePosition === '320px') {
+      if (isNowVisible) {
         console.log('✅ Apertura exitosa');
       } else {
         console.log('❌ Error en apertura');
@@ -66,14 +59,10 @@ window.testSidebarTransitions = function() {
       await wait(500); // Esperar transición
       
       const isNowHidden = !sidebar.classList.contains('visible');
-      const togglePosition = toggle.style.right;
-      const toggleClasses = toggle.className;
       
       console.log(`Después de cerrar - Sidebar oculto: ${isNowHidden}`);
-      console.log(`Toggle position: ${togglePosition}`);
-      console.log(`Toggle classes: ${toggleClasses}`);
       
-      if (isNowHidden && togglePosition === '10px') {
+      if (isNowHidden) {
         console.log('✅ Cierre exitoso');
       } else {
         console.log('❌ Error en cierre');
@@ -82,12 +71,10 @@ window.testSidebarTransitions = function() {
       // Test 4: Verificar transiciones CSS
       console.log('5. Verificando propiedades CSS...');
       const sidebarStyles = window.getComputedStyle(sidebar);
-      const toggleStyles = window.getComputedStyle(toggle);
       
       console.log(`Sidebar transition: ${sidebarStyles.transition}`);
-      console.log(`Toggle transition: ${toggleStyles.transition}`);
       
-      if (sidebarStyles.transition.includes('0.4s') && toggleStyles.transition.includes('0.4s')) {
+      if (sidebarStyles.transition.includes('0.4s')) {
         console.log('✅ Transiciones CSS configuradas correctamente');
       } else {
         console.log('❌ Transiciones CSS incorrectas');

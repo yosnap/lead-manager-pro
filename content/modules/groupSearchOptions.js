@@ -22,62 +22,31 @@ class GroupSearchOptions {
         autoCloseChat: true
       }
     };
-
-    this.options = this.loadOptions();
+    this.options = { ...this.defaultOptions };
+    this.loadOptions();
   }
 
-  // Cargar opciones desde localStorage usando clave unificada
+  // Cargar opciones desde chrome.storage.sync
   loadOptions() {
-    try {
-      // Intentar cargar desde localStorage primero
-      const savedOptions = localStorage.getItem('lmp_group_search_options');
-      if (savedOptions) {
-        const parsedOptions = JSON.parse(savedOptions);
-        console.log('Opciones de grupos encontradas en localStorage:', parsedOptions);
-        return { ...this.defaultOptions, ...parsedOptions };
+    chrome.storage.sync.get(['groupSearchSettings'], (result) => {
+      if (result && result.groupSearchSettings) {
+        this.options = { ...this.defaultOptions, ...result.groupSearchSettings };
+        console.log('Opciones de grupos cargadas de chrome.storage.sync:', this.options);
       } else {
-        console.log('No se encontraron opciones de grupo en localStorage, guardando opciones por defecto');
-        // Si no hay opciones guardadas, guardar las opciones por defecto
         this.saveOptions(this.defaultOptions);
+        console.log('No se encontraron opciones de grupo en chrome.storage.sync, guardando opciones por defecto');
       }
-    } catch (error) {
-      console.error('Error al cargar las opciones de búsqueda de grupos:', error);
-      console.log('Guardando opciones por defecto debido al error');
-      // En caso de error, guardar las opciones por defecto
-      this.saveOptions(this.defaultOptions);
-    }
-
-    // Si no hay opciones guardadas o hay un error, devolver las opciones por defecto
-    return { ...this.defaultOptions };
+    });
   }
 
-  // Guardar opciones en localStorage
+  // Guardar opciones en chrome.storage.sync
   saveOptions(options) {
-    try {
-      const newOptions = { ...this.options, ...options };
-      this.options = newOptions;
-      localStorage.setItem('lmp_group_search_options', JSON.stringify(newOptions));
-
-      // También guardar en chrome.storage para persistencia y acceso desde background
-      try {
-        chrome.storage.local.set({
-          'lmp_group_search_options': newOptions,
-          // Mantener compatibilidad con propiedades individuales
-          'groupTypes': newOptions.groupTypes,
-          'minMembers': newOptions.minMembers,
-          'minPosts': newOptions.minPosts
-        }, function() {
-          console.log('Opciones de grupo guardadas en chrome.storage.local con clave unificada');
-        });
-      } catch (storageError) {
-        console.error('Error al guardar opciones de grupo en chrome.storage:', storageError);
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error al guardar las opciones de búsqueda de grupos:', error);
-      return false;
-    }
+    const newOptions = { ...this.options, ...options };
+    this.options = newOptions;
+    chrome.storage.sync.set({ groupSearchSettings: newOptions }, () => {
+      console.log('Opciones de grupo guardadas en chrome.storage.sync:', newOptions);
+    });
+    return true;
   }
 
   // Obtener una opción específica

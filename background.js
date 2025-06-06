@@ -1,0 +1,3 @@
+// chrome.storage.local.get([ ... ]); // PARA BORRAR: clave antigua
+// chrome.storage.local.set({ ... }); // PARA BORRAR: clave antigua
+// ... existing code ... 

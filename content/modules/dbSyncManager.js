@@ -191,7 +191,6 @@ class DbSyncManager {
       const result = await new Promise(resolve => {
         chrome.storage.local.get([
           'snap_lead_manager_general_options',
-          'lmp_group_search_options',
           'leadManagerInteractionStats',
           'leadManagerExtractedGroups',
           'leadManagerExtractedMembers'
@@ -202,9 +201,7 @@ class DbSyncManager {
       const dataToSync = {
         configurations: {
           generalOptions: result.snap_lead_manager_general_options ?
-            JSON.parse(result.snap_lead_manager_general_options) : null,
-          groupOptions: result.lmp_group_search_options ?
-            JSON.parse(result.lmp_group_search_options) : null
+            JSON.parse(result.snap_lead_manager_general_options) : null
         },
         statistics: {
           interactions: result.leadManagerInteractionStats || null

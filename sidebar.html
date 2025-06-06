@@ -63,59 +63,59 @@
           <div class="collapsible-section">
             <button class="collapsible-trigger">Configuración Avanzada</button>
             <div class="collapsible-content">
-              <!-- Configuración general -->
-              <div class="settings-section">
-                <h3>Opciones Generales</h3>
-                <div class="form-group">
-                  <label for="max-scrolls">Scrolls máximos</label>
-                  <input type="number" id="max-scrolls" min="1" value="4" placeholder="Por defecto 4">
-                  <small class="input-help">Cantidad máxima de desplazamientos para cargar resultados</small>
+              <!-- Configuración avanzada para ambos tipos -->
+              <div id="advanced-options" class="settings-section">
+                <div id="scrolls-delay-fields" style="display: none;">
+                  <div class="form-group">
+                    <label for="max-scrolls">Scrolls máximos</label>
+                    <input type="number" id="max-scrolls" min="1" value="50">
+                    <small class="input-help">Cantidad máxima de desplazamientos para cargar resultados</small>
+                  </div>
+                  <div class="form-group">
+                    <label for="scroll-delay">Tiempo entre scrolls (segundos)</label>
+                    <input type="number" id="scroll-delay" min="0.5" step="0.1" value="2">
+                    <small class="input-help">Tiempo de espera entre cada desplazamiento</small>
+                  </div>
                 </div>
-                <div class="form-group">
-                  <label for="scroll-delay">Tiempo entre scrolls (segundos)</label>
-                  <input type="number" id="scroll-delay" min="1" step="0.5" value="2" placeholder="Por defecto 2 segundos">
-                  <small class="input-help">Tiempo de espera entre cada desplazamiento</small>
-                </div>
-              </div>
-
-              <!-- Opciones específicas para grupos -->
-              <div id="group-options" class="settings-section" style="display: none;">
-                <h3>Opciones para Grupos</h3>
-                <div class="form-group">
-                  <label>Tipos de grupo</label>
-                  <div class="checkbox-group">
-                    <label class="checkbox-label">
+                <!-- Opciones específicas para grupos -->
+                <div id="group-options" style="display: none;">
+                  <h3>Opciones para Grupos</h3>
+                  <div class="form-group">
+                    <label for="min-users">Cantidad mínima de usuarios</label>
+                    <input type="number" id="min-users" min="0" value="1000">
+                    <small class="input-help">Número mínimo de miembros que debe tener el grupo</small>
+                  </div>
+                  <div class="form-group">
+                    <label>Cantidad mínima de publicaciones</label>
+                    <div class="posts-filters">
+                      <div class="posts-filter-item">
+                        <label for="min-posts-year">Por año</label>
+                        <input type="number" id="min-posts-year" min="0" value="1000" placeholder="Mín. anual">
+                      </div>
+                      <div class="posts-filter-item">
+                        <label for="min-posts-month">Por mes</label>
+                        <input type="number" id="min-posts-month" min="0" value="100" placeholder="Mín. mensual">
+                      </div>
+                      <div class="posts-filter-item">
+                        <label for="min-posts-day">Por día</label>
+                        <input type="number" id="min-posts-day" min="0" value="5" placeholder="Mín. diaria">
+                      </div>
+                    </div>
+                    <div class="filter-info">
+                      <p>Se requiere el mínimo de usuarios <strong>Y</strong> al menos uno de los mínimos de publicaciones (año, mes o día). Si no se establece ningún mínimo de publicaciones, sólo se filtrará por la cantidad de usuarios.</p>
+                    </div>
+                  </div>
+                  <div class="form-group checkbox-row">
+                    <label for="only-public-groups">
                       <input type="checkbox" id="only-public-groups">
-                      Solo públicos
+                      Solo grupos públicos
                     </label>
                     <small class="input-help">Si está marcado, buscará solo grupos públicos. Si no, buscará públicos y privados.</small>
                   </div>
                 </div>
                 <div class="form-group">
-                  <label for="min-users">Cantidad mínima de usuarios</label>
-                  <input type="number" id="min-users" min="0" value="1000">
-                  <small class="input-help">Número mínimo de miembros que debe tener el grupo</small>
-                </div>
-
-                <div class="form-group">
-                  <label>Cantidad mínima de publicaciones</label>
-                  <div class="posts-filters">
-                    <div class="posts-filter-item">
-                      <label for="min-posts-year">Por año</label>
-                      <input type="number" id="min-posts-year" min="0" value="1000" placeholder="Mín. anual">
-                    </div>
-                    <div class="posts-filter-item">
-                      <label for="min-posts-month">Por mes</label>
-                      <input type="number" id="min-posts-month" min="0" value="100" placeholder="Mín. mensual">
-                    </div>
-                    <div class="posts-filter-item">
-                      <label for="min-posts-day">Por día</label>
-                      <input type="number" id="min-posts-day" min="0" value="5" placeholder="Mín. diaria">
-                    </div>
-                  </div>
-                  <div class="filter-info">
-                    <p>Se requiere el mínimo de usuarios <strong>Y</strong> al menos uno de los mínimos de publicaciones (año, mes o día). Si no se establece ningún mínimo de publicaciones, sólo se filtrará por la cantidad de usuarios.</p>
-                  </div>
+                  <button id="save-advanced-settings" class="btn">Guardar configuración</button>
+                  <div id="advanced-settings-toast" class="settings-toast" style="display:none;">Configuración guardada</div>
                 </div>
               </div>
             </div>
@@ -211,85 +211,8 @@
       <div class="tab-content" id="settings-tab">
         <section class="settings-global-section">
           <h2>Configuración Global</h2>
-
-          <!-- Configuración General -->
           <div class="form-group">
-            <label for="global-max-scrolls">Scrolls máximos (global)</label>
-            <input type="number" id="global-max-scrolls" min="1" value="4">
-          </div>
-
-          <div class="form-group">
-            <label for="global-scroll-delay">Tiempo entre scrolls (segundos)</label>
-            <input type="number" id="global-scroll-delay" min="1" step="0.5" value="2">
-          </div>
-
-          <div class="form-group checkbox-row">
-            <label for="auto-sync-enabled">
-              <input type="checkbox" id="auto-sync-enabled">
-              Sincronización automática
-            </label>
-          </div>
-        </section>
-
-        <!-- Configuración de Personas -->
-        <section class="settings-profiles-section">
-          <h2>Configuración de Búsqueda de Personas</h2>
-
-          <div class="form-group">
-            <label for="profile-max-results">Máximo de resultados por búsqueda</label>
-            <input type="number" id="profile-max-results" min="10" max="1000" value="100">
-          </div>
-
-          <div class="form-group">
-            <label for="profile-delay">Tiempo entre extracciones (segundos)</label>
-            <input type="number" id="profile-delay" min="1" step="0.5" value="2">
-          </div>
-
-          <div class="form-group checkbox-row">
-            <label for="profile-auto-scroll">
-              <input type="checkbox" id="profile-auto-scroll">
-              Scroll automático en búsquedas
-            </label>
-          </div>
-        </section>
-
-        <!-- Configuración de Grupos -->
-        <section class="settings-groups-section">
-          <h2>Configuración de Búsqueda de Grupos</h2>
-
-          <div class="form-group">
-            <label for="group-max-results">Máximo de resultados por búsqueda</label>
-            <input type="number" id="group-max-results" min="10" max="1000" value="100">
-          </div>
-
-          <div class="form-group">
-            <label for="group-delay">Tiempo entre extracciones (segundos)</label>
-            <input type="number" id="group-delay" min="1" step="0.5" value="2">
-          </div>
-
-          <div class="form-group checkbox-row">
-            <label for="group-public-only">
-              <input type="checkbox" id="group-public-only">
-              Solo grupos públicos
-            </label>
-          </div>
-
-          <div class="form-group checkbox-row">
-            <label for="group-auto-scroll">
-              <input type="checkbox" id="group-auto-scroll">
-              Scroll automático en búsquedas
-            </label>
-          </div>
-        </section>
-
-        <!-- Botón de guardado y estado -->
-        <section class="settings-actions-section">
-          <div class="form-group">
-            <button id="save-global-config" class="btn">Guardar Toda la Configuración</button>
-          </div>
-
-          <div class="form-group">
-            <div id="global-settings-status" class="status"></div>
+            <em>Próximamente podrás ajustar aquí configuraciones generales y avanzadas.</em>
           </div>
         </section>
       </div>

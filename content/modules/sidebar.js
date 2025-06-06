@@ -124,19 +124,11 @@ function checkAuthStatus(callback) {
     console.log('Lead Manager Pro: Módulo Auth no disponible, usando método alternativo');
     
     // Primero verificamos en chrome.storage.local
-    chrome.storage.local.get(['lmp_auth'], function(localResult) {
-      if (localResult.lmp_auth === true) {
-        console.log('Lead Manager Pro: Usuario autenticado en storage.local');
-        callback(true);
-        return;
-      }
-      
-      // Si no está en local, verificamos en chrome.storage.sync
-      chrome.storage.sync.get(['lmp_auth'], function(syncResult) {
-        const isAuthenticated = syncResult.lmp_auth === true;
-        console.log('Lead Manager Pro: Estado de autenticación en storage.sync:', isAuthenticated);
-        callback(isAuthenticated);
-      });
+    // chrome.storage.local.get([ ... ]); // PARA BORRAR: clave antigua
+    chrome.storage.sync.get(['lmp_auth'], function(syncResult) {
+      const isAuthenticated = syncResult.lmp_auth === true;
+      console.log('Lead Manager Pro: Estado de autenticación en storage.sync:', isAuthenticated);
+      callback(isAuthenticated);
     });
   }
 }
@@ -1011,3 +1003,52 @@ function sendMessageToSidebar(action, data = {}) {
     window.LeadManagerPro.modules.setupSidebarListeners();
   }
 })();
+
+// Crear el nuevo botón toggle flotante
+const newToggle = document.createElement('button');
+newToggle.id = 'lmp-sidebar-toggle';
+newToggle.setAttribute('type', 'button');
+newToggle.setAttribute('aria-label', 'Mostrar Lead Manager');
+newToggle.setAttribute('title', 'Mostrar Lead Manager');
+newToggle.style.cssText = `
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  width: 56px;
+  height: 56px;
+  background: #0866ff;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  z-index: 10001;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+`;
+newToggle.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" fill="#0866ff"/><path d="M9 7L15 12L9 17V7Z" fill="white"/></svg>';
+document.body.appendChild(newToggle);
+
+// Mostrar/ocultar sidebar con el nuevo toggle
+newToggle.addEventListener('click', function() {
+  const sidebar = document.getElementById('snap-lead-manager-searcher');
+  const isVisible = sidebar.classList.contains('visible');
+  if (isVisible) {
+    sidebar.classList.remove('visible');
+    document.body.classList.remove('snap-lead-manager-body-shift');
+    newToggle.setAttribute('aria-label', 'Mostrar Lead Manager');
+    newToggle.setAttribute('title', 'Mostrar Lead Manager');
+    newToggle.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" fill="#0866ff"/><path d="M9 7L15 12L9 17V7Z" fill="white"/></svg>';
+  } else {
+    sidebar.classList.add('visible');
+    document.body.classList.add('snap-lead-manager-body-shift');
+    newToggle.setAttribute('aria-label', 'Ocultar Lead Manager');
+    newToggle.setAttribute('title', 'Ocultar Lead Manager');
+    newToggle.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" fill="#0866ff"/><path d="M15 7L9 12L15 17V7Z" fill="white"/></svg>';
+  }
+  newToggle.style.transform = 'scale(0.92)';
+  setTimeout(() => { newToggle.style.transform = 'scale(1)'; }, 120);
+});

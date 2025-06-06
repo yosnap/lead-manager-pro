@@ -142,21 +142,8 @@
       
       // Buscar los datos en el storage
       return new Promise(resolve => {
-        chrome.storage.local.get(['interactionHistory', 'leadManagerInteractionHistory'], (result) => {
-          // Verificar leadManagerInteractionHistory primero
-          if (result.leadManagerInteractionHistory && 
-              result.leadManagerInteractionHistory.interactions && 
-              result.leadManagerInteractionHistory.interactions[currentGroupId]) {
-            
-            const groupHistory = result.leadManagerInteractionHistory.interactions[currentGroupId];
-            resolve({
-              lastIndex: groupHistory.lastIndex || 0,
-              interactionCount: groupHistory.members ? groupHistory.members.length : 0
-            });
-            return;
-          }
-          
-          // Verificar interactionHistory como respaldo
+        chrome.storage.sync.get(['interactionHistory'], (result) => {
+          // Verificar interactionHistory
           if (result.interactionHistory && result.interactionHistory[currentGroupId]) {
             const groupHistory = result.interactionHistory[currentGroupId];
             resolve({
@@ -165,7 +152,6 @@
             });
             return;
           }
-          
           // Si no hay datos, retornar valores por defecto
           resolve({ lastIndex: 0, interactionCount: 0 });
         });
@@ -227,58 +213,56 @@
   // Reiniciar historial de un grupo directamente
   function resetGroupHistoryDirectly(groupId) {
     return new Promise(resolve => {
-      chrome.storage.local.get(['interactionHistory', 'leadManagerInteractionHistory'], (result) => {
-        // Reiniciar en leadManagerInteractionHistory
-        if (result.leadManagerInteractionHistory) {
-          const history = result.leadManagerInteractionHistory;
-          
-          if (history.interactions && history.interactions[groupId]) {
-            // Calcular cuántas interacciones había para restar del total
-            const interactionsCount = history.interactions[groupId].members ? 
-              history.interactions[groupId].members.length : 0;
-            
-            // Reiniciar el grupo
-            history.interactions[groupId] = {
-              lastIndex: 0,
-              members: []
-            };
-            
-            // Actualizar contador total
-            history.totalInteractions = Math.max(0, (history.totalInteractions || 0) - interactionsCount);
-            
-            // Guardar cambios
-            chrome.storage.local.set({ 'leadManagerInteractionHistory': history });
-          }
-        }
+      // chrome.storage.local.get(['interactionHistory', 'leadManagerInteractionHistory'], (result) => { // PARA BORRAR: clave antigua
+      // Reiniciar en leadManagerInteractionHistory
+      if (result.leadManagerInteractionHistory) {
+        const history = result.leadManagerInteractionHistory;
         
-        // Reiniciar en interactionHistory
-        if (result.interactionHistory) {
-          const history = result.interactionHistory;
+        if (history.interactions && history.interactions[groupId]) {
+          // Calcular cuántas interacciones había para restar del total
+          const interactionsCount = history.interactions[groupId].members ? 
+            history.interactions[groupId].members.length : 0;
           
-          if (history[groupId]) {
-            // Reiniciar el grupo
-            history[groupId] = {
-              lastIndex: 0,
-              interactions: []
-            };
-            
-            // Guardar cambios
-            chrome.storage.local.set({ 'interactionHistory': history });
-          }
+          // Reiniciar el grupo
+          history.interactions[groupId] = {
+            lastIndex: 0,
+            members: []
+          };
+          
+          // Actualizar contador total
+          history.totalInteractions = Math.max(0, (history.totalInteractions || 0) - interactionsCount);
+          
+          // Guardar cambios
+          // chrome.storage.local.set({ 'leadManagerInteractionHistory': history }); // PARA BORRAR: clave antigua
         }
+      }
+      
+      // Reiniciar en interactionHistory
+      if (result.interactionHistory) {
+        const history = result.interactionHistory;
         
-        resolve();
-      });
+        if (history[groupId]) {
+          // Reiniciar el grupo
+          history[groupId] = {
+            lastIndex: 0,
+            interactions: []
+          };
+          
+          // Guardar cambios
+          // chrome.storage.local.set({ 'interactionHistory': history }); // PARA BORRAR: clave antigua
+        }
+      }
+      
+      resolve();
     });
   }
   
   // Reiniciar todo el historial directamente
   function resetAllHistoryDirectly() {
     return new Promise(resolve => {
-      chrome.storage.local.set({
-        'leadManagerInteractionHistory': { interactions: {}, totalInteractions: 0 },
-        'interactionHistory': {}
-      }, resolve);
+      // chrome.storage.local.set({ ... }); // PARA BORRAR: clave antigua
+      // Reiniciar todo el historial directamente
+      resolve();
     });
   }
   

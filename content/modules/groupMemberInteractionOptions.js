@@ -26,6 +26,7 @@ class GroupMemberInteractionOptions {
       }
       
       // Intentar cargar desde localStorage como respaldo
+      // localStorage.setItem('snap_lead_manager_member_interaction_options', ...); // PARA BORRAR: clave antigua
       const savedOptions = localStorage.getItem('snap_lead_manager_member_interaction_options');
       if (savedOptions) {
         const parsedOptions = JSON.parse(savedOptions);
@@ -59,7 +60,7 @@ class GroupMemberInteractionOptions {
       }
       
       // Guardar en localStorage como respaldo
-      localStorage.setItem('snap_lead_manager_member_interaction_options', JSON.stringify(newOptions));
+      // localStorage.setItem('snap_lead_manager_member_interaction_options', ...); // PARA BORRAR: clave antigua
       
       return true;
     } catch (error) {

@@ -5,52 +5,22 @@
 
 class OptionsManager {
   constructor() {
-    this.STORAGE = chrome.storage.local;
     this.STORAGE_SYNC = chrome.storage.sync;
-
-    // Claves para las diferentes secciones de opciones
-    this.KEYS = {
-      GENERAL: 'lmp_general_options',
-      GROUP_SEARCH: 'lmp_group_search_options',
-      MEMBER_INTERACTION: 'lmp_member_interaction_options',
-      UI_PREFERENCES: 'lmp_ui_preferences'
-    };
-
-    // Valores por defecto
+    // Solo dos claves válidas
+    this.VALID_KEYS = ['groupSearchSettings', 'peopleSearchSettings'];
     this.DEFAULTS = {
-      general: {
-        maxScrolls: 50,
-        scrollDelay: 2,
-        autoSave: true,
-        debugMode: false
-      },
-      groupSearch: {
-        types: {
-          public: true,
-          private: true
-        },
+      groupSearchSettings: {
+        types: { public: true, private: true },
         minUsers: 1000,
-        minPosts: {
-          year: 100,
-          month: 10,
-          day: 1
-        }
+        minPosts: { year: 100, month: 10, day: 1 },
+        maxScrolls: 50,
+        scrollDelay: 2
       },
-      memberInteraction: {
-        membersToInteract: 10,
-        interactionDelay: 3,
-        message: "¡Hola! Me interesa conectar contigo.",
-        autoCloseChat: true,
-        respectLimits: true
-      },
-      uiPreferences: {
-        sidebarPosition: 'right',
-        compactMode: false,
-        showNotifications: true,
-        theme: 'light'
+      peopleSearchSettings: {
+        maxScrolls: 50,
+        scrollDelay: 2
       }
     };
-
     this.cache = {};
     this.listeners = {};
   }
@@ -74,20 +44,13 @@ class OptionsManager {
    */
   async loadAllOptions() {
     return new Promise((resolve, reject) => {
-      const allKeys = Object.values(this.KEYS);
-
-      this.STORAGE.get(allKeys, (result) => {
+      this.STORAGE_SYNC.get(this.VALID_KEYS, (result) => {
         if (chrome.runtime.lastError) {
           reject(chrome.runtime.lastError);
           return;
         }
-
-        // Cargar con valores por defecto si no existen
-        this.cache.general = { ...this.DEFAULTS.general, ...(result[this.KEYS.GENERAL] || {}) };
-        this.cache.groupSearch = { ...this.DEFAULTS.groupSearch, ...(result[this.KEYS.GROUP_SEARCH] || {}) };
-        this.cache.memberInteraction = { ...this.DEFAULTS.memberInteraction, ...(result[this.KEYS.MEMBER_INTERACTION] || {}) };
-        this.cache.uiPreferences = { ...this.DEFAULTS.uiPreferences, ...(result[this.KEYS.UI_PREFERENCES] || {}) };
-
+        this.cache.groupSearchSettings = { ...this.DEFAULTS.groupSearchSettings, ...(result.groupSearchSettings || {}) };
+        this.cache.peopleSearchSettings = { ...this.DEFAULTS.peopleSearchSettings, ...(result.peopleSearchSettings || {}) };
         console.log('OptionsManager: Opciones cargadas:', this.cache);
         resolve(this.cache);
       });
@@ -97,19 +60,20 @@ class OptionsManager {
   /**
    * Obtiene una sección de opciones
    */
-  getOptions(section) {
-    return this.cache[section] || this.DEFAULTS[section] || {};
+  getOptions(key) {
+    if (!this.VALID_KEYS.includes(key)) return {};
+    return this.cache[key] || this.DEFAULTS[key] || {};
   }
 
   /**
    * Obtiene una opción específica
    */
-  getOption(section, key, defaultValue = null) {
-    const sectionOptions = this.getOptions(section);
+  getOption(key, optionKey, defaultValue = null) {
+    const sectionOptions = this.getOptions(key);
 
     // Soporte para claves anidadas (ej: 'types.public')
-    if (key.includes('.')) {
-      const keys = key.split('.');
+    if (optionKey.includes('.')) {
+      const keys = optionKey.split('.');
       let value = sectionOptions;
 
       for (const k of keys) {
@@ -120,56 +84,29 @@ class OptionsManager {
       return value !== undefined ? value : defaultValue;
     }
 
-    return sectionOptions[key] !== undefined ? sectionOptions[key] : defaultValue;
+    return sectionOptions[optionKey] !== undefined ? sectionOptions[optionKey] : defaultValue;
   }
 
   /**
    * Establece opciones para una sección
    */
-  async setOptions(section, options) {
+  async setOptions(key, options) {
     return new Promise((resolve, reject) => {
-      // Actualizar cache
-      this.cache[section] = { ...this.cache[section], ...options };
-
-      // Generar la clave de storage
-      const storageKeyName = section.toUpperCase().replace(/([A-Z])/g, '_$1');
-      const storageKey = this.KEYS[storageKeyName];
-
-      // Validar que la clave sea válida
-      if (!storageKey || storageKey === 'undefined' || typeof storageKey !== 'string') {
-        console.error('OptionsManager: Invalid storage key generated:', {
-          section,
-          storageKeyName,
-          storageKey,
-          availableKeys: Object.keys(this.KEYS)
-        });
-        reject(new Error(`Invalid storage key for section: ${section}`));
+      if (!this.VALID_KEYS.includes(key)) {
+        console.error('OptionsManager: Invalid storage key:', key);
+        reject(new Error(`Invalid storage key: ${key}`));
         return;
       }
-
-      // Guardar en storage
-      const dataToSave = {
-        [storageKey]: this.cache[section]
-      };
-
-      this.STORAGE.set(dataToSave, () => {
+      this.cache[key] = { ...this.cache[key], ...options };
+      const dataToSave = { [key]: this.cache[key] };
+      this.STORAGE_SYNC.set(dataToSave, () => {
         if (chrome.runtime.lastError) {
           reject(chrome.runtime.lastError);
           return;
         }
-
-        // También sincronizar en storage.sync
-        this.STORAGE_SYNC.set(dataToSave, () => {
-          if (chrome.runtime.lastError) {
-            console.warn('OptionsManager: Error al sincronizar:', chrome.runtime.lastError);
-          }
-        });
-
-        // Notificar a listeners
-        this.notifyListeners(section, this.cache[section]);
-
-        console.log(`OptionsManager: Opciones de ${section} actualizadas:`, this.cache[section]);
-        resolve(this.cache[section]);
+        this.notifyListeners(key, this.cache[key]);
+        console.log(`OptionsManager: Opciones de ${key} actualizadas:`, this.cache[key]);
+        resolve(this.cache[key]);
       });
     });
   }
@@ -177,37 +114,33 @@ class OptionsManager {
   /**
    * Establece una opción específica
    */
-  async setOption(section, key, value) {
-    const currentOptions = this.getOptions(section);
-
-    // Soporte para claves anidadas
-    if (key.includes('.')) {
-      const keys = key.split('.');
+  async setOption(key, optionKey, value) {
+    const currentOptions = this.getOptions(key);
+    if (optionKey.includes('.')) {
+      const keys = optionKey.split('.');
       const updated = { ...currentOptions };
       let current = updated;
-
       for (let i = 0; i < keys.length - 1; i++) {
         if (!current[keys[i]]) current[keys[i]] = {};
         current = current[keys[i]];
       }
-
       current[keys[keys.length - 1]] = value;
-      return await this.setOptions(section, updated);
+      return await this.setOptions(key, updated);
     } else {
-      return await this.setOptions(section, { [key]: value });
+      return await this.setOptions(key, { [optionKey]: value });
     }
   }
 
   /**
    * Resetea una sección a valores por defecto
    */
-  async resetSection(section) {
-    const defaults = this.DEFAULTS[section];
+  async resetSection(key) {
+    const defaults = this.DEFAULTS[key];
     if (!defaults) {
-      throw new Error(`Sección desconocida: ${section}`);
+      throw new Error(`Sección desconocida: ${key}`);
     }
 
-    return await this.setOptions(section, defaults);
+    return await this.setOptions(key, defaults);
   }
 
   /**
@@ -228,9 +161,9 @@ class OptionsManager {
     try {
       const { exportedAt, version, ...options } = optionsData;
 
-      for (const [section, sectionOptions] of Object.entries(options)) {
-        if (this.DEFAULTS[section]) {
-          await this.setOptions(section, sectionOptions);
+      for (const [key, sectionOptions] of Object.entries(options)) {
+        if (this.DEFAULTS[key]) {
+          await this.setOptions(key, sectionOptions);
         }
       }
 
@@ -245,27 +178,24 @@ class OptionsManager {
   /**
    * Añade un listener para cambios en opciones
    */
-  addListener(section, callback) {
-    if (!this.listeners[section]) {
-      this.listeners[section] = [];
+  addListener(key, callback) {
+    if (!this.listeners[key]) {
+      this.listeners[key] = [];
     }
-
-    this.listeners[section].push(callback);
-
-    // Retornar función para remover el listener
+    this.listeners[key].push(callback);
     return () => {
-      this.listeners[section] = this.listeners[section].filter(cb => cb !== callback);
+      this.listeners[key] = this.listeners[key].filter(cb => cb !== callback);
     };
   }
 
   /**
    * Notifica a los listeners sobre cambios
    */
-  notifyListeners(section, newOptions) {
-    if (this.listeners[section]) {
-      this.listeners[section].forEach(callback => {
+  notifyListeners(key, newOptions) {
+    if (this.listeners[key]) {
+      this.listeners[key].forEach(callback => {
         try {
-          callback(newOptions, section);
+          callback(newOptions, key);
         } catch (error) {
           console.error('OptionsManager: Error en listener:', error);
         }
@@ -277,7 +207,7 @@ class OptionsManager {
    * Obtiene las opciones actuales para búsqueda de grupos con filtros aplicados
    */
   getGroupSearchFilters() {
-    const options = this.getOptions('groupSearch');
+    const options = this.getOptions('groupSearchSettings');
 
     return {
       types: options.types || { public: true, private: true },

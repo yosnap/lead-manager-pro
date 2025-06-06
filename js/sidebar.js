@@ -2200,3 +2200,177 @@ function exportResults(format) {
     showError(`Error al exportar: ${error.message}`);
   }
 }
+
+// --- Auto-save group settings and show toast ---
+function showGroupSettingsToast() {
+  const toast = document.getElementById('group-settings-toast');
+  if (toast) {
+    toast.style.display = 'block';
+    setTimeout(() => {
+      toast.style.display = 'none';
+    }, 2000);
+  }
+}
+
+function saveGroupSettings() {
+  // Get values from group settings inputs
+  const minUsers = document.getElementById('min-users')?.valueAsNumber || 0;
+  const minPostsYear = document.getElementById('min-posts-year')?.valueAsNumber || 0;
+  const minPostsMonth = document.getElementById('min-posts-month')?.valueAsNumber || 0;
+  const minPostsDay = document.getElementById('min-posts-day')?.valueAsNumber || 0;
+  const onlyPublicGroups = document.getElementById('only-public-groups')?.checked || false;
+
+  // Save to chrome.storage.sync
+  chrome.storage.sync.set({
+    groupFilters: {
+      minUsers,
+      minPostsYear,
+      minPostsMonth,
+      minPostsDay,
+      onlyPublicGroups
+    }
+  }, () => {
+    showGroupSettingsToast();
+  });
+}
+
+function loadGroupSettings() {
+  chrome.storage.sync.get('groupFilters', (result) => {
+    const filters = result.groupFilters || {};
+    if (document.getElementById('min-users')) document.getElementById('min-users').value = filters.minUsers ?? 1000;
+    if (document.getElementById('min-posts-year')) document.getElementById('min-posts-year').value = filters.minPostsYear ?? 1000;
+    if (document.getElementById('min-posts-month')) document.getElementById('min-posts-month').value = filters.minPostsMonth ?? 100;
+    if (document.getElementById('min-posts-day')) document.getElementById('min-posts-day').value = filters.minPostsDay ?? 5;
+    if (document.getElementById('only-public-groups')) document.getElementById('only-public-groups').checked = !!filters.onlyPublicGroups;
+  });
+}
+
+function setupGroupSettingsButton() {
+  const saveBtn = document.getElementById('save-group-settings');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', saveGroupSettings);
+  }
+}
+
+// Call setup and load on DOM ready
+window.addEventListener('DOMContentLoaded', () => {
+  setupGroupSettingsButton();
+  loadGroupSettings();
+});
+
+// --- Advanced settings logic for both search types ---
+function showAdvancedSettingsToast() {
+  const toast = document.getElementById('advanced-settings-toast');
+  if (toast) {
+    toast.style.display = 'block';
+    setTimeout(() => {
+      toast.style.display = 'none';
+    }, 2000);
+  }
+}
+
+function saveAdvancedSettings() {
+  const searchType = document.getElementById('search-type')?.value || 'people';
+  const maxScrolls = document.getElementById('max-scrolls')?.valueAsNumber || 50;
+  const scrollDelay = document.getElementById('scroll-delay')?.valueAsNumber || 2;
+
+  if (searchType === 'groups') {
+    const minUsers = document.getElementById('min-users')?.valueAsNumber || 0;
+    const minPostsYear = document.getElementById('min-posts-year')?.valueAsNumber || 0;
+    const minPostsMonth = document.getElementById('min-posts-month')?.valueAsNumber || 0;
+    const minPostsDay = document.getElementById('min-posts-day')?.valueAsNumber || 0;
+    const onlyPublicGroups = document.getElementById('only-public-groups')?.checked || false;
+    chrome.storage.sync.set({
+      groupSearchSettings: {
+        maxScrolls,
+        scrollDelay,
+        minUsers,
+        minPostsYear,
+        minPostsMonth,
+        minPostsDay,
+        onlyPublicGroups
+      }
+    }, showAdvancedSettingsToast);
+  } else {
+    chrome.storage.sync.set({
+      peopleSearchSettings: {
+        maxScrolls,
+        scrollDelay
+      }
+    }, showAdvancedSettingsToast);
+  }
+}
+
+function loadAdvancedSettings() {
+  const searchType = document.getElementById('search-type')?.value || 'people';
+  if (searchType === 'groups') {
+    chrome.storage.sync.get('groupSearchSettings', (result) => {
+      const s = result.groupSearchSettings || {};
+      document.getElementById('max-scrolls').value = s.maxScrolls ?? 50;
+      document.getElementById('scroll-delay').value = s.scrollDelay ?? 2;
+      document.getElementById('min-users').value = s.minUsers ?? 1000;
+      document.getElementById('min-posts-year').value = s.minPostsYear ?? 1000;
+      document.getElementById('min-posts-month').value = s.minPostsMonth ?? 100;
+      document.getElementById('min-posts-day').value = s.minPostsDay ?? 5;
+      document.getElementById('only-public-groups').checked = !!s.onlyPublicGroups;
+    });
+  } else {
+    chrome.storage.sync.get('peopleSearchSettings', (result) => {
+      const s = result.peopleSearchSettings || {};
+      document.getElementById('max-scrolls').value = s.maxScrolls ?? 50;
+      document.getElementById('scroll-delay').value = s.scrollDelay ?? 2;
+    });
+  }
+}
+
+function updateAdvancedSettingsVisibility() {
+  const searchType = document.getElementById('search-type')?.value || 'people';
+  const scrollsDelayFields = document.getElementById('scrolls-delay-fields');
+  const groupOptions = document.getElementById('group-options');
+  if (scrollsDelayFields) scrollsDelayFields.style.display = 'block';
+  if (groupOptions) groupOptions.style.display = (searchType === 'groups') ? 'block' : 'none';
+}
+
+function setupAdvancedSettingsEvents() {
+  const saveBtn = document.getElementById('save-advanced-settings');
+  if (saveBtn) saveBtn.addEventListener('click', saveAdvancedSettings);
+  const searchTypeSelect = document.getElementById('search-type');
+  if (searchTypeSelect) {
+    searchTypeSelect.addEventListener('change', () => {
+      updateAdvancedSettingsVisibility();
+      loadAdvancedSettings();
+    });
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  setupAdvancedSettingsEvents();
+  updateAdvancedSettingsVisibility();
+  loadAdvancedSettings();
+});
+
+// --- TEMPORARY: Clean up old/unused storage keys ---
+function cleanOldStorageKeys() {
+  // Remove old keys from local storage
+  chrome.storage.local.remove([
+    'maxScrolls',
+    'minUsers',
+    'scrollDelay',
+    // Add any other old keys you want to remove
+  ]);
+
+  // Remove unused keys from sync storage
+  chrome.storage.sync.remove([
+    'lmp_migration_completed',
+    'lmp_general_options',
+    'groupFilters',
+    'generalSettings',
+    'interactionSettings',
+    // Add any other old keys you want to remove
+  ]);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  cleanOldStorageKeys(); // Remove after first run if not needed anymore
+});
+

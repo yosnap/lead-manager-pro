@@ -88,10 +88,7 @@
               }
               
               // Guardar el historial actualizado
-              await new Promise(resolve => {
-                chrome.storage.local.set({ 'interactionHistory': history }, resolve);
-              });
-              
+              // chrome.storage.local.set({ 'interactionHistory': history }, ...); // PARA BORRAR: clave antigua
               console.log(`Historial del grupo ${groupId} reiniciado`);
               return true;
             } catch (error) {
@@ -103,9 +100,9 @@
           // Reiniciar todo el historial
           resetAllHistory: async function() {
             try {
-              await new Promise(resolve => {
-                chrome.storage.local.set({ 'interactionHistory': {} }, resolve);
-              });
+              // await new Promise(resolve => {
+              //   chrome.storage.local.set({ 'interactionHistory': {} }, resolve);
+              // });
               
               console.log('Todo el historial de interacciones ha sido reiniciado');
               return true;
@@ -145,10 +142,7 @@
               history[groupId].lastIndex = memberIndex + 1;
               
               // Guardar el historial actualizado
-              await new Promise(resolve => {
-                chrome.storage.local.set({ 'interactionHistory': history }, resolve);
-              });
-              
+              // chrome.storage.local.set({ 'interactionHistory': history }, ...); // PARA BORRAR: clave antigua
               return true;
             } catch (error) {
               console.error('Error al registrar interacción:', error);
@@ -635,12 +629,6 @@
         
         // Nuevo método para crear la sección de historial
         interactionUI.createHistorySection = function(container, insertAfterElement) {
-      }
-    }, 1000);
-  });
-})();
-        // Nuevo método para crear la sección de historial
-        interactionUI.createHistorySection = function(container, insertAfterElement) {
           // Crear la sección de historial
           const historySection = document.createElement('div');
           historySection.id = 'lead-manager-history-container';
@@ -815,165 +803,6 @@
           if (historyContainer) {
             await interactionHistory.updateHistoryStats(historyContainer);
           }
-        };        // Añadir el resto de la implementación
-        
-        // Modificar la función de iniciar interacción para usar el historial
-        const originalStartInteraction = interactionUI.startInteraction;
-        
-        interactionUI.startInteraction = async function() {
-          // Establecer el tiempo de inicio
-          this.startTime = Date.now();
-          
-          // Reiniciar la barra de progreso
-          const progressFill = document.querySelector('.lead-manager-progress-fill');
-          const progressStatus = document.querySelector('.lead-manager-progress-status');
-          
-          if (progressFill) {
-            progressFill.style.width = '0%';
-          }
-          
-          if (progressStatus) {
-            progressStatus.textContent = 'Iniciando interacción...';
-            progressStatus.style.color = '#65676B';
-          }
-          
-          // Verificar si se debe continuar desde el último índice
-          const continueFromLastCheckbox = document.getElementById('lmp-continue-from-last');
-          const continueFromLast = continueFromLastCheckbox ? continueFromLastCheckbox.checked : false;
-          
-          // Obtener el último índice si es necesario
-          let startFromIndex = 0;
-          if (continueFromLast) {
-            const historyData = await interactionHistory.loadHistoryData();
-            startFromIndex = historyData.lastIndex || 0;
-            console.log(`Continuando desde el índice ${startFromIndex} según historial`);
-          } else {
-            console.log('Iniciando desde el principio (índice 0)');
-          }
-          
-          // Guardar referencia al indice de inicio
-          this.startFromIndex = startFromIndex;
-          
-          // Modificar el objeto de interacción para registrar el historial
-          if (window.leadManagerPro.memberInteraction) {
-            const memberInteraction = window.leadManagerPro.memberInteraction;
-            
-            // Guardar la función original
-            const originalStartInteractionFn = memberInteraction.startInteraction;
-            
-            // Reemplazar temporalmente
-            memberInteraction.startInteraction = async function(callback) {
-              // Establecer el índice inicial
-              this.currentMemberIndex = startFromIndex;
-              
-              return await originalStartInteractionFn.call(this, async (progress) => {
-                // Ajustar el índice considerando el desplazamiento
-                if (progress.type === 'progress') {
-                  progress.actualMemberIndex = progress.memberIndex + startFromIndex;
-                  
-                  // Actualizar la barra de progreso
-                  const progressFill = document.querySelector('.lead-manager-progress-fill');
-                  const progressStatus = document.querySelector('.lead-manager-progress-status');
-                  
-                  if (progressFill && progressStatus) {
-                    // Calcular el porcentaje de progreso
-                    const percent = Math.round((progress.memberIndex / progress.totalMembers) * 100);
-                    progressFill.style.width = `${percent}%`;
-                    
-                    // Mostrar índice real (considerando desde donde empezamos)
-                    const actualIndex = progress.actualMemberIndex;
-                    
-                    // Actualizar el texto de estado
-                    if (continueFromLast && startFromIndex > 0) {
-                      progressStatus.textContent = `Procesando miembro ${progress.memberIndex + 1} de ${progress.totalMembers} (índice real: ${actualIndex + 1})`;
-                    } else {
-                      progressStatus.textContent = `Procesando miembro ${progress.memberIndex + 1} de ${progress.totalMembers}`;
-                    }
-                    
-                    if (progress.messageSent) {
-                      progressStatus.textContent += ' - Mensaje enviado';
-                    }
-                  }
-                  
-                  // Registrar interacción exitosa
-                  if (progress.messageSent) {
-                    // Obtener el mensaje enviado
-                    let messageText = "Mensaje enviado";
-                    
-                    // Intentar obtener el mensaje real que se envió
-                    if (this.lastSentMessageIndex !== undefined && 
-                        Array.isArray(this.messages)) {
-                      const msgIndex = this.lastSentMessageIndex;
-                      if (msgIndex >= 0 && msgIndex < this.messages.length) {
-                        messageText = this.messages[msgIndex];
-                      }
-                    }
-                    
-                    // Registrar en el historial
-                    await interactionHistory.registerInteraction(
-                      progress.actualMemberIndex,
-                      messageText
-                    );
-                    
-                    // Actualizar estadísticas en la UI
-                    const historyContainer = document.getElementById('lead-manager-history-container');
-                    if (historyContainer) {
-                      await interactionHistory.updateHistoryStats(historyContainer);
-                    }
-                  }
-                } else if (progress.type === 'complete') {
-                  // Actualizar la UI para mostrar que la interacción ha terminado
-                  const progressFill = document.querySelector('.lead-manager-progress-fill');
-                  const progressStatus = document.querySelector('.lead-manager-progress-status');
-                  
-                  if (progressFill) {
-                    progressFill.style.width = '100%';
-                  }
-                  
-                  if (progressStatus) {
-                    // Calcular la duración
-                    const endTime = Date.now();
-                    const duration = Math.round((endTime - memberInteraction.startTime) / 1000);
-                    const minutes = Math.floor(duration / 60);
-                    const seconds = duration % 60;
-                    
-                    if (progress.limitReached) {
-                      progressStatus.textContent = `Interacción completada. Se alcanzó el límite máximo de ${progress.maxMembersLimit} miembros. Tiempo: ${minutes ? `${minutes}m ` : ''}${seconds}s.`;
-                    } else {
-                      progressStatus.textContent = `Interacción completada. Se procesaron ${progress.processedMembers} de ${progress.totalMembers} miembros en ${minutes ? `${minutes}m ` : ''}${seconds}s.`;
-                    }
-                  }
-                  
-                  // Restaurar el botón de interacción
-                  const interactionButtons = document.querySelectorAll('.lead-manager-interaction-button');
-                  if (interactionButtons.length > 0) {
-                    interactionButtons.forEach(button => {
-                      button.textContent = 'Iniciar Interacción';
-                      button.style.backgroundColor = '#4267B2';
-                    });
-                  }
-                } else if (progress.type === 'error') {
-                  // Mostrar error en la UI
-                  const progressStatus = document.querySelector('.lead-manager-progress-status');
-                  if (progressStatus) {
-                    progressStatus.textContent = `Error: ${progress.error.message}`;
-                    progressStatus.style.color = '#dc3545';
-                  }
-                }
-                
-                // Llamar al callback original
-                if (callback) {
-                  callback(progress);
-                }
-              });
-            };
-            
-            // Guardar el tiempo de inicio
-            memberInteraction.startTime = Date.now();
-          }
-          
-          // Llamar a la función original
-          return await originalStartInteraction.call(this);
         };
         
         console.log('Funcionalidad de historial añadida al panel flotante exitosamente');
