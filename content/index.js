@@ -378,6 +378,9 @@ async function initContentScript() {
 
   // Al final de la inicialización de todos los módulos principales
   document.dispatchEvent(new Event('LeadManagerProModulesReady'));
+
+  // --- Fragmento para activar el switch de 'Grupos públicos' en la página de resultados de grupos ---
+  activarSwitchGruposPublicosRobusto();
 }
 
 /**
@@ -1016,3 +1019,31 @@ window._debug_leadManagerPro = {
 };
 
 console.log('Lead Manager Pro: Script de contenido cargado');
+
+// Llamar a la función tras la inicialización del script de contenido, solo en la página de búsqueda de grupos
+if (window.location.href.includes('/search/groups')) {
+  activarSwitchGruposPublicosRobusto();
+}
+
+// --- Fragmento para activar el switch de 'Grupos públicos' en la página de resultados de grupos ---
+function activarSwitchGruposPublicosRobusto() {
+  chrome.storage.sync.get(['groupSearchSettings'], (result) => {
+    const settings = result.groupSearchSettings || {};
+    if (settings.onlyPublicGroups) {
+      let attempts = 0;
+      const maxAttempts = 20; // 10 segundos
+      const interval = setInterval(() => {
+        const switchInput = document.querySelector('input[aria-label="Grupos públicos"][role="switch"]');
+        if (switchInput) {
+          if (switchInput.getAttribute('aria-checked') !== 'true') {
+            switchInput.click();
+            console.log('Lead Manager Pro: Switch "Grupos públicos" activado automáticamente');
+          }
+          clearInterval(interval);
+        }
+        attempts++;
+        if (attempts >= maxAttempts) clearInterval(interval);
+      }, 500);
+    }
+  });
+}

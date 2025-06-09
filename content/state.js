@@ -118,7 +118,23 @@ window.LeadManagerPro.state.updateSearchState = function(newState) {
     payload: this.searchState
   }, (response) => {
     if (chrome.runtime.lastError) {
-      console.error('Error al enviar actualización al sidebar:', chrome.runtime.lastError);
+      // Log detallado
+      console.error('Error al enviar actualización al sidebar:', chrome.runtime.lastError.message, chrome.runtime.lastError);
+      // Si el error es que el receptor no existe, reintentar una vez tras 1 segundo
+      if (chrome.runtime.lastError.message && chrome.runtime.lastError.message.includes('Receiving end does not exist')) {
+        setTimeout(() => {
+          chrome.runtime.sendMessage({
+            type: 'SEARCH_STATUS_UPDATE',
+            payload: this.searchState
+          }, (retryResponse) => {
+            if (chrome.runtime.lastError) {
+              console.error('Reintento fallido al enviar actualización al sidebar:', chrome.runtime.lastError.message, chrome.runtime.lastError);
+            } else {
+              console.log('Estado actualizado en sidebar tras reintento:', retryResponse);
+            }
+          });
+        }, 1000);
+      }
     } else {
       console.log('Estado actualizado en sidebar:', response);
     }

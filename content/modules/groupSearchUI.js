@@ -20,6 +20,9 @@ class GroupSearchUI {
     // Configurar título y opciones iniciales
     this.updateHeader(options.title || 'Búsqueda de Grupos');
     
+    // Activar el switch de Facebook si corresponde
+    this.activateFacebookPublicGroupsSwitch();
+    
     return this;
   }
 
@@ -383,6 +386,31 @@ class GroupSearchUI {
       if (pauseBtn) pauseBtn.disabled = true;
       if (stopBtn) stopBtn.disabled = true;
     }
+  }
+
+  // Activa el switch de 'Grupos públicos' en la interfaz de Facebook si corresponde
+  activateFacebookPublicGroupsSwitch() {
+    // Comprobar la configuración de búsqueda de grupos
+    chrome.storage.sync.get(['groupSearchSettings'], (result) => {
+      const settings = result.groupSearchSettings || {};
+      if (settings.onlyPublicGroups) {
+        // Esperar a que el switch esté en el DOM (puede tardar por AJAX)
+        const interval = setInterval(() => {
+          // Buscar el input del switch por su aria-label
+          const switchInput = document.querySelector('input[aria-label="Grupos públicos"][role="switch"]');
+          if (switchInput) {
+            // Si no está activado, haz click para activarlo
+            if (switchInput.getAttribute('aria-checked') !== 'true') {
+              switchInput.click();
+              console.log('Lead Manager Pro: Switch "Grupos públicos" activado automáticamente');
+            }
+            clearInterval(interval);
+          }
+        }, 500);
+        // Por si nunca aparece, corta el intervalo tras 10 segundos
+        setTimeout(() => clearInterval(interval), 10000);
+      }
+    });
   }
 }
 

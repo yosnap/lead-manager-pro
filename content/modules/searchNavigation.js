@@ -38,31 +38,8 @@ window.LeadManagerPro.modules.navigateToSearchPage = async function(searchState)
     // Debug
     console.log(`Lead Manager Pro: Navegando a ${searchUrl}`);
     
-    // Ocultar el sidebar antes de navegar
-    const sidebarContainer = document.getElementById('snap-lead-manager-searcher');
-    if (sidebarContainer) {
-      sidebarContainer.style.transform = 'translateX(100%)';
-    }
-    
-    // Usar un enfoque más seguro para la navegación
-    try {
-      // Intentar primero con window.location
-      // window.location.href = searchUrl; // PARA BORRAR: navegación automática
-    } catch (navError) {
-      console.warn('Error al navegar con location.href, intentando método alternativo:', navError);
-      
-      // Alternativa: Crear un enlace y hacer clic en él
-      const navLink = document.createElement('a');
-      navLink.href = searchUrl;
-      navLink.style.display = 'none';
-      document.body.appendChild(navLink);
-      navLink.click();
-      
-      // Limpiar después
-      setTimeout(() => {
-        document.body.removeChild(navLink);
-      }, 100);
-    }
+    // Use window.location.href for automatic navigation
+    window.location.href = searchUrl; // Navigate automatically to the group search page
     
     return new Promise((resolve) => {
       setTimeout(() => resolve(true), 300);

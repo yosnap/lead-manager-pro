@@ -30,56 +30,47 @@ class GroupFinder {
   }
 
   // Inicializar con opciones
-  init(options, progressCallback = null) {
+  async init(options, progressCallback = null) {
     // Verificar autenticación
     if (!this.checkAuthentication()) {
       console.log('GroupFinder: Inicialización bloqueada - autenticación requerida');
       return Promise.reject(new Error('Autenticación requerida'));
     }
-    
-    console.log("INITIALIZING GROUP FINDER WITH OPTIONS:", options);
-    
-    this.options = options || {};
+
+    // Leer SIEMPRE la configuración más reciente antes de iniciar
+    const config = await new Promise((resolve) => {
+      chrome.storage.sync.get(['groupSearchSettings'], (result) => {
+        resolve(result.groupSearchSettings || {});
+      });
+    });
+
+    // Mezclar opciones recibidas con las de storage
+    this.options = { ...config, ...options };
     this.progressCallback = (typeof progressCallback === 'function') ? progressCallback : null;
-    
+
     // Reiniciar estado global
     window.LeadManagerPro.state.resetSearchState();
     window.LeadManagerPro.state.updateSearchState({
       searchType: 'groups',
       currentOperation: 'Inicializando búsqueda de grupos...'
     });
-    
+
     this.groups = [];
     this.scrollCount = 0;
-    
-    // Leer configuración desde chrome.storage.local
-    return new Promise((resolve) => {
-      // chrome.storage.local.get([ ... ]); // PARA BORRAR: clave antigua
-      console.log('GroupFinder: Leyendo opciones desde chrome.storage.local:', result);
-      
-      // Establecer valores de scroll
-      this.maxScrolls = result.maxScrolls ? Number(result.maxScrolls) : 4;
-      this.scrollTimeout = result.scrollDelay ? Number(result.scrollDelay) * 1000 : 2000;
-      
-      // Opciones de grupos
-      this.options = {
-        ...this.options,
-        minUsers: result.minUsers ? parseInt(result.minUsers) : 0,
-        minPostsYear: result.minPostsYear || '',
-        minPostsMonth: result.minPostsMonth || '',
-        minPostsDay: result.minPostsDay || ''
-      };
-      
-      console.log('GroupFinder: Configuración final:', {
-        scroll: {
-          maxScrolls: this.maxScrolls,
-          scrollTimeout: this.scrollTimeout
-        },
-        grupos: this.options
-      });
-      
-      resolve(this);
+
+    // Establecer valores de scroll
+    this.maxScrolls = this.options.maxScrolls ? Number(this.options.maxScrolls) : 4;
+    this.scrollTimeout = this.options.scrollDelay ? Number(this.options.scrollDelay) * 1000 : 2000;
+
+    console.log('GroupFinder: Configuración final:', {
+      scroll: {
+        maxScrolls: this.maxScrolls,
+        scrollTimeout: this.scrollTimeout
+      },
+      grupos: this.options
     });
+
+    return this;
   }
 
   // Iniciar la búsqueda de grupos
