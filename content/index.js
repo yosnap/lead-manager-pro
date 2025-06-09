@@ -375,6 +375,9 @@ async function initContentScript() {
   
   // Verificar periódicamente que el sidebar sigue presente
   setupSidebarPresenceCheck();
+
+  // Al final de la inicialización de todos los módulos principales
+  document.dispatchEvent(new Event('LeadManagerProModulesReady'));
 }
 
 /**

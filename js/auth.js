@@ -239,6 +239,8 @@ const Auth = {
 window.LeadManagerPro = window.LeadManagerPro || {};
 window.LeadManagerPro.Auth = Auth;
 
+document.dispatchEvent(new Event('LeadManagerProAuthReady'));
+
 // Log de confirmación
 console.log('✅ Auth module loaded and exported successfully to window.LeadManagerPro.Auth');
 console.log('🔍 Auth methods available:', Object.keys(Auth));

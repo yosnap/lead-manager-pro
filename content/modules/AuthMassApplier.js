@@ -8,6 +8,17 @@ class AuthMassApplier {
     this.appliedModules = new Set();
     this.moduleChecks = {};
     this.authWrapper = window.LeadManagerPro?.AuthenticationWrapper;
+
+    // Esperar a que los módulos estén listos
+    if (window.leadManagerPro && window.leadManagerPro.groupFinder) {
+      this.applyToAllModules();
+      this.applyToUIModules();
+    } else {
+      document.addEventListener('LeadManagerProModulesReady', () => {
+        this.applyToAllModules();
+        this.applyToUIModules();
+      });
+    }
   }
   
   /**
@@ -69,11 +80,20 @@ class AuthMassApplier {
   }
   
   /**
-   * Obtiene un módulo por su ruta global
+   * Obtiene un módulo por su ruta global, buscando en los tres posibles namespaces
    */
   getModuleByPath(path) {
     try {
-      return eval(path);
+      // Buscar en window.leadManagerPro
+      let result = null;
+      try { result = eval(path.replace('window.', 'window.leadManagerPro.')); } catch (e) {}
+      if (result) return result;
+      // Buscar en window.LeadManagerPro
+      try { result = eval(path.replace('window.', 'window.LeadManagerPro.')); } catch (e) {}
+      if (result) return result;
+      // Buscar en window.LeadManagerPro.modules
+      try { result = eval(path.replace('window.', 'window.LeadManagerPro.modules.')); } catch (e) {}
+      return result;
     } catch (error) {
       return null;
     }

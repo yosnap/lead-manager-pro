@@ -379,7 +379,13 @@ class AuthenticationWrapper {
 
 // Crear instancia global
 window.LeadManagerPro = window.LeadManagerPro || {};
-window.LeadManagerPro.AuthenticationWrapper = new AuthenticationWrapper();
 
-// Exportar para uso en otros módulos
-window.authWrapper = window.LeadManagerPro.AuthenticationWrapper;
+if (window.LeadManagerPro?.Auth) {
+  window.LeadManagerPro.AuthenticationWrapper = new AuthenticationWrapper();
+  window.authWrapper = window.LeadManagerPro.AuthenticationWrapper;
+} else {
+  document.addEventListener('LeadManagerProAuthReady', () => {
+    window.LeadManagerPro.AuthenticationWrapper = new AuthenticationWrapper();
+    window.authWrapper = window.LeadManagerPro.AuthenticationWrapper;
+  });
+}
