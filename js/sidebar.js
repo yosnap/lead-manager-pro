@@ -2203,10 +2203,9 @@ function exportResults(format) {
   }
 
   // Obtener datos de búsqueda actual del estado
-  const searchContext = state.currentSearch || {};
-  const searchTerm = searchContext.term || '';
-  const searchType = searchContext.type || '';
-  const location = searchContext.city || '';
+  const searchTerm = state.currentSearchTerm || '';
+  const searchType = state.currentSearchType || '';
+  const location = state.currentSearchCity || '';
 
   // Normalizar y limpiar los datos antes de exportar
   const exportData = results.map(group => {
@@ -2236,9 +2235,9 @@ function exportResults(format) {
       postsYear,
       postsMonth,
       postsDay,
-      searchTerm,
-      searchType,
-      location,
+      searchTerm, // Siempre desde el estado global
+      searchType, // Siempre desde el estado global
+      location,   // Siempre desde el estado global
       extractedAt: group.extractedAt || ''
     };
   });
