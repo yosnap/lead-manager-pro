@@ -638,6 +638,13 @@ function updateResultsList(profiles) {
     const listItem = document.createElement('li');
     listItem.className = 'result-item';
 
+    // Corregir la URL del grupo para que sea absoluta
+    let groupUrl = group.url;
+    if (groupUrl && !/^https?:\/\//.test(groupUrl)) {
+      // Si no empieza con http o https, asume que es un ID o path
+      groupUrl = 'https://www.facebook.com/groups/' + groupUrl.replace(/^\//, '');
+    }
+
     // Crear contenido del item con estilos mejorados
     listItem.innerHTML = `
       <div class="result-item-container" style="padding: 15px; border-bottom: 1px solid #e4e6eb; background: white;">
@@ -645,7 +652,7 @@ function updateResultsList(profiles) {
           <span class="result-name" style="font-weight: bold; font-size: 16px; color: #1c1e21;">
             ${group.name || 'Sin nombre'}
           </span>
-          <a href="${group.url}" target="_blank" class="result-link" style="background: #1877f2; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 14px;">
+          <a href="${groupUrl}" target="_blank" rel="noopener noreferrer" class="result-link" style="background: #1877f2; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 14px;">
             Ver grupo
           </a>
       </div>
@@ -690,23 +697,33 @@ function updateResultsList(profiles) {
     console.error('Error al guardar resultados en localStorage:', error);
   }
 
-  // Mostrar resumen
+  // Mostrar resumen y crear botones de exportación con JS (no inline)
   if (resultsSummary) {
     resultsSummary.innerHTML = `
       <div class="results-summary" style="padding: 15px; background: #f0f2f5; border-radius: 8px; margin-top: 15px;">
         <h3 style="margin: 0 0 10px 0; color: #1c1e21;">Resumen de la búsqueda</h3>
         <p style="margin: 0 0 15px 0;">Se encontraron <strong>${profiles.length}</strong> grupos que cumplen con los criterios.</p>
-        <div style="display: flex; gap: 10px;">
-          <button class="snap-lead-button" onclick="exportResults('json')" style="background: #1877f2; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
-            Exportar JSON
-          </button>
-          <button class="snap-lead-button" onclick="exportResults('csv')" style="background: #1877f2; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
-            Exportar CSV
-          </button>
-        </div>
+        <div id="export-buttons" style="display: flex; gap: 10px;"></div>
       </div>
     `;
     resultsSummary.style.display = 'block';
+
+    // Crear botones con JS para evitar CSP inline
+    const exportButtons = document.getElementById('export-buttons');
+    const btnJson = document.createElement('button');
+    btnJson.className = 'snap-lead-button';
+    btnJson.textContent = 'Exportar JSON';
+    btnJson.style = 'background: #1877f2; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;';
+    btnJson.addEventListener('click', () => exportResults('json'));
+
+    const btnCsv = document.createElement('button');
+    btnCsv.className = 'snap-lead-button';
+    btnCsv.textContent = 'Exportar CSV';
+    btnCsv.style = 'background: #1877f2; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;';
+    btnCsv.addEventListener('click', () => exportResults('csv'));
+
+    exportButtons.appendChild(btnJson);
+    exportButtons.appendChild(btnCsv);
   }
 }
 
@@ -2021,6 +2038,12 @@ function handleSearchResults(results, message = '') {
     return;
   }
 
+  // Mapear group.groupUrl a group.url si es necesario
+  results = results.map(group => ({
+    ...group,
+    url: group.url || group.groupUrl || ''
+  }));
+
   // Actualizar estado
   state.profiles = results;
   state.foundCount = results.length;
@@ -2048,7 +2071,7 @@ function handleSearchResults(results, message = '') {
   }
 
   // Actualizar contenido de resultados
-  const searchResultsList = document.getElementById('search-results');
+  let searchResultsList = document.getElementById('search-results');
   if (!searchResultsList) {
     debugLog('Creando nuevo contenedor de resultados');
     const newResultsList = document.createElement('ul');
@@ -2066,11 +2089,16 @@ function handleSearchResults(results, message = '') {
   results.forEach((group) => {
     const listItem = document.createElement('li');
     listItem.className = 'result-item';
+    // Corregir la URL del grupo para que sea absoluta
+    let groupUrl = group.url;
+    if (groupUrl && !/^https?:\/\//.test(groupUrl)) {
+      groupUrl = 'https://www.facebook.com/groups/' + groupUrl.replace(/^\//, '');
+    }
     listItem.innerHTML = `
       <div class="result-item-container">
         <div class="result-header">
           <span class="result-name">${group.name || 'Sin nombre'}</span>
-          <a href="${group.url}" target="_blank" class="result-link">Ver grupo</a>
+          <a href="${groupUrl}" target="_blank" rel="noopener noreferrer" class="result-link">Ver grupo</a>
         </div>
         <div class="result-info">
           <div>
@@ -2105,7 +2133,7 @@ function handleSearchResults(results, message = '') {
     searchResultsList.appendChild(listItem);
   });
 
-  // Crear o actualizar el resumen
+  // Crear o actualizar el resumen y los botones de exportación (sin inline onclick)
   if (!resultsSummary) {
     resultsSummary = document.createElement('div');
     resultsSummary.id = 'results-summary';
@@ -2118,13 +2146,25 @@ function handleSearchResults(results, message = '') {
     <div class="results-summary">
       <h3>Resumen de la búsqueda</h3>
       <p>Se encontraron <strong>${results.length}</strong> grupos que cumplen con los criterios.</p>
-      <div class="export-buttons">
-        <button class="snap-lead-button" onclick="exportResults('json')">Exportar JSON</button>
-        <button class="snap-lead-button" onclick="exportResults('csv')">Exportar CSV</button>
-      </div>
+      <div id="export-buttons" class="export-buttons"></div>
     </div>
   `;
   resultsSummary.style.display = 'block';
+
+  // Crear botones de exportación con JS para evitar CSP inline
+  const exportButtons = document.getElementById('export-buttons');
+  const btnJson = document.createElement('button');
+  btnJson.className = 'snap-lead-button';
+  btnJson.textContent = 'Exportar JSON';
+  btnJson.addEventListener('click', () => exportResults('json'));
+
+  const btnCsv = document.createElement('button');
+  btnCsv.className = 'snap-lead-button';
+  btnCsv.textContent = 'Exportar CSV';
+  btnCsv.addEventListener('click', () => exportResults('csv'));
+
+  exportButtons.appendChild(btnJson);
+  exportButtons.appendChild(btnCsv);
 
   // Agregar entrada al log
   addLogEntry(message || `Búsqueda completada. Se encontraron ${results.length} grupos.`);
@@ -2132,7 +2172,7 @@ function handleSearchResults(results, message = '') {
   // Guardar resultados en localStorage
   try {
     localStorage.setItem('snap_lead_manager_search_results', JSON.stringify(results));
-      } catch (error) {
+  } catch (error) {
     console.error('Error al guardar resultados en localStorage:', error);
   }
 
@@ -2147,60 +2187,87 @@ function handleSearchResults(results, message = '') {
 
 // Función para exportar resultados
 function exportResults(format) {
-  const results = state.profiles;
+  let results = state.profiles;
+  // Si no hay resultados en el estado, intenta recuperarlos de localStorage
+  if (!results || !Array.isArray(results) || results.length === 0) {
+    try {
+      const saved = localStorage.getItem('snap_lead_manager_search_results');
+      if (saved) {
+        results = JSON.parse(saved);
+      }
+    } catch (e) {}
+  }
   if (!results || !Array.isArray(results) || results.length === 0) {
     showError('No hay resultados para exportar');
     return;
   }
 
-  try {
-    let content, filename, type;
+  // Obtener datos de búsqueda actual del estado
+  const searchContext = state.currentSearch || {};
+  const searchTerm = searchContext.term || '';
+  const searchType = searchContext.type || '';
+  const location = searchContext.city || '';
 
-    if (format === 'json') {
-      content = JSON.stringify(results, null, 2);
-      filename = 'grupos_facebook.json';
-      type = 'application/json';
-    } else if (format === 'csv') {
-      // Definir las columnas del CSV
-      const headers = ['nombre', 'url', 'tipo', 'miembros', 'publicacionesAño', 'publicacionesMes', 'publicacionesDia'];
-
-      // Crear las filas
-      const rows = [
-        headers.join(','), // Cabecera
-        ...results.map(group => [
-          `"${(group.name || '').replace(/"/g, '""')}"`,
-          `"${(group.url || '').replace(/"/g, '""')}"`,
-          group.type || '',
-          group.members || '',
-          group.postsYear || '',
-          group.postsMonth || '',
-          group.postsDay || ''
-        ].join(','))
-      ];
-
-      content = rows.join('\n');
-      filename = 'grupos_facebook.csv';
-      type = 'text/csv';
-    } else {
-      throw new Error('Formato no soportado');
+  // Normalizar y limpiar los datos antes de exportar
+  const exportData = results.map(group => {
+    // Limpiar la url de parámetros
+    let cleanUrl = group.groupUrl || group.url || '';
+    if (cleanUrl.includes('?')) cleanUrl = cleanUrl.split('?')[0];
+    // Mapear publicaciones según frequency si no existen los campos
+    let postsYear = group.postsYear || 0;
+    let postsMonth = group.postsMonth || 0;
+    let postsDay = group.postsDay || 0;
+    if ((!postsYear && !postsMonth && !postsDay) && group.frequency) {
+      const freq = group.frequency.toLowerCase();
+      const match = group.frequency.match(/(\d+[\.,]?\d*)/);
+      const num = match ? parseFloat(match[0].replace(',', '.')) : 0;
+      if (freq.includes('año')) postsYear = num;
+      else if (freq.includes('mes')) postsMonth = num;
+      else if (freq.includes('día')) postsDay = num;
     }
+    return {
+      name: group.name || '',
+      groupType: group.groupType || '',
+      groupUrl: cleanUrl,
+      imageUrl: group.imageUrl || '',
+      members: group.members || '',
+      membersCount: group.membersCount || '',
+      frequency: group.frequency || '',
+      postsYear,
+      postsMonth,
+      postsDay,
+      searchTerm,
+      searchType,
+      location,
+      extractedAt: group.extractedAt || ''
+    };
+  });
 
-    // Crear el blob y descargar
-    const blob = new Blob([content], { type: `${type};charset=utf-8;` });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    // Mostrar mensaje de éxito
-    addLogEntry(`Exportación ${format.toUpperCase()} completada`);
-  } catch (error) {
-    console.error('Error al exportar resultados:', error);
-    showError(`Error al exportar: ${error.message}`);
+  if (format === 'json') {
+    const content = JSON.stringify(exportData, null, 2);
+    const filename = 'grupos_facebook.json';
+    const type = 'application/json';
+    downloadFile(content, filename, type);
+  } else if (format === 'csv') {
+    const headers = [
+      'name', 'groupType', 'groupUrl', 'imageUrl', 'members', 'membersCount', 'frequency',
+      'postsYear', 'postsMonth', 'postsDay', 'searchTerm', 'searchType', 'location', 'extractedAt'
+    ];
+    const rows = [
+      headers.join(','),
+      ...exportData.map(group => headers.map(h => {
+        let val = group[h];
+        if (typeof val === 'string') {
+          val = val.replace(/"/g, '""'); // Escapar comillas
+          if (val.includes(',') || val.includes('\n')) val = '"' + val + '"';
+        }
+        return val;
+      }).join(','))
+    ];
+    const content = rows.join('\n');
+    const filename = 'grupos_facebook.csv';
+    const type = 'text/csv';
+    downloadFile(content, filename, type);
   }
 }
 
@@ -2376,4 +2443,17 @@ function cleanOldStorageKeys() {
 window.addEventListener('DOMContentLoaded', () => {
   cleanOldStorageKeys(); // Remove after first run if not needed anymore
 });
+
+// Utilidad para descargar archivos desde el navegador
+function downloadFile(content, filename, type) {
+  const blob = new Blob([content], { type: `${type};charset=utf-8;` });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 

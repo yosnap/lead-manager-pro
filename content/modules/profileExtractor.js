@@ -123,7 +123,11 @@ window.LeadManagerPro.modules.extractProfilesFromPage = async function(searchSta
           
           // Extraer URL del grupo
           const linkElement = element.querySelector('a[href*="/groups/"]');
-          const groupUrl = linkElement ? linkElement.href : '';
+          let groupUrl = linkElement ? linkElement.href : '';
+          // Limpiar parámetros de tracking de Facebook
+          if (groupUrl.includes('?')) {
+            groupUrl = groupUrl.split('?')[0];
+          }
           
           // Buscar más exhaustivamente los elementos que contienen la información del grupo
           // Esto busca el elemento que contiene "Público · X miembros · Y publicaciones"
@@ -305,6 +309,17 @@ window.LeadManagerPro.modules.extractProfilesFromPage = async function(searchSta
           const imgElement = element.querySelector('img');
           const imageUrl = imgElement ? imgElement.src : '';
           
+          // Parsear publicaciones al año, mes y día
+          let postsYear = 0, postsMonth = 0, postsDay = 0;
+          if (frequency) {
+            const freqLower = frequency.toLowerCase();
+            const postsMatch = frequency.match(/(\d+[\.,]?\d*)/);
+            let postsCount = postsMatch ? parseFloat(postsMatch[0].replace(',', '.')) : 0;
+            if (freqLower.includes('día')) postsDay = postsCount;
+            else if (freqLower.includes('mes')) postsMonth = postsCount;
+            else if (freqLower.includes('año')) postsYear = postsCount;
+          }
+          
           // Crear objeto de datos del grupo
           const groupData = {
             name,
@@ -313,6 +328,9 @@ window.LeadManagerPro.modules.extractProfilesFromPage = async function(searchSta
             membersCount: userCount,
             groupType,
             frequency,
+            postsYear,
+            postsMonth,
+            postsDay,
             imageUrl,
             searchTerm: searchState.searchTerm,
             searchType: searchState.searchType,
