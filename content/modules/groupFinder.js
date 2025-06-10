@@ -46,6 +46,14 @@ class GroupFinder {
 
     // Mezclar opciones recibidas con las de storage
     this.options = { ...config, ...options };
+    // Ya no es necesario mapear minMembers a minUsers
+    if (this.options.minPosts) {
+      this.options.minPostsYear = this.options.minPosts.year;
+      this.options.minPostsMonth = this.options.minPosts.month;
+      this.options.minPostsDay = this.options.minPosts.day;
+    }
+    // --- FIN MAPEO ---
+
     this.progressCallback = (typeof progressCallback === 'function') ? progressCallback : null;
 
     // Reiniciar estado global
@@ -276,7 +284,8 @@ class GroupFinder {
             return null;
           }
         })
-        .filter(Boolean);
+        .filter(Boolean)
+        .filter(group => this.shouldIncludeGroup(group));
 
       // Actualizar grupos encontrados
       const uniqueGroups = [...new Set([...this.groups, ...newGroups])];
@@ -430,8 +439,26 @@ class GroupFinder {
       const name = linkElement.textContent.trim();
       if (!name) return null;
 
-      const membersText = element.textContent.match(/(\d+(?:,\d+)*)\s*miembros?/i);
-      const members = membersText ? parseInt(membersText[1].replace(/,/g, '')) : 0;
+      // Extraer solo el número y el sufijo válido (mil, k, millones)
+      const membersTextMatch = element.textContent.match(/([\d.,]+)\s*(mil|k|millones)?(?=\s*miembros?)/i);
+      const numberPart = membersTextMatch ? membersTextMatch[1].replace(',', '.').trim() : '0';
+      const suffix = membersTextMatch && membersTextMatch[2] ? membersTextMatch[2].toLowerCase() : '';
+      let membersCount = parseFloat(numberPart);
+      // Log de depuración
+      console.log('[LeadManagerPro][DEBUG] Extracción de miembros:', {
+        originalText: element.textContent,
+        numberPart,
+        suffix,
+        beforeParse: membersCount
+      });
+      if (suffix === 'mil' || suffix === 'k') {
+        membersCount *= 1000;
+      } else if (suffix === 'millones') {
+        membersCount *= 1000000;
+      }
+      membersCount = Math.floor(membersCount);
+      // Log de depuración final
+      console.log('[LeadManagerPro][DEBUG] Resultado final de miembros:', membersCount);
 
       const descElement = element.querySelector('span[dir="auto"]');
       const description = descElement ? descElement.textContent.trim() : '';
@@ -441,7 +468,7 @@ class GroupFinder {
       return {
         name,
         url,
-        members,
+        members: membersCount,
         description,
         timestamp,
         source: 'facebook-search'
@@ -559,22 +586,24 @@ class GroupFinder {
     return 0;
   }
 
-  // Convertir strings con formato a números (ej: "1.2K" → 1200)
+  // Convertir strings con formato a números (ej: "1.2K" → 1200, "13 mil" → 13000)
   parseNumericString(text) {
     if (!text) return 0;
-    
-    text = text.replace(/,/g, '');
-    const numericMatch = text.match(/[\d.]+/);
-    if (!numericMatch) return 0;
-    
-    let value = parseFloat(numericMatch[0]);
-    
-    if (text.match(/[kK]/)) {
-      value *= 1000;
-    } else if (text.match(/[mM]/)) {
-      value *= 1000000;
+    text = text.toLowerCase().replace(/,/g, '.').replace(/\s+/g, '');
+    let value = 0;
+    if (/mil$/.test(text)) {
+      value = parseFloat(text.replace('mil', '')) * 1000;
+    } else if (/millones?$/.test(text)) {
+      value = parseFloat(text.replace(/millones?/, '')) * 1000000;
+    } else if (/k$/.test(text)) {
+      value = parseFloat(text.replace('k', '')) * 1000;
+    } else if (/m$/.test(text)) {
+      value = parseFloat(text.replace('m', '')) * 1000000;
+    } else {
+      // Solo número puro
+      const numericMatch = text.match(/^[\d.]+$/);
+      value = numericMatch ? parseFloat(numericMatch[0]) : 0;
     }
-    
     return Math.floor(value);
   }
 

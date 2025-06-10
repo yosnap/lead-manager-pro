@@ -125,10 +125,10 @@ function checkAuthStatus(callback) {
     
     // Primero verificamos en chrome.storage.local
     // chrome.storage.local.get([ ... ]); // PARA BORRAR: clave antigua
-    chrome.storage.sync.get(['lmp_auth'], function(syncResult) {
-      const isAuthenticated = syncResult.lmp_auth === true;
-      console.log('Lead Manager Pro: Estado de autenticación en storage.sync:', isAuthenticated);
-      callback(isAuthenticated);
+      chrome.storage.sync.get(['lmp_auth'], function(syncResult) {
+        const isAuthenticated = syncResult.lmp_auth === true;
+        console.log('Lead Manager Pro: Estado de autenticación en storage.sync:', isAuthenticated);
+        callback(isAuthenticated);
     });
   }
 }

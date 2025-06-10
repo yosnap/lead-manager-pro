@@ -131,15 +131,15 @@ const Auth = {
 
       // Notificar a content scripts SOLO si chrome.tabs está disponible
       if (chrome.tabs && chrome.tabs.query) {
-        chrome.tabs.query({}, function(tabs) {
-          tabs.forEach(tab => {
+      chrome.tabs.query({}, function(tabs) {
+        tabs.forEach(tab => {
             try {
-              chrome.tabs.sendMessage(tab.id, {
-                action: 'auth_state_changed',
-                authenticated: true
+          chrome.tabs.sendMessage(tab.id, {
+            action: 'auth_state_changed',
+            authenticated: true
               });
             } catch (error) {
-              // Ignorar errores de tabs que no tienen content script
+            // Ignorar errores de tabs que no tienen content script
             }
           });
         });

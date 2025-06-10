@@ -225,48 +225,25 @@ window.LeadManagerPro.modules.extractProfilesFromPage = async function(searchSta
           console.log(`Lead Manager Pro: Procesando texto de miembros: "${members}"`);
           
           if (members) {
-            // Primero intentamos el formato con números y multiplicadores (K, M)
-            const userMatch = members.match(/(\d+[\.,]?\d*)\s*[kKmM]?/);
-            if (userMatch) {
-              // Normalizar el string numérico
-              let userStr = userMatch[0].trim();
-              console.log(`Lead Manager Pro: Match de usuarios encontrado: "${userStr}"`);
-              
-              // Detectar si son miles (k) o millones (M) y aplicar multiplicador
-              let multiplier = 1;
-              if (userStr.toLowerCase().includes('k')) {
-                multiplier = 1000;
-                userStr = userStr.toLowerCase().replace('k', '');
-              } else if (userStr.toLowerCase().includes('m')) {
-                multiplier = 1000000;
-                userStr = userStr.toLowerCase().replace('m', '');
+            // Nuevo parseo robusto: solo 'mil', 'k', 'millones' como multiplicadores
+            const match = members.match(/([\d.,]+)\s*(mil|k|millones)?/i);
+            if (match) {
+              let numberPart = match[1].replace(',', '.').trim();
+              const suffix = match[2] ? match[2].toLowerCase() : '';
+              userCount = parseFloat(numberPart);
+              if (suffix === 'mil' || suffix === 'k') {
+                userCount *= 1000;
+              } else if (suffix === 'millones') {
+                userCount *= 1000000;
               }
-              
-              // Normalizar separadores decimales/miles
-              userStr = userStr.replace(',', '.').trim();
-              
-              // Convertir a número y aplicar multiplicador
-              userCount = parseFloat(userStr) * multiplier;
-              console.log(`Lead Manager Pro: Cantidad de usuarios calculada: ${userCount} (original: ${userStr}, multiplicador: ${multiplier})`);
-            }
-            
-            // Si no pudimos extraer el número, intentamos con texto completo
-            if (userCount === 0) {
-              console.log(`Lead Manager Pro: Intentando extraer número de usuarios con método alternativo`);
-              
-              // Extraer cualquier secuencia numérica
+              userCount = Math.floor(userCount);
+              console.log(`Lead Manager Pro: Cantidad de usuarios calculada (nuevo parser): ${userCount} (original: ${numberPart}, sufijo: ${suffix})`);
+            } else {
+              // Si no hay match, intentar extraer cualquier número
               const allNumbers = members.match(/\d+/g);
               if (allNumbers && allNumbers.length > 0) {
-                // Tomamos el número más grande como cantidad de usuarios
                 userCount = Math.max(...allNumbers.map(num => parseInt(num, 10)));
                 console.log(`Lead Manager Pro: Cantidad de usuarios extraída con método alternativo: ${userCount}`);
-                
-                // Aplicar multiplicador si hay indicadores de K o M
-                if (members.toLowerCase().includes('k') || members.toLowerCase().includes('mil')) {
-                  userCount *= 1000;
-                } else if (members.toLowerCase().includes('m') || members.toLowerCase().includes('mill')) {
-                  userCount *= 1000000;
-                }
               }
             }
           }

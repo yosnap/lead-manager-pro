@@ -49,14 +49,14 @@ class GroupSearchFiltersUI {
 
     // Crear secciones
     const groupTypesSection = this.createGroupTypesSection(filters.groupTypes);
-    const minMembersSection = this.createMinMembersSection(filters.minMembers);
+    const minUsersSection = this.createMinUsersSection(filters.minUsers);
     const minPostsSection = this.createMinPostsSection(filters.minPosts);
     const buttonsContainer = this.createButtonsContainer();
 
     // Ensamblar formulario
     formContainer.appendChild(title);
     formContainer.appendChild(groupTypesSection);
-    formContainer.appendChild(minMembersSection);
+    formContainer.appendChild(minUsersSection);
     formContainer.appendChild(minPostsSection);
     formContainer.appendChild(buttonsContainer);
 
@@ -133,7 +133,7 @@ class GroupSearchFiltersUI {
   }
 
   // Crear sección de miembros mínimos
-  createMinMembersSection(minMembers) {
+  createMinUsersSection(minUsers) {
     const section = document.createElement('div');
     section.style.marginBottom = '16px';
 
@@ -148,9 +148,9 @@ class GroupSearchFiltersUI {
 
     const input = document.createElement('input');
     input.type = 'number';
-    input.id = 'min-members';
+    input.id = 'min-users';
     input.min = '1';
-    input.value = minMembers;
+    input.value = minUsers;
     input.style.cssText = `
       width: 100%;
       padding: 8px 12px;
@@ -323,13 +323,13 @@ class GroupSearchFiltersUI {
       // Obtener valores del formulario
       const publicChecked = document.getElementById('group-type-public').checked;
       const privateChecked = document.getElementById('group-type-private').checked;
-      const minMembers = parseInt(document.getElementById('min-members').value);
+      const minUsers = parseInt(document.getElementById('min-users').value);
       const minPostsYear = parseInt(document.getElementById('min-posts-year').value);
       const minPostsMonth = parseInt(document.getElementById('min-posts-month').value);
       const minPostsDay = parseInt(document.getElementById('min-posts-day').value);
 
       // Validar
-      if (isNaN(minMembers) || minMembers < 1) {
+      if (isNaN(minUsers) || minUsers < 1) {
         alert('La cantidad mínima de miembros debe ser un número mayor a 0');
         return;
       }
@@ -345,7 +345,7 @@ class GroupSearchFiltersUI {
           public: publicChecked,
           private: privateChecked
         },
-        minMembers: minMembers,
+        minUsers: minUsers,
         minPosts: {
           year: isNaN(minPostsYear) ? 0 : minPostsYear,
           month: isNaN(minPostsMonth) ? 0 : minPostsMonth,

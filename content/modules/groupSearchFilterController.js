@@ -58,7 +58,7 @@ class GroupSearchFilterController {
       if (!isPublic && !filterCriteria.groupTypes.private) return false;
       
       // Verificar número mínimo de miembros (SIEMPRE DEBE CUMPLIRSE)
-      if (filterCriteria.minMembers > 0 && group.members < filterCriteria.minMembers) return false;
+      if (filterCriteria.minUsers > 0 && group.members < filterCriteria.minUsers) return false;
       
       // Verificar publicaciones mínimas (debe cumplir al menos UNA de las condiciones)
       // Si no hay actividad registrada, no se puede aplicar este filtro
@@ -89,10 +89,10 @@ class GroupSearchFilterController {
     // Intentar obtener los criterios desde el módulo de opciones
     if (window.leadManagerPro && window.leadManagerPro.generalOptions) {
       const options = window.leadManagerPro.generalOptions.getAllOptions();
-      if (options.groupTypes && options.minMembers !== undefined && options.minPosts) {
+      if (options.groupTypes && options.minUsers !== undefined && options.minPosts) {
         return {
           groupTypes: options.groupTypes,
-          minMembers: options.minMembers,
+          minUsers: options.minUsers,
           minPosts: options.minPosts
         };
       }
@@ -103,10 +103,10 @@ class GroupSearchFilterController {
       const savedOptions = localStorage.getItem('snap_lead_manager_general_options');
       if (savedOptions) {
         const parsedOptions = JSON.parse(savedOptions);
-        if (parsedOptions.groupTypes && parsedOptions.minMembers !== undefined && parsedOptions.minPosts) {
+        if (parsedOptions.groupTypes && parsedOptions.minUsers !== undefined && parsedOptions.minPosts) {
           return {
             groupTypes: parsedOptions.groupTypes,
-            minMembers: parsedOptions.minMembers,
+            minUsers: parsedOptions.minUsers,
             minPosts: parsedOptions.minPosts
           };
         }
@@ -121,7 +121,7 @@ class GroupSearchFilterController {
         public: true,
         private: true
       },
-      minMembers: 100,
+      minUsers: 100,
       minPosts: {
         year: 50,
         month: 10,

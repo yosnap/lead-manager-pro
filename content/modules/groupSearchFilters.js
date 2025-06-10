@@ -7,7 +7,7 @@ class GroupSearchFilters {
         public: true,
         private: true
       },
-      minMembers: 100,
+      minUsers: 100,
       minPosts: {
         year: 50,
         month: 10,
@@ -110,7 +110,7 @@ class GroupSearchFilters {
     if (typeof memberCount !== 'number' || isNaN(memberCount)) {
       return false;
     }
-    return memberCount >= this.filters.minMembers;
+    return memberCount >= this.filters.minUsers;
   }
   validatePostCount(postStats) {
     if (!postStats || typeof postStats !== 'object') {
@@ -127,7 +127,7 @@ class GroupSearchFilters {
     if (this.filters.groupTypes.public) allowedTypes.push('Público');
     if (this.filters.groupTypes.private) allowedTypes.push('Privado');
     criteria.push(`Tipos: ${allowedTypes.join(', ')}`);
-    criteria.push(`Miembros mínimos: ${this.filters.minMembers}`);
+    criteria.push(`Miembros mínimos: ${this.filters.minUsers}`);
     const postCriteria = [];
     if (this.filters.minPosts.year > 0) postCriteria.push(`${this.filters.minPosts.year}/año`);
     if (this.filters.minPosts.month > 0) postCriteria.push(`${this.filters.minPosts.month}/mes`);

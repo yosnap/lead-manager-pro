@@ -385,7 +385,7 @@ if (window.LeadManagerPro?.Auth) {
   window.authWrapper = window.LeadManagerPro.AuthenticationWrapper;
 } else {
   document.addEventListener('LeadManagerProAuthReady', () => {
-    window.LeadManagerPro.AuthenticationWrapper = new AuthenticationWrapper();
-    window.authWrapper = window.LeadManagerPro.AuthenticationWrapper;
+window.LeadManagerPro.AuthenticationWrapper = new AuthenticationWrapper();
+window.authWrapper = window.LeadManagerPro.AuthenticationWrapper;
   });
 }

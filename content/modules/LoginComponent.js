@@ -218,12 +218,12 @@ class LoginComponent {
       window.LeadManagerPro.Auth.login(username, password, remember, (success) => {
         this.setLoading(false);
         if (success) {
-          if (this.onLoginSuccess) {
-            this.onLoginSuccess();
-          }
-        } else {
-          this.showError('Credenciales incorrectas. Usa: lunai / lunai1234');
+        if (this.onLoginSuccess) {
+          this.onLoginSuccess();
         }
+      } else {
+        this.showError('Credenciales incorrectas. Usa: lunai / lunai1234');
+      }
       });
     } else {
       this.setLoading(false);

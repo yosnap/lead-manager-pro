@@ -1047,3 +1047,13 @@ function activarSwitchGruposPublicosRobusto() {
     }
   });
 }
+
+// Listener global para detener la búsqueda desde la UI aunque el sidebar falle
+window.addEventListener('message', (event) => {
+  if (event && event.data && event.data.action === 'stop_search') {
+    if (window.leadManagerPro && window.leadManagerPro.groupFinder) {
+      window.leadManagerPro.groupFinder.stopSearch();
+      console.log('[Lead Manager Pro] Búsqueda detenida por mensaje global.');
+    }
+  }
+});

@@ -1703,18 +1703,21 @@ function setupMessageListeners() {
 
     switch (message.action) {
       case 'status_update':
-        if (message.status) {
-          state.isRunning = message.status.isSearching;
-          state.isPaused = message.status.pauseSearch;
-          updateStatus(message.status.message || 'Actualizando...', message.status.progress);
-          updateUI();
-          debugLog('Estado actualizado:', {
-            isRunning: state.isRunning,
-            isPaused: state.isPaused,
-            message: message.status.message,
-            progress: message.status.progress
-          });
-        }
+        // Robustecer el mapeo de estado recibido
+        const s = message.status || {};
+        // Permitir compatibilidad con payload plano o anidado
+        state.isRunning = s.isSearching !== undefined ? s.isSearching : (s.isRunning !== undefined ? s.isRunning : false);
+        state.isPaused = s.pauseSearch !== undefined ? s.pauseSearch : (s.isPaused !== undefined ? s.isPaused : false);
+        state.progress = s.progress !== undefined ? s.progress : 0;
+        state.statusMessage = s.message || s.statusMessage || 'Actualizando...';
+        updateStatus(state.statusMessage, state.progress);
+        updateUI();
+        debugLog('Estado actualizado (robusto):', {
+          isRunning: state.isRunning,
+          isPaused: state.isPaused,
+          message: state.statusMessage,
+          progress: state.progress
+        });
         break;
 
       case 'search_result':

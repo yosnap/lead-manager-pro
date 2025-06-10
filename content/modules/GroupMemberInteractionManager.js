@@ -84,7 +84,7 @@ class GroupMemberInteractionManager {
     }
   }
 
-  async startMemberInteraction() {
+    async startMemberInteraction() {
     const config = {
       membersToInteract: parseInt(document.getElementById('members-to-interact')?.value) || 10,
       interactionDelay: parseFloat(document.getElementById('interaction-delay')?.value) || 3,

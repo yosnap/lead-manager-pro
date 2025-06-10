@@ -202,15 +202,14 @@ class GroupSearchUI {
     const stopBtn = this.container.querySelector('#lmp-stop-btn');
     if (stopBtn) {
       stopBtn.addEventListener('click', () => {
+        // Detener desde el content script (si está disponible)
         if (window.leadManagerPro && window.leadManagerPro.groupFinder) {
-          const groups = window.leadManagerPro.groupFinder.stopSearch();
-          this.updateProgress(100);
-          this.updateStatus(`Búsqueda finalizada. Se encontraron ${groups.length} grupos.`);
-          
-          // Actualizar la interfaz para mostrar que se ha detenido
-          if (pauseBtn) pauseBtn.disabled = true;
-          stopBtn.disabled = true;
+          window.leadManagerPro.groupFinder.stopSearch();
         }
+        // Enviar mensaje global para asegurar que el content script lo reciba
+        window.postMessage({ action: 'stop_search' }, '*');
+        this.updateControlButtonsState(false, false);
+        this.updateStatus('Búsqueda detenida por el usuario');
       });
     }
     
@@ -247,6 +246,27 @@ class GroupSearchUI {
             this.updateStatus('Resultados exportados en formato CSV');
           }
         }
+      });
+    }
+
+    // Llamar a updateControlButtonsState en los eventos relevantes
+    // Al iniciar búsqueda
+    this.updateControlButtonsState(true, false);
+    // Al pausar
+    if (pauseBtn) {
+      pauseBtn.addEventListener('click', () => {
+        const isPaused = pauseBtn.textContent === 'Reanudar';
+        if (isPaused) {
+          this.updateControlButtonsState(true, false);
+        } else {
+          this.updateControlButtonsState(true, true);
+        }
+      });
+    }
+    // Al detener
+    if (stopBtn) {
+      stopBtn.addEventListener('click', () => {
+        this.updateControlButtonsState(false, false);
       });
     }
   }
@@ -411,6 +431,38 @@ class GroupSearchUI {
         setTimeout(() => clearInterval(interval), 10000);
       }
     });
+  }
+
+  // Añadir función para actualizar colores de los botones según el estado
+  updateControlButtonsState(isSearching, isPaused) {
+    const pauseBtn = this.container.querySelector('#lmp-pause-btn');
+    const stopBtn = this.container.querySelector('#lmp-stop-btn');
+    if (pauseBtn) {
+      if (!isSearching) {
+        pauseBtn.style.backgroundColor = '#ccc';
+        pauseBtn.style.color = '#fff';
+        pauseBtn.disabled = true;
+      } else if (isPaused) {
+        pauseBtn.style.backgroundColor = '#dc3545'; // rojo
+        pauseBtn.style.color = '#fff';
+        pauseBtn.disabled = false;
+      } else {
+        pauseBtn.style.backgroundColor = '#1877f2'; // azul
+        pauseBtn.style.color = '#fff';
+        pauseBtn.disabled = false;
+      }
+    }
+    if (stopBtn) {
+      if (!isSearching) {
+        stopBtn.style.backgroundColor = '#ccc';
+        stopBtn.style.color = '#fff';
+        stopBtn.disabled = true;
+      } else {
+        stopBtn.style.backgroundColor = '#dc3545'; // rojo
+        stopBtn.style.color = '#fff';
+        stopBtn.disabled = false;
+      }
+    }
   }
 }
 

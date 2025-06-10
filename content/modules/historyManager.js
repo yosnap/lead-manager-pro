@@ -214,46 +214,46 @@
   function resetGroupHistoryDirectly(groupId) {
     return new Promise(resolve => {
       // chrome.storage.local.get(['interactionHistory', 'leadManagerInteractionHistory'], (result) => { // PARA BORRAR: clave antigua
-      // Reiniciar en leadManagerInteractionHistory
-      if (result.leadManagerInteractionHistory) {
-        const history = result.leadManagerInteractionHistory;
-        
-        if (history.interactions && history.interactions[groupId]) {
-          // Calcular cuántas interacciones había para restar del total
-          const interactionsCount = history.interactions[groupId].members ? 
-            history.interactions[groupId].members.length : 0;
+        // Reiniciar en leadManagerInteractionHistory
+        if (result.leadManagerInteractionHistory) {
+          const history = result.leadManagerInteractionHistory;
           
-          // Reiniciar el grupo
-          history.interactions[groupId] = {
-            lastIndex: 0,
-            members: []
-          };
-          
-          // Actualizar contador total
-          history.totalInteractions = Math.max(0, (history.totalInteractions || 0) - interactionsCount);
-          
-          // Guardar cambios
+          if (history.interactions && history.interactions[groupId]) {
+            // Calcular cuántas interacciones había para restar del total
+            const interactionsCount = history.interactions[groupId].members ? 
+              history.interactions[groupId].members.length : 0;
+            
+            // Reiniciar el grupo
+            history.interactions[groupId] = {
+              lastIndex: 0,
+              members: []
+            };
+            
+            // Actualizar contador total
+            history.totalInteractions = Math.max(0, (history.totalInteractions || 0) - interactionsCount);
+            
+            // Guardar cambios
           // chrome.storage.local.set({ 'leadManagerInteractionHistory': history }); // PARA BORRAR: clave antigua
+          }
         }
-      }
-      
-      // Reiniciar en interactionHistory
-      if (result.interactionHistory) {
-        const history = result.interactionHistory;
         
-        if (history[groupId]) {
-          // Reiniciar el grupo
-          history[groupId] = {
-            lastIndex: 0,
-            interactions: []
-          };
+        // Reiniciar en interactionHistory
+        if (result.interactionHistory) {
+          const history = result.interactionHistory;
           
-          // Guardar cambios
+          if (history[groupId]) {
+            // Reiniciar el grupo
+            history[groupId] = {
+              lastIndex: 0,
+              interactions: []
+            };
+            
+            // Guardar cambios
           // chrome.storage.local.set({ 'interactionHistory': history }); // PARA BORRAR: clave antigua
+          }
         }
-      }
-      
-      resolve();
+        
+        resolve();
     });
   }
   

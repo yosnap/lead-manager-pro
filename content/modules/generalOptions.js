@@ -21,18 +21,18 @@ class GeneralOptions {
       } else {
         this.saveOptions(this.defaultOptions);
         console.log('No se encontraron opciones en chrome.storage.sync, guardando opciones por defecto');
-      }
+    }
     });
   }
   
   // Guardar opciones en chrome.storage.sync
   saveOptions(options) {
-    const newOptions = { ...this.options, ...options };
-    this.options = newOptions;
+      const newOptions = { ...this.options, ...options };
+      this.options = newOptions;
     chrome.storage.sync.set({ peopleSearchSettings: newOptions }, () => {
       console.log('Opciones generales guardadas en chrome.storage.sync:', newOptions);
     });
-    return true;
+      return true;
   }
   
   // Obtener una opción específica
