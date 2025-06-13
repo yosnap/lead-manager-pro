@@ -18,7 +18,13 @@ window.LeadManagerPro.modules.applyCityFilter = async function() {
     const selectFirstCitySuggestion = window.LeadManagerPro.modules.selectFirstCitySuggestion;
     
     // Verificar si ya se aplicó el filtro
-    const cityFilterApplied = localStorage.getItem('snap_lead_manager_city_filter_applied') === 'true';
+    let cityFilterApplied = false;
+    await new Promise(resolve => {
+      chrome.storage.local.get(['snap_lead_manager_city_filter_applied'], (result) => {
+        cityFilterApplied = result.snap_lead_manager_city_filter_applied === 'true';
+        resolve();
+      });
+    });
     if (cityFilterApplied) {
       // Iniciar automáticamente la búsqueda 
       if (window.LeadManagerPro.modules.findProfiles) {
@@ -30,17 +36,21 @@ window.LeadManagerPro.modules.applyCityFilter = async function() {
     }
     
     // Obtener datos de búsqueda del localStorage
-    const searchDataStr = localStorage.getItem('snap_lead_manager_search_data');
-    if (!searchDataStr) {
-      localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+    let searchData = null;
+    await new Promise(resolve => {
+      chrome.storage.local.get(['snap_lead_manager_search_data'], (result) => {
+        searchData = result.snap_lead_manager_search_data;
+        resolve();
+      });
+    });
+    if (!searchData) {
+      chrome.storage.local.set({ 'snap_lead_manager_city_filter_applied': 'true' });
       return { success: false, message: 'No hay datos de búsqueda disponibles' };
     }
     
-    const searchData = JSON.parse(searchDataStr);
-    
     // Verificar si hay una ciudad especificada en los datos de búsqueda
     if (!searchData || !searchData.city || searchData.city.trim() === '') {
-      localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+      chrome.storage.local.set({ 'snap_lead_manager_city_filter_applied': 'true' });
       return { success: true, message: 'No hay ciudad para filtrar' };
     }
     
@@ -107,7 +117,7 @@ window.LeadManagerPro.modules.applyCityFilter = async function() {
     const filterApplied = await verifyFilterApplied(city);
     
     // Marcar como aplicado para evitar reintentos
-    localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+    chrome.storage.local.set({ 'snap_lead_manager_city_filter_applied': 'true' });
     
     // Notificar al sidebar que el filtro fue aplicado
     notifySidebarFilterApplied(city);
@@ -126,7 +136,7 @@ window.LeadManagerPro.modules.applyCityFilter = async function() {
     return { success: true, message: 'Filtro de ciudad aplicado con éxito' };
   } catch (error) {
     window.LeadManagerPro.utils.updateStatus('Error al aplicar filtro de ciudad, continuando sin filtro', 40);
-    localStorage.setItem('snap_lead_manager_city_filter_applied', 'true');
+    chrome.storage.local.set({ 'snap_lead_manager_city_filter_applied': 'true' });
     
     // Intentar continuar de todos modos
     setTimeout(() => {

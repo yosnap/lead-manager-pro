@@ -1052,3 +1052,19 @@ newToggle.addEventListener('click', function() {
   newToggle.style.transform = 'scale(0.92)';
   setTimeout(() => { newToggle.style.transform = 'scale(1)'; }, 120);
 });
+
+// Migración: obtener datos de búsqueda y resultados desde chrome.storage.local en vez de localStorage
+async function getSearchData() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['snap_lead_manager_search_data'], (result) => {
+      resolve(result.snap_lead_manager_search_data);
+    });
+  });
+}
+async function getSearchResults() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['snap_lead_manager_search_results'], (result) => {
+      resolve(result.snap_lead_manager_search_results || []);
+    });
+  });
+}

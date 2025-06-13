@@ -79,20 +79,6 @@ function resetExtension() {
   console.log('Restableciendo Lead Manager Pro...');
   
   try {
-    // Limpiar localStorage
-    const keysToKeep = [];
-    const keysToRemove = [];
-    
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('snap_lead_manager_')) {
-        keysToRemove.push(key);
-      }
-    }
-    
-    console.log('Limpiando localStorage:', keysToRemove);
-    keysToRemove.forEach(key => localStorage.removeItem(key));
-    
     // Eliminar elementos DOM existentes
     const elementsToRemove = [
       'snap-lead-manager-searcher',

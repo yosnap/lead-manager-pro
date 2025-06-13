@@ -1057,3 +1057,19 @@ window.addEventListener('message', (event) => {
     }
   }
 });
+
+// Migración: obtener datos de búsqueda y opciones desde chrome.storage.local en vez de localStorage
+async function getGeneralOptions() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['snap_lead_manager_general_options'], (result) => {
+      resolve(result.snap_lead_manager_general_options);
+    });
+  });
+}
+async function getSearchData() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['snap_lead_manager_search_data'], (result) => {
+      resolve(result.snap_lead_manager_search_data);
+    });
+  });
+}

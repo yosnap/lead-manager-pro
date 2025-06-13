@@ -83,11 +83,6 @@ window.LeadManagerPro.state.resetSearchState = function() {
 
   // Notificar reinicio
   this.updateSearchState(this.searchState);
-
-  // Limpiar localStorage solo para estado de búsqueda
-  // localStorage.removeItem('searchState'); // PARA BORRAR: clave antigua
-  // localStorage.removeItem('lastSearchResults'); // PARA BORRAR: clave antigua
-  // localStorage.removeItem('lastSearchTime'); // PARA BORRAR: clave antigua
 };
 
 /**
@@ -145,13 +140,6 @@ window.LeadManagerPro.state.updateSearchState = function(newState) {
     type: 'BACKGROUND_STATUS_UPDATE',
     payload: this.searchState
   });
-
-  // Guardar estado en localStorage para persistencia temporal
-  // try {
-  //   localStorage.setItem('searchState', JSON.stringify(this.searchState));
-  // } catch (error) {
-  //   console.error('Error al guardar estado en localStorage:', error);
-  // }
 };
 
 // Función para notificar resultados
@@ -174,14 +162,6 @@ window.LeadManagerPro.state.notifyResults = function(results, message = '') {
 
   // Actualizar estado
   this.updateSearchState(payload);
-
-  // Guardar resultados en localStorage
-  // try {
-  //   localStorage.setItem('lastSearchResults', JSON.stringify(results));
-  //   localStorage.setItem('lastSearchTime', new Date().toISOString());
-  // } catch (error) {
-  //   console.error('Error al guardar resultados en localStorage:', error);
-  // }
 };
 
 // Cargar estado al inicializar

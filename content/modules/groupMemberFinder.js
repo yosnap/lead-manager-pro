@@ -30,7 +30,7 @@ class GroupMemberFinder {
   }
 
   // Inicializar con opciones
-  init(options, progressCallback = null) {
+  async init(options, progressCallback = null) {
     // Verificar autenticación
     if (!this.checkAuthentication()) {
       console.log('GroupMemberFinder: Inicialización bloqueada - autenticación requerida');
@@ -42,50 +42,40 @@ class GroupMemberFinder {
     
     this.options = options || {};
     
-    // Cargar opciones generales desde localStorage
+    // Cargar opciones generales desde chrome.storage.local
     try {
-      const generalOptionsStr = localStorage.getItem('snap_lead_manager_general_options');
-      
-      if (generalOptionsStr) {
-        const generalOptions = JSON.parse(generalOptionsStr);
-        console.log('→ Options found in localStorage:', generalOptions);
-        
+      let generalOptions = null;
+      await new Promise(resolve => {
+        chrome.storage.local.get(['snap_lead_manager_general_options'], (result) => {
+          generalOptions = result.snap_lead_manager_general_options;
+          resolve();
+        });
+      });
+      if (generalOptions) {
+        console.log('→ Options found in chrome.storage.local:', generalOptions);
         if (!isNaN(Number(generalOptions.maxScrolls))) {
           this.maxScrolls = Number(generalOptions.maxScrolls);
-          console.log('→ Setting maxScrolls from localStorage:', this.maxScrolls);
+          console.log('→ Setting maxScrolls from chrome.storage.local:', this.maxScrolls);
         } else {
-          console.warn('→ Invalid maxScrolls in localStorage, using default value');
+          console.warn('→ Invalid maxScrolls in chrome.storage.local, using default value');
           this.maxScrolls = 50;
         }
-        
         if (!isNaN(Number(generalOptions.scrollDelay))) {
           // Convertir a milisegundos
           this.scrollTimeout = Number(generalOptions.scrollDelay) * 1000;
-          console.log('→ Setting scrollDelay from localStorage:', generalOptions.scrollDelay, 'seconds');
+          console.log('→ Setting scrollDelay from chrome.storage.local:', generalOptions.scrollDelay, 'seconds');
         } else {
-          console.warn('→ Invalid scrollDelay in localStorage, using default value');
+          console.warn('→ Invalid scrollDelay in chrome.storage.local, using default value');
           this.scrollTimeout = 2000;
         }
       } else {
-        console.warn('⚠️ No options in localStorage - using defaults');
-        
+        console.warn('⚠️ No options in chrome.storage.local - using defaults');
         // Usar valores por defecto
         this.maxScrolls = 50;
         this.scrollTimeout = 2000;
-        
-        // Guardar en localStorage para futuros usos
-        // localStorage.setItem('snap_lead_manager_general_options', JSON.stringify({
-        //   maxScrolls: this.maxScrolls,
-        //   scrollDelay: this.scrollTimeout / 1000
-        // })); // PARA BORRAR: clave antigua
-        
-        console.log('→ Default options saved to localStorage:', {
-          maxScrolls: this.maxScrolls,
-          scrollDelay: this.scrollTimeout / 1000
-        });
       }
     } catch (parseError) {
-      console.error('⚠️ ERROR parsing options from localStorage:', parseError);
+      console.error('⚠️ ERROR parsing options from chrome.storage.local:', parseError);
       // En caso de error, usar valores por defecto
       this.maxScrolls = 50;
       this.scrollTimeout = 2000;

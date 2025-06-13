@@ -66,15 +66,22 @@ window.LeadManagerPro.modules.findProfiles = async function() {
       }
     }
     
-    // Obtener datos de búsqueda del localStorage
-    const searchDataStr = localStorage.getItem('snap_lead_manager_search_data');
-    if (!searchDataStr) {
+    // Migración: lectura de datos de búsqueda desde chrome.storage.local en vez de localStorage
+    async function getSearchData() {
+      return new Promise(resolve => {
+        chrome.storage.local.get(['snap_lead_manager_search_data'], (result) => {
+          resolve(result.snap_lead_manager_search_data);
+        });
+      });
+    }
+
+    // Reemplaza la lógica de obtención de searchDataStr y searchData
+    const searchData = await getSearchData();
+    if (!searchData) {
       console.error('Lead Manager Pro: No hay datos de búsqueda disponibles');
       return { success: false, message: 'No hay datos de búsqueda disponibles' };
     }
-    
-    const searchData = JSON.parse(searchDataStr);
-    
+
     // Validar datos de búsqueda
     if (!searchData || !searchData.term || searchData.term.trim() === '') {
       console.error('Lead Manager Pro: Término de búsqueda no válido');
@@ -96,12 +103,12 @@ window.LeadManagerPro.modules.findProfiles = async function() {
     });
     
     console.log(`Lead Manager Pro: Estado de búsqueda inicializado: ${JSON.stringify({
-      searchType: searchState.searchType,
-      searchTerm: searchState.searchTerm,
-      city: searchState.city
+      searchType: searchData.type || 'people',
+      searchTerm: searchData.term.trim(),
+      city: searchData.city || ''
     })}`);
     
-    updateStatus(`Iniciando búsqueda de ${searchState.searchType === 'people' ? 'personas' : 'grupos'} para: ${searchState.searchTerm}`, 5);
+    updateStatus(`Iniciando búsqueda de ${searchData.type === 'people' ? 'personas' : 'grupos'} para: ${searchData.term.trim()}`, 5);
     
     // Verificar si el filtro de ciudad ya se aplicó
     const cityFilterApplied = localStorage.getItem('snap_lead_manager_city_filter_applied') === 'true';
@@ -150,42 +157,37 @@ window.LeadManagerPro.modules.findProfiles = async function() {
     const resultType = searchState.searchType === 'people' ? 'perfiles' : 'grupos';
     updateStatus(`Encontrados ${searchState.foundProfiles.length} ${resultType} en la página ${searchState.currentPage}.`, 50);
     
-    // Obtener opciones para controlar la búsqueda DIRECTAMENTE desde localStorage
-    let MAX_SCROLLS = 50; // valor por defecto
-    let SCROLL_DELAY = 2000; // valor por defecto en milisegundos
-    
-    try {
-      // Leer directamente desde localStorage donde el sidebar guarda la configuración
-      const generalOptionsStr = localStorage.getItem('snap_lead_manager_general_options');
-      if (generalOptionsStr) {
-        const generalOptions = JSON.parse(generalOptionsStr);
-        
-        // Usar configuración del sidebar si está disponible
-        if (generalOptions && !isNaN(Number(generalOptions.maxScrolls))) {
-          MAX_SCROLLS = Number(generalOptions.maxScrolls);
-        }
-        
-        if (generalOptions && !isNaN(Number(generalOptions.scrollDelay))) {
-          SCROLL_DELAY = Number(generalOptions.scrollDelay) * 1000; // Convertir a milisegundos
-        }
-        
-        console.log('findProfiles: Usando configuración de localStorage:', {
-          maxScrolls: MAX_SCROLLS, 
-          scrollDelay: SCROLL_DELAY/1000
+    // Migración: obtener opciones generales desde chrome.storage.local en vez de localStorage
+    async function getGeneralOptions() {
+      return new Promise(resolve => {
+        chrome.storage.local.get(['snap_lead_manager_general_options'], (result) => {
+          resolve(result.snap_lead_manager_general_options);
         });
-      } else {
-        // Usar opciones del estado global solo como respaldo
-        const options = window.LeadManagerPro.state.options || {};
-        MAX_SCROLLS = !isNaN(Number(options.maxScrolls)) ? Number(options.maxScrolls) : 50;
-        SCROLL_DELAY = (!isNaN(Number(options.scrollDelay)) ? Number(options.scrollDelay) : 2) * 1000;
-        
-        console.log('findProfiles: No se encontró configuración en localStorage, usando respaldo:', {
-          maxScrolls: MAX_SCROLLS, 
-          scrollDelay: SCROLL_DELAY/1000
-        });
+      });
+    }
+
+    // Reemplaza la lógica de obtención de generalOptionsStr y generalOptions
+    let generalOptions = await getGeneralOptions();
+    if (generalOptions) {
+      if (!isNaN(Number(generalOptions.maxScrolls))) {
+        MAX_SCROLLS = Number(generalOptions.maxScrolls);
       }
-    } catch (error) {
-      console.error('Error al leer configuración para findProfiles:', error);
+      if (!isNaN(Number(generalOptions.scrollDelay))) {
+        SCROLL_DELAY = Number(generalOptions.scrollDelay) * 1000;
+      }
+      console.log('findProfiles: Usando configuración de chrome.storage.local:', {
+        maxScrolls: MAX_SCROLLS,
+        scrollDelay: SCROLL_DELAY/1000
+      });
+    } else {
+      // Usar opciones del estado global solo como respaldo
+      const options = window.LeadManagerPro.state.options || {};
+      MAX_SCROLLS = !isNaN(Number(options.maxScrolls)) ? Number(options.maxScrolls) : 50;
+      SCROLL_DELAY = (!isNaN(Number(options.scrollDelay)) ? Number(options.scrollDelay) : 2) * 1000;
+      console.log('findProfiles: No se encontró configuración en chrome.storage.local, usando respaldo:', {
+        maxScrolls: MAX_SCROLLS,
+        scrollDelay: SCROLL_DELAY/1000
+      });
     }
     
     // Continuar con las siguientes páginas hasta que se alcance el máximo de scrolls

@@ -98,21 +98,24 @@ class GroupSearchFilterController {
       }
     }
     
-    // Si no está disponible el módulo, intentar obtener desde localStorage
+    // Si no está disponible el módulo, intentar obtener desde chrome.storage.local
     try {
-      const savedOptions = localStorage.getItem('snap_lead_manager_general_options');
-      if (savedOptions) {
-        const parsedOptions = JSON.parse(savedOptions);
-        if (parsedOptions.groupTypes && parsedOptions.minUsers !== undefined && parsedOptions.minPosts) {
-          return {
-            groupTypes: parsedOptions.groupTypes,
-            minUsers: parsedOptions.minUsers,
-            minPosts: parsedOptions.minPosts
-          };
-        }
+      let parsedOptions = null;
+      await new Promise(resolve => {
+        chrome.storage.local.get(['snap_lead_manager_general_options'], (result) => {
+          parsedOptions = result.snap_lead_manager_general_options;
+          resolve();
+        });
+      });
+      if (parsedOptions && parsedOptions.groupTypes && parsedOptions.minUsers !== undefined && parsedOptions.minPosts) {
+        return {
+          groupTypes: parsedOptions.groupTypes,
+          minUsers: parsedOptions.minUsers,
+          minPosts: parsedOptions.minPosts
+        };
       }
     } catch (error) {
-      console.error('Error al leer criterios de filtrado desde localStorage:', error);
+      console.error('Error al leer criterios de filtrado desde chrome.storage.local:', error);
     }
     
     // Si no se puede obtener de ninguna forma, usar valores por defecto

@@ -411,8 +411,8 @@ function performSearch() {
       city: searchCity,
       timestamp: Date.now()
     };
-    localStorage.setItem('snap_lead_manager_search_data', JSON.stringify(searchData));
-    localStorage.setItem('snap_lead_manager_search_active', 'true');
+    chrome.storage.local.set({ snap_lead_manager_search_data: searchData });
+    chrome.storage.local.set({ snap_lead_manager_search_active: true });
 
     debugLog('Datos de búsqueda guardados');
 
@@ -581,7 +581,7 @@ function stopSearch() {
     state.isPaused = false;
 
     // Guardar indicador de búsqueda inactiva
-    localStorage.setItem('snap_lead_manager_search_active', 'false');
+    chrome.storage.local.set({ snap_lead_manager_search_active: false });
 
     // Detener verificación de estado
     stopStatusChecking();
@@ -691,11 +691,7 @@ function updateResultsList(profiles) {
   });
 
   // Guardar resultados en localStorage
-  try {
-    localStorage.setItem('snap_lead_manager_search_results', JSON.stringify(profiles));
-  } catch (error) {
-    console.error('Error al guardar resultados en localStorage:', error);
-  }
+  chrome.storage.local.set({ snap_lead_manager_search_results: profiles });
 
   // Mostrar resumen y crear botones de exportación con JS (no inline)
   if (resultsSummary) {
@@ -947,7 +943,7 @@ function updateExistingCriteria() {
   state.savedCriteria[criteriaIndex] = updatedCriteria;
 
   // Guardar en localStorage
-  localStorage.setItem('snap_lead_manager_saved_criteria', JSON.stringify(state.savedCriteria));
+  chrome.storage.local.set({ snap_lead_manager_saved_criteria: state.savedCriteria });
 
   // Restaurar estado de edición
   state.editingCriteriaId = null;
@@ -1047,7 +1043,7 @@ function saveSearchCriteria() {
   }
 
   // Guardar en localStorage
-  localStorage.setItem('snap_lead_manager_saved_criteria', JSON.stringify(state.savedCriteria));
+  chrome.storage.local.set({ snap_lead_manager_saved_criteria: state.savedCriteria });
 
   // Cerrar modal
   saveCriteriaModal.style.display = 'none';
@@ -1264,7 +1260,7 @@ function renameSavedCriteria(criteriaId) {
     state.savedCriteria[criteriaIndex].name = newName.trim();
 
     // Guardar en localStorage
-    localStorage.setItem('snap_lead_manager_saved_criteria', JSON.stringify(state.savedCriteria));
+    chrome.storage.local.set({ snap_lead_manager_saved_criteria: state.savedCriteria });
 
     // Actualizar lista
     updateSavedCriteriaList();
@@ -1278,7 +1274,7 @@ function deleteSavedCriteria(criteriaId) {
     state.savedCriteria = state.savedCriteria.filter(c => c.id !== criteriaId);
 
     // Guardar en localStorage
-    localStorage.setItem('snap_lead_manager_saved_criteria', JSON.stringify(state.savedCriteria));
+    chrome.storage.local.set({ snap_lead_manager_saved_criteria: state.savedCriteria });
 
     // Actualizar lista
     updateSavedCriteriaList();
@@ -1465,7 +1461,7 @@ function applySavedCriteria(criteria) {
         updateSearchInfo();
 
   // Guardar criterios en localStorage
-  localStorage.setItem('snap_lead_manager_search_criteria', JSON.stringify(criteria));
+  chrome.storage.local.set({ snap_lead_manager_search_criteria: criteria });
 }
 
 // Función para inicializar eventos
@@ -1624,7 +1620,7 @@ async function initializeSidebar() {
     debugLog('Navegación por tabs inicializada');
 
     // Verificar si hay una búsqueda en curso
-    const searchActive = localStorage.getItem('snap_lead_manager_search_active') === 'true';
+    const searchActive = chrome.storage.local.get({ snap_lead_manager_search_active: false }, (result) => result.snap_lead_manager_search_active);
     debugLog('Estado de búsqueda activa:', searchActive);
 
     if (searchActive) {
@@ -1664,25 +1660,25 @@ async function loadSavedState() {
 
   try {
     // Cargar criterios guardados
-    const savedCriteria = localStorage.getItem('snap_lead_manager_saved_criteria');
+    const savedCriteria = chrome.storage.local.get({ snap_lead_manager_saved_criteria: [] }, (result) => result.snap_lead_manager_saved_criteria);
     if (savedCriteria) {
-      state.savedCriteria = JSON.parse(savedCriteria);
+      state.savedCriteria = savedCriteria;
       debugLog('Criterios guardados cargados:', state.savedCriteria.length);
     }
 
     // Cargar resultados previos si existen
-    const savedResults = localStorage.getItem('snap_lead_manager_search_results');
+    const savedResults = chrome.storage.local.get({ snap_lead_manager_search_results: [] }, (result) => result.snap_lead_manager_search_results);
     if (savedResults) {
-      const results = JSON.parse(savedResults);
+      const results = savedResults;
       debugLog('Resultados previos encontrados:', results.length);
       // Mostrar resultados previos
       handleSearchResults(results, 'Resultados de búsqueda previa');
     }
 
     // Cargar datos de búsqueda actual
-    const searchData = localStorage.getItem('snap_lead_manager_search_data');
+    const searchData = chrome.storage.local.get({ snap_lead_manager_search_data: {} }, (result) => result.snap_lead_manager_search_data);
     if (searchData) {
-      const data = JSON.parse(searchData);
+      const data = searchData;
       debugLog('Datos de búsqueda actual:', data);
 
       // Actualizar campos
@@ -1754,7 +1750,7 @@ function setupMessageListeners() {
           // Actualizar estado final
           updateStatus(statusMessage || 'Búsqueda completada', 100);
           document.body.classList.remove('search-active');
-          localStorage.setItem('snap_lead_manager_search_active', 'false');
+          chrome.storage.local.set({ snap_lead_manager_search_active: false });
 
           // Detener verificación de estado
           stopStatusChecking();
@@ -1771,7 +1767,7 @@ function setupMessageListeners() {
         showError(message.error);
         state.isRunning = false;
         state.isPaused = false;
-        localStorage.setItem('snap_lead_manager_search_active', 'false');
+        chrome.storage.local.set({ snap_lead_manager_search_active: false });
         stopStatusChecking();
         updateUI();
         debugLog('Error procesado:', message.error);
@@ -1780,7 +1776,7 @@ function setupMessageListeners() {
       case 'sidebar_ready':
         debugLog('Sidebar listo, verificando estado inicial...');
         // Si hay una búsqueda activa, solicitar estado
-        if (localStorage.getItem('snap_lead_manager_search_active') === 'true') {
+        if (chrome.storage.local.get({ snap_lead_manager_search_active: false }, (result) => result.snap_lead_manager_search_active)) {
           getSearchStatus();
         }
         break;
@@ -2170,11 +2166,7 @@ function handleSearchResults(results, message = '') {
   addLogEntry(message || `Búsqueda completada. Se encontraron ${results.length} grupos.`);
 
   // Guardar resultados en localStorage
-  try {
-    localStorage.setItem('snap_lead_manager_search_results', JSON.stringify(results));
-  } catch (error) {
-    console.error('Error al guardar resultados en localStorage:', error);
-  }
+  chrome.storage.local.set({ snap_lead_manager_search_results: results });
 
   // Actualizar UI
   updateUI();
@@ -2191,9 +2183,9 @@ function exportResults(format) {
   // Si no hay resultados en el estado, intenta recuperarlos de localStorage
   if (!results || !Array.isArray(results) || results.length === 0) {
     try {
-      const saved = localStorage.getItem('snap_lead_manager_search_results');
+      const saved = chrome.storage.local.get({ snap_lead_manager_search_results: [] }, (result) => result.snap_lead_manager_search_results);
       if (saved) {
-        results = JSON.parse(saved);
+        results = saved;
       }
     } catch (e) {}
   }
@@ -2454,5 +2446,117 @@ function downloadFile(content, filename, type) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+// Migración: lectura de resultados de búsqueda desde chrome.storage.local en vez de localStorage
+async function getSearchResults() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['snap_lead_manager_search_results'], (result) => {
+      resolve(result.snap_lead_manager_search_results || []);
+    });
+  });
+}
+
+// Función para precargar los datos de la última búsqueda y reflejarlos en la UI y el estado global
+async function precargarBusqueda() {
+  const searchData = await getSearchData();
+  console.log('[Precarga] Datos recuperados para precarga:', searchData);
+  console.log('[Precarga] Referencias de inputs:', {
+    searchTypeSelect,
+    searchTermInput,
+    searchCityInput
+  });
+  if (searchData) {
+    if (searchTypeSelect) {
+      searchTypeSelect.value = searchData.type || 'groups';
+      searchTypeSelect.dispatchEvent(new Event('change'));
+      console.log('[Precarga] Asignado searchTypeSelect:', searchTypeSelect.value);
+    } else {
+      console.warn('[Precarga] searchTypeSelect no está disponible');
+    }
+    if (searchTermInput) {
+      searchTermInput.value = searchData.term || '';
+      console.log('[Precarga] Asignado searchTermInput:', searchTermInput.value);
+    } else {
+      console.warn('[Precarga] searchTermInput no está disponible');
+    }
+    if (searchCityInput) {
+      searchCityInput.value = searchData.city || '';
+      console.log('[Precarga] Asignado searchCityInput:', searchCityInput.value);
+    } else {
+      console.warn('[Precarga] searchCityInput no está disponible');
+    }
+    // Actualiza el estado global
+    state.currentSearchTerm = searchData.term || '';
+    state.currentSearchCity = searchData.city || '';
+    state.currentSearchType = searchData.type || 'groups';
+    // Actualiza la UI de estado
+    if (typeof updateSearchInfo === 'function') updateSearchInfo();
+  } else {
+    console.warn('[Precarga] No se recuperaron datos de búsqueda para precargar');
+  }
+}
+
+// Función para precargar criterios guardados y reflejarlos en la UI
+async function precargarCriteriosGuardados() {
+  const criterios = await new Promise(resolve => {
+    chrome.storage.local.get(['snap_lead_manager_saved_criteria'], (result) => {
+      resolve(result.snap_lead_manager_saved_criteria || []);
+    });
+  });
+  state.savedCriteria = criterios;
+  if (typeof updateSavedCriteriaList === 'function') updateSavedCriteriaList();
+}
+
+// Función para precargar resultados y reflejarlos en la UI
+async function precargarResultados() {
+  const resultados = await getSearchResults();
+  if (typeof updateResultsList === 'function') updateResultsList(resultados);
+}
+
+// Llamar a las funciones de precarga al cargar la UI, asegurando que el DOM esté listo
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', async () => {
+    await precargarBusqueda();
+    await precargarCriteriosGuardados();
+    await precargarResultados();
+    // Trigger automático del filtro de ciudad si hay valor precargado
+    if (searchCityInput && searchCityInput.value) {
+      console.log('[Precarga] Forzando flag de filtro de ciudad a false y aplicando filtro...');
+      chrome.storage.local.set({ 'snap_lead_manager_city_filter_applied': 'false' }, async () => {
+        if (window.LeadManagerPro && window.LeadManagerPro.modules && window.LeadManagerPro.modules.applyCityFilter) {
+          await window.LeadManagerPro.modules.applyCityFilter();
+        } else {
+          console.warn('[Precarga] No se encontró applyCityFilter en LeadManagerPro.modules');
+        }
+      });
+    }
+  });
+} else {
+  (async () => {
+    await precargarBusqueda();
+    await precargarCriteriosGuardados();
+    await precargarResultados();
+    // Trigger automático del filtro de ciudad si hay valor precargado
+    if (searchCityInput && searchCityInput.value) {
+      console.log('[Precarga] Forzando flag de filtro de ciudad a false y aplicando filtro...');
+      chrome.storage.local.set({ 'snap_lead_manager_city_filter_applied': 'false' }, async () => {
+        if (window.LeadManagerPro && window.LeadManagerPro.modules && window.LeadManagerPro.modules.applyCityFilter) {
+          await window.LeadManagerPro.modules.applyCityFilter();
+        } else {
+          console.warn('[Precarga] No se encontró applyCityFilter en LeadManagerPro.modules');
+        }
+      });
+    }
+  })();
+}
+
+// Utilidad para obtener los datos de búsqueda desde chrome.storage.local
+async function getSearchData() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['snap_lead_manager_search_data'], (result) => {
+      resolve(result.snap_lead_manager_search_data);
+    });
+  });
 }
 

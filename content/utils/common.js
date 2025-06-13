@@ -65,5 +65,59 @@ window.LeadManagerPro.utils.log = function(message, data) {
   }
 };
 
+/**
+ * Migra automáticamente los datos relevantes de localStorage a chrome.storage.local y limpia localStorage
+ */
+window.LeadManagerPro.utils.migrateLocalStorageToExtensionStorage = async function() {
+  // Lista de claves relevantes a migrar
+  const keysToMigrate = [
+    'snap_lead_manager_saved_criteria',
+    'snap_lead_manager_general_options',
+    'snap_lead_manager_group_options',
+    'snap_lead_manager_search_data',
+    'snap_lead_manager_search_results',
+    'snap_lead_manager_city_filter_applied',
+    'snap_lead_manager_search_active',
+    'snap_lead_manager_search_url',
+    'snap_lead_manager_search_type',
+    'snap_lead_manager_force_reload',
+    'snap_lead_manager_results_pending',
+    'foundGroups',
+    'lmp_group_search_options',
+    'snap_lead_manager_member_interaction_options',
+    // Agrega aquí cualquier otra clave relevante
+  ];
+
+  const dataToMigrate = {};
+  // Recopilar datos existentes en localStorage
+  keysToMigrate.forEach(key => {
+    const value = localStorage.getItem(key);
+    if (value !== null) {
+      try {
+        // Intenta parsear como JSON, si falla guarda como string
+        dataToMigrate[key] = JSON.parse(value);
+      } catch (e) {
+        dataToMigrate[key] = value;
+      }
+    }
+  });
+
+  // Guardar en chrome.storage.local si hay datos
+  if (Object.keys(dataToMigrate).length > 0 && typeof chrome !== 'undefined' && chrome.storage) {
+    await new Promise(resolve => {
+      chrome.storage.local.set(dataToMigrate, () => {
+        // Limpiar las claves migradas de localStorage
+        keysToMigrate.forEach(key => localStorage.removeItem(key));
+        // Log para depuración
+        console.log('LeadManagerPro: Migración de localStorage a chrome.storage.local completada:', Object.keys(dataToMigrate));
+        resolve();
+      });
+    });
+  }
+};
+
+// Ejecutar la migración automáticamente al cargar el módulo
+window.LeadManagerPro.utils.migrateLocalStorageToExtensionStorage();
+
 // Indicador de que el módulo se cargó correctamente
 console.log('LeadManagerPro: Módulo de utilidades comunes cargado correctamente');
