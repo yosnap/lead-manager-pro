@@ -395,6 +395,9 @@ function performSearch() {
     state.currentSearchCity = searchCity;
     state.currentSearchType = searchType;
 
+    // Actualizar UI inmediatamente para activar los botones
+    updateUI();
+
     debugLog('Estado inicial configurado');
 
     // Limpiar localStorage de búsquedas previas
@@ -415,11 +418,6 @@ function performSearch() {
     chrome.storage.local.set({ snap_lead_manager_search_active: true });
 
     debugLog('Datos de búsqueda guardados');
-
-    // Actualizar UI
-    document.body.classList.add('search-active');
-    if (pauseButton) pauseButton.disabled = false;
-    if (stopButton) stopButton.disabled = false;
 
     // Guardar opciones generales
     chrome.storage.local.set({
@@ -466,10 +464,6 @@ function performSearch() {
 
     // Actualizar estado inicial
     updateStatus(`Iniciando búsqueda de ${searchType === 'groups' ? 'grupos' : 'perfiles'}: ${searchTerm}`, 5);
-
-    // Actualizar UI
-    updateUI();
-    updateSearchInfo();
 
     // Iniciar verificación del estado
     startStatusChecking();
@@ -2175,6 +2169,15 @@ function handleSearchResults(results, message = '') {
   resultsContent?.offsetHeight;
 
   debugLog('Resultados procesados y mostrados');
+
+  // Al finalizar la búsqueda, actualizar el estado y la UI
+  state.isRunning = false;
+  state.isPaused = false;
+  updateUI();
+
+  // Cambiar a la pestaña de Resultados
+  const resultadosTab = document.querySelector('[data-tab="resultados-tab"]');
+  if (resultadosTab) resultadosTab.click();
 }
 
 // Función para exportar resultados
