@@ -1068,3 +1068,30 @@ async function getSearchResults() {
     });
   });
 }
+
+// Función para ocultar el trigger lmp-sidebar-toggle en páginas de grupo específico
+(function() {
+  function isSpecificGroupPage() {
+    return /facebook\.com\/groups\//.test(window.location.href);
+  }
+  function hideSidebarToggleIfGroup() {
+    const toggle = document.getElementById('lmp-sidebar-toggle');
+    if (toggle) {
+      if (isSpecificGroupPage()) {
+        toggle.style.display = 'none';
+      } else {
+        toggle.style.display = '';
+      }
+    }
+  }
+  // Ejecutar al cargar y en cambios de URL
+  hideSidebarToggleIfGroup();
+  let lastUrl = location.href;
+  const observer = new MutationObserver(() => {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      hideSidebarToggleIfGroup();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+})();

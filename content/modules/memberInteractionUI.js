@@ -1597,6 +1597,17 @@ class MemberInteractionUI {
     // Añadir icono SVG de play
     button.innerHTML = this.icons.play;
     
+    // Verificar autenticación
+    const isAuthenticated = window.LeadManagerPro && window.LeadManagerPro.AuthenticationWrapper && window.LeadManagerPro.AuthenticationWrapper.authenticated;
+    if (!isAuthenticated) {
+      button.disabled = true;
+      button.style.opacity = '0.6';
+      button.style.cursor = 'not-allowed';
+      // Solo dejar el title para el tooltip nativo
+      button.setAttribute('title', 'Inicia sesión en el popup principal de la extensión para habilitar esta función');
+      return button;
+    }
+
     // Modificar el event listener existente para incluir la funcionalidad de diagnóstico
     button.addEventListener('click', async (e) => {
       e.preventDefault();
@@ -2031,3 +2042,83 @@ class MemberInteractionUI {
 // Exportar la clase
 window.leadManagerPro = window.leadManagerPro || {};
 window.leadManagerPro.memberInteractionUI = new MemberInteractionUI();
+
+// Agregar trigger flotante para abrir el panel de interacción en páginas de grupo
+(function() {
+  function isGroupPage() {
+    return /facebook\.com\/groups\//.test(window.location.href);
+  }
+
+  function createInteractionTrigger() {
+    if (document.getElementById('lmp-interaction-trigger')) return;
+    if (!isGroupPage()) return;
+    const trigger = document.createElement('button');
+    trigger.id = 'lmp-interaction-trigger';
+    trigger.title = 'Abrir Interacciones';
+    trigger.style.cssText = `
+      position: fixed;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      width: 54px;
+      height: 54px;
+      background: #4267B2;
+      color: #fff;
+      border: none;
+      border-radius: 50% 0 0 50%;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      z-index: 10001;
+      cursor: pointer;
+      transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+    `;
+    trigger.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" fill="#4267B2"/><path d="M7 10h10v2H7v-2zm0 4h7v2H7v-2z" fill="white"/></svg>';
+    trigger.addEventListener('mouseenter', function() {
+      trigger.style.background = '#365899';
+    });
+    trigger.addEventListener('mouseleave', function() {
+      trigger.style.background = '#4267B2';
+    });
+    trigger.addEventListener('click', function() {
+      let panel = document.querySelector('.lead-manager-interaction-ui');
+      if (!panel) {
+        // Forzar creación si no existe
+        if (window.leadManagerPro && window.leadManagerPro.memberInteractionUI) {
+          window.leadManagerPro.memberInteractionUI.show();
+          panel = document.querySelector('.lead-manager-interaction-ui');
+        }
+      }
+      if (panel) {
+        panel.style.display = 'flex';
+        panel.style.position = 'fixed';
+        panel.style.inset = '127px auto auto 1px';
+        panel.style.right = '';
+        panel.style.left = '1px';
+        panel.style.top = '127px';
+        panel.style.bottom = '';
+        panel.style.zIndex = '10001';
+      }
+    });
+    document.body.appendChild(trigger);
+  }
+
+  // Ejecutar al cargar y en cambios de URL
+  function setupTriggerObserver() {
+    createInteractionTrigger();
+    let lastUrl = location.href;
+    const observer = new MutationObserver(() => {
+      if (location.href !== lastUrl) {
+        lastUrl = location.href;
+        // Eliminar trigger si no es página de grupo
+        const t = document.getElementById('lmp-interaction-trigger');
+        if (t) t.remove();
+        createInteractionTrigger();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+  setupTriggerObserver();
+})();
